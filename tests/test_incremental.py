@@ -57,8 +57,8 @@ def test_recrystallize_seeds_and_carries_survival():
 
     # FakeBackend never drafts an initial tree in incremental mode
     assert be.calls["tree"] == 0
-    # the shared node survived (seed survival 9 + 2 settled rounds = 11)
+    # the shared node survived (seed survival 9 + 3 rounds to plateau = 12)
     kept = next(n for n in new_tree.nodes if n.condition == 'priority == "high"')
-    assert kept.rounds_survived == 11
+    assert kept.rounds_survived == 12
     # the stale branch the new tree dropped shows up as removed
     assert [n.condition for n in diff.removed] == ['security_score > 0.99']

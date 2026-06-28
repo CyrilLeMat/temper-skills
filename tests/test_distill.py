@@ -38,23 +38,46 @@ def test_overengineering_critic_always_added():
     assert "overengineering_critic" in seen
 
 
-def test_high_scores_converge_early():
-    be = FakeBackend(score=9)  # settled every round; quick stop_quiet=2
+def test_stable_scores_plateau_and_stop():
+    # FakeBackend returns the same tree+scores every round, so after the first
+    # round nothing improves — the loop plateaus and stops (quick stop_quiet=2):
+    # round 1 (progress) → rounds 2,3 stale → stop at round 3.
+    be = FakeBackend(score=9)
     distill(_sources(), backend=be, profile="quick")
-    assert be.calls["arbitration"] == 2  # converged at round 2, well under the cap of 8
+    assert be.calls["arbitration"] == 3
 
 
-def test_low_scores_run_to_cap():
-    be = FakeBackend(score=3)  # never clears the bar -> never settles
+def test_stuck_low_scores_also_stop_on_plateau():
+    # The old behavior ground to the round cap; now a stuck run stops on plateau too.
+    be = FakeBackend(score=3)
     distill(_sources(), backend=be, profile="quick")
-    assert be.calls["arbitration"] == 8  # quick profile max rounds
+    assert be.calls["arbitration"] == 3  # not the cap of 8
+
+
+def test_backend_failure_after_progress_salvages_last_tree():
+    be = FakeBackend(score=4)
+    orig = be.complete
+    calls = {"n": 0}
+
+    def flaky(system, user, schema):
+        from temper_skills.schemas import ProposerArbitration
+        if schema is ProposerArbitration:
+            calls["n"] += 1
+            if calls["n"] == 2:
+                raise RuntimeError("transient backend disconnect")
+        return orig(system, user, schema)
+
+    be.complete = flaky
+    # round 1 arbitration ok, round 2 arbitration raises → salvage round-1 tree
+    tree = distill(_sources(), backend=be, profile="standard")
+    assert tree.nodes  # finalized the last good tree instead of crashing
 
 
 def test_rounds_survived_tracked():
     be = FakeBackend(score=9)
     tree = distill(_sources(), backend=be, profile="quick")
-    # initial draft (1) + 2 surviving rounds
-    assert tree.nodes[0].rounds_survived == 3
+    # initial draft (1) + 3 surviving rounds (plateau stop at round 3)
+    assert tree.nodes[0].rounds_survived == 4
 
 
 def test_quick_profile_no_provenance():

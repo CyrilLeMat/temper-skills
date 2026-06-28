@@ -209,12 +209,21 @@ def distill(
         tree = _initial_tree(backend, sources)
         survival = {_node_key(n.condition): 1 for n in tree.nodes}
     seen_gray_zones: set[str] = {n.gray_zone for n in tree.nodes if n.gray_zone}
-    quiet_rounds = 0
+    stale_rounds = 0
+    best_mean = -1.0
     last_arbitration: ProposerArbitration | None = None
 
     for r in range(1, max_rounds + 1):
-        verdicts = [_critique(backend, sources, p, tree) for p in personas]
-        arbitration = _arbitrate(backend, sources, tree, verdicts, incremental=incremental)
+        try:
+            verdicts = [_critique(backend, sources, p, tree) for p in personas]
+            arbitration = _arbitrate(backend, sources, tree, verdicts, incremental=incremental)
+        except Exception:
+            # A transient backend failure shouldn't throw away the rounds already
+            # paid for. With nothing to salvage (round 1), re-raise; otherwise keep
+            # the last good tree and finalize it.
+            if last_arbitration is None:
+                raise
+            break
         new_tree = arbitration.tree
         last_arbitration = arbitration
 
@@ -228,18 +237,21 @@ def distill(
         tree = new_tree
         result = RoundResult(r, max_rounds, verdicts, arbitration, tree, dict(survival))
 
-        # A round is "quiet" only when the panel both stops finding new gray zones
-        # and scores the tree above the bar — scores, not just gray zones, gate
-        # convergence (the README's "converges when scores stabilize").
-        settled = not new_gray and result.min_score >= SCORE_BAR
-        quiet_rounds = quiet_rounds + 1 if settled else 0
+        # Convergence = the scores *stabilize* (the plan's actual criterion), not an
+        # absolute bar that may never be reached. A round makes progress if the mean
+        # score improved or a new gray zone surfaced; once neither happens for
+        # `stop_quiet` rounds the loop has plateaued — stop, whether the plateau is
+        # high (good tree) or low (the loop can't do better on this schema).
+        progressed = result.mean_score > best_mean + 0.1 or bool(new_gray)
+        best_mean = max(best_mean, result.mean_score)
+        stale_rounds = 0 if progressed else stale_rounds + 1
 
         decision = gate(result) if gate else "continue"
         if decision == "abort":
             raise KeyboardInterrupt("distillation aborted by gate")
         if decision == "stop":
             break
-        if quiet_rounds >= stop_quiet:
+        if stale_rounds >= stop_quiet:
             break
 
     model_tag = f"{backend.model} via {backend.name}"
