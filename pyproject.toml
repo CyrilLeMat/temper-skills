@@ -18,8 +18,14 @@ dependencies = [
     "rich>=13.0",
 ]
 
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
 [project.scripts]
 temper-skills = "temper_skills.cli:app"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["temper_skills"]
