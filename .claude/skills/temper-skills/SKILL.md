@@ -14,6 +14,23 @@ reviewers. Everything runs on the user's Claude Code subscription via the Task t
 > security scanning. The loop measures internal consistency, not correctness against the
 > world; real correctness still comes from the user's ratified examples.
 
+## Operating rule — run autonomously (read this first)
+
+**You make the decisions; the loop is the point.** There are **exactly two** moments you
+may block the user, and no others:
+
+1. **Schema accept/edit** — once, up front (the inferred features cap what the tree can express).
+2. **The per-round gate** — Continue / Stop / Abort (skipped on `quick`).
+
+For **everything else, decide and record — do not ask.** Specifically, **never** raise an
+`AskUserQuestion` / multiple-choice modal to have the user choose feature breadth, whether
+to keep/drop a branch, how to resolve a gray zone, or any "which design do you prefer"
+question. Those are the loop's job: the `overengineering_critic` prunes complexity, and you
+resolve gray zones with the safest defensible default and **record** them (see Gray zones).
+The user ratifies by *reviewing* recorded provenance, not by answering questions mid-run. If
+you catch yourself about to open a question modal for anything other than the two gates
+above: stop, make the defensible call, record it, and keep going.
+
 ## Inputs
 
 - A target `skill.md` / prompt (the logic to migrate), path given by the user.
