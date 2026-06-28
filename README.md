@@ -53,9 +53,12 @@ For CI, headless, or non-Claude-Code use:
 temper-skills ingest skill.md --backend auto   # api | claude | opencode | auto
 ```
 
-`--backend auto` uses `ANTHROPIC_API_KEY` if set, else a detected agent CLI. Note:
-headless agent CLIs (`claude -p`) bill the **API**, not your subscription — for a
-subscription run use mode 1.
+`--backend auto` uses `ANTHROPIC_API_KEY` if set, else a detected agent CLI. The API
+backend runs on **LiteLLM + Instructor**, so `--model` takes any LiteLLM id
+(`claude-sonnet-4-6`, `openai/gpt-4o`, `gemini/gemini-1.5-pro`, a local model, …) with
+the matching provider key in the environment — provider integration and structured-output
+parsing aren't ours. Note: headless agent CLIs (`claude -p`) bill the **API**, not your
+subscription — for a subscription run use mode 1.
 
 ## How it works
 

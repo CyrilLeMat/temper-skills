@@ -12,7 +12,8 @@ license = "Apache-2.0"
 authors = [{ name = "Cyril", email = "cyril@hellosunrise.com" }]
 keywords = ["llm", "agents", "decision-tree", "adversarial", "determinism"]
 dependencies = [
-    "anthropic>=0.40",
+    "litellm>=1.50",      # provider-agnostic model routing (Anthropic, OpenAI, Gemini, local, …)
+    "instructor>=1.5",    # Pydantic-validated structured output + retries over LiteLLM
     "pydantic>=2.0",
     "typer>=0.12",
     "rich>=13.0",

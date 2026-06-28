@@ -1,4 +1,18 @@
-"""ApiBackend — the metered path: Anthropic SDK + native structured outputs."""
+"""ApiBackend — the metered path, on LiteLLM + Instructor.
+
+LiteLLM routes to any supported provider (Anthropic, OpenAI, Gemini, local, …);
+Instructor enforces the Pydantic schema with validation + retries. We don't
+re-implement provider integration or structured-output parsing — that's their job.
+The loop, personas, export, validation, and incremental code never see this.
+
+Model ids: a bare ``claude-*`` is routed to Anthropic; otherwise pass a LiteLLM
+provider-prefixed id (``openai/gpt-4o``, ``gemini/gemini-1.5-pro``, …). The relevant
+provider key must be in the environment (ANTHROPIC_API_KEY, OPENAI_API_KEY, …).
+
+Tradeoff vs the old direct-Anthropic backend: Anthropic-specific adaptive thinking is
+not requested here (it isn't portable across providers); structured output goes through
+Instructor's tool/JSON mode rather than Anthropic's native structured outputs.
+"""
 
 from __future__ import annotations
 
@@ -10,12 +24,14 @@ from .base import Backend
 
 T = TypeVar("T", bound=BaseModel)
 
-# USD per 1M tokens (input, output).
-_RATES = {
-    "claude-sonnet-4-6": (3.0, 15.0),
-    "claude-opus-4-8": (5.0, 25.0),
-    "claude-haiku-4-5": (1.0, 5.0),
-}
+
+def _route(model: str) -> str:
+    """Make a bare model id LiteLLM-routable."""
+    if "/" in model:
+        return model
+    if model.startswith("claude"):
+        return f"anthropic/{model}"
+    return model
 
 
 class ApiBackend(Backend):
@@ -23,30 +39,36 @@ class ApiBackend(Backend):
 
     def __init__(self, model: str = "claude-sonnet-4-6", max_tokens: int = 8000):
         super().__init__(model)
-        import anthropic  # imported lazily so the CLI backend needs no SDK key/env
+        import instructor
+        import litellm
 
-        self.client = anthropic.Anthropic()
+        litellm.suppress_debug_info = True
+        self._litellm = litellm
+        self._client = instructor.from_litellm(litellm.completion)
+        self._route = _route(model)
         self.max_tokens = max_tokens
+        self.cost = 0.0
 
     def complete(self, system: str, user: str, schema: type[T]) -> T:
-        response = self.client.messages.parse(
-            model=self.model,
+        obj, completion = self._client.chat.completions.create_with_completion(
+            model=self._route,
             max_tokens=self.max_tokens,
-            thinking={"type": "adaptive"},
-            system=system,
-            messages=[{"role": "user", "content": user}],
-            output_format=schema,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            response_model=schema,
+            max_retries=2,
         )
-        self.input_tokens += response.usage.input_tokens
-        self.output_tokens += response.usage.output_tokens
-        parsed = response.parsed_output
-        if parsed is None:
-            raise RuntimeError(
-                f"Structured parse failed (stop_reason={response.stop_reason}); "
-                "the model may have refused or hit max_tokens."
-            )
-        return parsed
+        usage = getattr(completion, "usage", None)
+        if usage:
+            self.input_tokens += getattr(usage, "prompt_tokens", 0) or 0
+            self.output_tokens += getattr(usage, "completion_tokens", 0) or 0
+        try:
+            self.cost += self._litellm.completion_cost(completion_response=completion) or 0.0
+        except Exception:
+            pass  # unknown-model pricing — leave cost as a best-effort sum
+        return obj
 
     def cost_estimate(self) -> float | None:
-        rin, rout = _RATES.get(self.model, (3.0, 15.0))
-        return (self.input_tokens * rin + self.output_tokens * rout) / 1_000_000
+        return self.cost

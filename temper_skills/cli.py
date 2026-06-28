@@ -79,7 +79,7 @@ def ingest(
     skill: str = typer.Argument(..., help="Path to the skill.md to migrate."),
     profile: str = typer.Option("standard", help=f"One of {list(PROFILES)}."),
     out: str = typer.Option("decision_tree.generated.py", help="Output .py path."),
-    model: str = typer.Option("claude-sonnet-4-6", help="Compile-time model."),
+    model: str = typer.Option("claude-sonnet-4-6", help="Model: any LiteLLM id (claude-sonnet-4-6, openai/gpt-4o, …)."),
     backend: str = typer.Option(
         "auto", help="LLM backend: auto | api | claude | opencode."
     ),
@@ -138,7 +138,7 @@ def incremental(
                                           help="New HARD constraint (repeatable)."),
     profile: str = typer.Option("standard", help=f"One of {list(PROFILES)}."),
     out: str = typer.Option("decision_tree.generated.py", help="Output .py path."),
-    model: str = typer.Option("claude-sonnet-4-6", help="Compile-time model."),
+    model: str = typer.Option("claude-sonnet-4-6", help="Model: any LiteLLM id (claude-sonnet-4-6, openai/gpt-4o, …)."),
     backend: str = typer.Option("auto", help="auto | api | claude | opencode."),
     fn: str = typer.Option(None, help="Override the function name."),
 ):
