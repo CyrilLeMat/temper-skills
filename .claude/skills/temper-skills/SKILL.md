@@ -71,7 +71,11 @@ the scale is uniform across the panel.
 ## The loop
 
 1. **Draft** the initial tree yourself (proposer) from the skill + schema + constraints.
-   Cover obvious cases; flag genuinely ambiguous regions as `gray_zone` rather than guessing.
+   Cover obvious cases. Where the source **underdetermines** an answer (a genuine gray
+   zone — e.g. "the skill says 'when in doubt, say no' but never lists safe foods"),
+   **resolve it yourself with the safest defensible default** consistent with the HARD
+   constraints and the source's stated bias, and **record it as a `gray_zone`** on the
+   node. Do **not** stop to ask the user how to resolve it — see "Gray zones" below.
 2. **Critique** — spawn the 5 persona subagents in parallel with the current tree; collect
    their scored JSON verdicts.
 3. **Arbitrate** (proposer) — for each persona decide `kept` / `changed` / `rejected` with a
@@ -85,6 +89,22 @@ the scale is uniform across the panel.
    asked for an unattended/quick run.)
 6. **Converge** — stop when **every persona scores ≥ 8 AND no new gray zone appeared** for
    the round, or the user stops, or you hit the round cap (`quick` ~8, `standard` ~20).
+
+### Gray zones are recorded, not interrogated
+
+A gray zone is where the source genuinely underdetermines the answer. The plan resolves
+these by **recording them and signing off at review** (§2.5, §4.4) — they appear as
+`# gray_zone:` comments in the exported tree. So:
+
+- **Resolve each gray zone yourself** with the safest defensible default (honor the
+  source's bias — e.g. "when in doubt → no" means a conservative, minimal positive set),
+  and record it as the node's `gray_zone`.
+- **Never raise a blocking question to resolve a gray zone**, and never batch a list of
+  design questions. The user ratifies or overrides by reading the recorded gray zones at
+  the round gate or in the final output — that is the sign-off.
+- The **only** blocking interactions in the whole run are: (1) the one-time schema
+  accept/edit, and (2) the per-round Continue / Stop / Abort gate. If you're about to ask
+  the user anything else, stop — make the defensible call, record it, and surface it.
 
 ## Export (deterministic — no LLM)
 

@@ -1,33 +1,44 @@
 {
   "fn_name": "can_dog_eat",
-  "features": ["food_item"],
+  "features": [
+    "food_item"
+  ],
   "default_outcome": "no — when in doubt, do not feed; verify with a vet",
-  "model": "claude (subscription) via claude-code-subagents",
+  "model": "claude-opus-4-8 via claude-code-subagents",
   "profile": "standard",
   "constraints_version": "v1.0",
   "nodes": [
     {
-      "condition": "(food_item or \"\").strip().lower() in {\"chocolate\", \"cocoa\", \"grapes\", \"raisins\", \"onion\", \"onions\", \"garlic\", \"chives\", \"leek\", \"leeks\", \"xylitol\", \"alcohol\", \"ethanol\", \"caffeine\", \"coffee\", \"macadamia\", \"macadamia nuts\"}",
-      "outcome": "no — toxic, never feed",
+      "condition": "food_item in {\"chocolate\", \"cocoa\", \"grapes\", \"raisins\", \"onion\", \"onions\", \"garlic\", \"chives\", \"leek\", \"leeks\", \"xylitol\", \"alcohol\", \"ethanol\", \"caffeine\", \"coffee\", \"macadamia\", \"macadamia nuts\"}",
+      "outcome": "no — toxic to dogs, never feed",
       "rounds_survived": 2,
-      "sources": ["constraints#1", "domain_expert"],
-      "critic_note": "toxin set kept expert-sized; nutmeg/yeast-dough deliberately excluded — they return 'no' via the default",
+      "sources": [
+        "constraints#H1",
+        "domain_expert",
+        "ASPCA"
+      ],
+      "critic_note": "expert-sized set; unlisted toxins (nutmeg, raw dough) still return 'no' via the default",
       "gray_zone": null
     },
     {
-      "condition": "(food_item or \"\").strip().lower() in {\"carrot\", \"carrots\", \"rice\", \"chicken\", \"banana\", \"blueberries\", \"green beans\", \"pumpkin\"}",
+      "condition": "food_item in {\"carrot\", \"carrots\", \"plain rice\", \"plain chicken\", \"banana\", \"blueberries\", \"green beans\", \"plain pumpkin\"}",
       "outcome": "yes — safe in moderation",
       "rounds_survived": 2,
-      "sources": ["edge_case_hunter"],
-      "critic_note": "demoted from a hard rule to a gray zone by the overengineering_critic — the source skill ratifies no safe foods",
-      "gray_zone": "safe-list has no ratified examples in the source skill — ratified by the human at the gate"
+      "sources": [
+        "proposer-draft",
+        "domain_expert"
+      ],
+      "critic_note": null,
+      "gray_zone": "safe-list has no ratified examples in the source skill; user ratified keeping a conservative whitelist (round 1 gate)"
     },
     {
-      "condition": "(food_item or \"\").strip().lower() == \"apple\"",
-      "outcome": "yes — flesh only, never core/seeds",
-      "rounds_survived": 1,
-      "sources": ["domain_expert"],
-      "critic_note": "apple earns its own node — the cyanogenic core/seed caveat can't fold into the generic safe verdict",
+      "condition": "food_item == \"apple\"",
+      "outcome": "yes — apple flesh only; never the core or seeds",
+      "rounds_survived": 2,
+      "sources": [
+        "domain_expert"
+      ],
+      "critic_note": "own node justified by cyanogenic seed/core caveat that can't fold into generic safe-in-moderation",
       "gray_zone": null
     }
   ]
