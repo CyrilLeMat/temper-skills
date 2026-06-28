@@ -10,6 +10,7 @@ from rich.prompt import Prompt
 from .backends import get_backend
 from .distill import PROFILES, RoundResult
 from .ingest import InferredSchema, ingest_skill
+from .validate import COMPARATORS, fn_from_json, fn_from_pyfile, load_dataset, run_validation
 
 app = typer.Typer(add_completion=False, help="Temper-Skills: prompt logic -> deterministic code.")
 console = Console()
@@ -99,6 +100,37 @@ def ingest(
     cost_line = f"~${cost:.4f} (metered)" if cost is not None else "subscription — no metered cost"
     console.print(Panel(tree.to_source(), title=f"Exported {out}", border_style="green"))
     console.print(f"[dim]backend {be.describe()} · cost: {cost_line}[/]")
+
+
+@app.command()
+def validate(
+    artifact: str = typer.Argument(..., help="The tree: a tree.json or an exported .py."),
+    dataset: str = typer.Argument(..., help="Held-out labeled set: JSON [{input, expected}, ...]."),
+    fn: str = typer.Option(None, help="Function name (for a .py with multiple defs)."),
+    match: str = typer.Option("label", help=f"Comparator: {list(COMPARATORS)}."),
+    min_agreement: float = typer.Option(1.0, help="Min agreement rate to pass (0–1)."),
+):
+    """Run the tree against a labeled set; report agreement and every disagreement.
+
+    Exits non-zero if agreement is below the threshold — so it pins the tree in CI.
+    """
+    if match not in COMPARATORS:
+        console.print(f"[red]--match must be one of {list(COMPARATORS)}[/]")
+        raise typer.Exit(2)
+    decide = fn_from_pyfile(artifact, fn) if artifact.endswith(".py") else fn_from_json(artifact)
+    report = run_validation(decide, load_dataset(dataset), COMPARATORS[match])
+
+    pct = report.agreement_rate * 100
+    color = "green" if report.passed(min_agreement) else "red"
+    lines = [f"Agreement: [{color}]{report.agreements}/{report.total} ({pct:.1f}%)[/]"]
+    if report.disagreements:
+        lines.append("\n[bold]Disagreements[/] — each is a tree bug or a mislabeled example; sign off:")
+        for d in report.disagreements:
+            lines.append(f"  input={d.input}")
+            lines.append(f"    expected [green]{d.expected}[/]  ·  got [red]{d.predicted}[/]")
+    console.print(Panel("\n".join(lines), title=f"validate {artifact}", border_style=color))
+    if not report.passed(min_agreement):
+        raise typer.Exit(1)
 
 
 if __name__ == "__main__":

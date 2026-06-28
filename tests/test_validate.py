@@ -1,0 +1,95 @@
+"""Validation harness: agreement accounting, comparators, loaders, CI pin."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+from temper_skills.tree import DecisionNode, DecisionTree
+from temper_skills.validate import (
+    exact_match,
+    fn_from_json,
+    fn_from_pyfile,
+    fn_from_tree,
+    label_match,
+    run_validation,
+)
+
+REPO = Path(__file__).resolve().parents[1]
+DOGFOOD = REPO / "examples" / "dog_food"
+
+
+def _tree():
+    return DecisionTree(
+        nodes=[DecisionNode('food_item == "chocolate"', "no — toxic", sources=["c#1"])],
+        default_outcome="yes — safe",
+        features=["food_item"],
+        fn_name="check",
+    )
+
+
+def test_all_agree():
+    fn = fn_from_tree(_tree())
+    data = [{"input": {"food_item": "chocolate"}, "expected": "no — toxic"},
+            {"input": {"food_item": "carrot"}, "expected": "yes — safe"}]
+    r = run_validation(fn, data, exact_match)
+    assert r.total == 2 and r.agreements == 2 and r.agreement_rate == 1.0
+    assert r.passed()
+
+
+def test_surfaces_disagreement():
+    fn = fn_from_tree(_tree())
+    data = [{"input": {"food_item": "carrot"}, "expected": "no — toxic"}]  # wrong label
+    r = run_validation(fn, data, exact_match)
+    assert r.agreements == 0 and len(r.disagreements) == 1
+    d = r.disagreements[0]
+    assert d.expected == "no — toxic" and d.predicted == "yes — safe"
+    assert not r.passed()
+
+
+def test_label_vs_exact_match():
+    assert label_match("no — toxic, never feed", "no")
+    assert not exact_match("no — toxic, never feed", "no")
+    assert label_match("escalate_urgent", "escalate_urgent")
+
+
+def test_crashing_branch_is_a_finding():
+    def boom(_):
+        raise ValueError("bad branch")
+
+    r = run_validation(boom, [{"input": {}, "expected": "x"}])
+    assert r.agreements == 0
+    assert r.disagreements[0].predicted.startswith("ERROR: ValueError")
+
+
+def test_passed_threshold():
+    fn = fn_from_tree(_tree())
+    data = [{"input": {"food_item": "chocolate"}, "expected": "no — toxic"},
+            {"input": {"food_item": "carrot"}, "expected": "WRONG"}]
+    r = run_validation(fn, data, exact_match)
+    assert r.agreement_rate == 0.5
+    assert not r.passed(1.0)
+    assert r.passed(0.5)
+
+
+def test_fn_from_pyfile_single(tmp_path):
+    p = tmp_path / "m.py"
+    p.write_text("def decide(case):\n    return 'x'\n")
+    assert fn_from_pyfile(str(p))({}) == "x"
+
+
+def test_fn_from_pyfile_ambiguous(tmp_path):
+    p = tmp_path / "m.py"
+    p.write_text("def a(c): return 1\ndef b(c): return 2\n")
+    with pytest.raises(ValueError):
+        fn_from_pyfile(str(p))
+
+
+def test_canonical_dogfood_tree_passes_its_validation_set():
+    """Pins the shipped example tree in CI — the H1 payoff on our own repo."""
+    fn = fn_from_json(str(DOGFOOD / "dog_food_tree.json"))
+    data = json.loads((DOGFOOD / "validation_set.json").read_text())
+    r = run_validation(fn, data, label_match)
+    assert r.passed(1.0), [(d.input, d.expected, d.predicted) for d in r.disagreements]

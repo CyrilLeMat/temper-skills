@@ -107,6 +107,23 @@ def normalize(raw: str) -> dict:
 can_dog_eat(normalize("a slice of Dark Chocolate cake"))   # -> "no — toxic, never feed"
 ```
 
+## Validation — pin the tree in CI
+
+The adversarial loop measures *consistency*; correctness comes from a **held-out labeled
+set**. Because the tree is a pure function, you can pin it in CI — a prompt can't be:
+
+```bash
+temper-skills validate route.py labeled_set.json --fn route_ticket
+# Agreement: 21/21 (100.0%)        → exits 0
+```
+
+`validate` runs the tree over `[{"input": {...}, "expected": "..."}, ...]`, reports the
+agreement rate, and lists **every disagreement** — each is either a tree bug or a mislabeled
+example, and both are worth knowing before shipping. It exits non-zero below
+`--min-agreement` (default 1.0), so it gates a PR. Optional for a relatable demo (Tier A);
+**mandatory** for high-stakes domains (Tier B) — a tree shipped without a held-out set is
+not auditable, no matter how many rounds it survived.
+
 ## Origin
 
 Mechanism validated in production on medical tooling — deterministic rule engines

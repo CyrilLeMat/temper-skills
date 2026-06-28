@@ -1,0 +1,23 @@
+[
+  {"input": {"food_item": "chocolate"}, "expected": "no"},
+  {"input": {"food_item": "cocoa"}, "expected": "no"},
+  {"input": {"food_item": "grapes"}, "expected": "no"},
+  {"input": {"food_item": "raisins"}, "expected": "no"},
+  {"input": {"food_item": "onion"}, "expected": "no"},
+  {"input": {"food_item": "garlic"}, "expected": "no"},
+  {"input": {"food_item": "xylitol"}, "expected": "no"},
+  {"input": {"food_item": "macadamia"}, "expected": "no"},
+  {"input": {"food_item": "coffee"}, "expected": "no"},
+  {"input": {"food_item": "Chocolate"}, "expected": "no"},
+  {"input": {"food_item": "  grapes  "}, "expected": "no"},
+  {"input": {"food_item": "carrot"}, "expected": "yes"},
+  {"input": {"food_item": "rice"}, "expected": "yes"},
+  {"input": {"food_item": "chicken"}, "expected": "yes"},
+  {"input": {"food_item": "banana"}, "expected": "yes"},
+  {"input": {"food_item": "blueberries"}, "expected": "yes"},
+  {"input": {"food_item": "green beans"}, "expected": "yes"},
+  {"input": {"food_item": "pumpkin"}, "expected": "yes"},
+  {"input": {"food_item": "apple"}, "expected": "yes"},
+  {"input": {"food_item": "kibble"}, "expected": "no"},
+  {"input": {"food_item": ""}, "expected": "no"}
+]

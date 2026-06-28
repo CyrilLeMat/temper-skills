@@ -53,6 +53,21 @@ can_dog_eat({"food_item": "carrot"})           # 'yes — safe in moderation'
 can_dog_eat({"food_item": "dark chocolate"})   # 'no — when in doubt …' (see boundary note below)
 ```
 
+## Validate it (§4.5)
+
+`validation_set.json` is a held-out labeled set; the shipped tree passes it 100%
+(and `tests/test_validate.py` pins that in CI):
+
+```bash
+temper-skills validate examples/dog_food/dog_food_checker.py \
+  examples/dog_food/validation_set.json --fn can_dog_eat
+# Agreement: 21/21 (100.0%)
+```
+
+Add an un-ratified safe food (e.g. `{"food_item": "watermelon", "expected": "yes"}`) and the
+harness surfaces it as a disagreement and exits non-zero — exactly the "the safe-list is
+incomplete" signal §4.5 is for (a tree gap to fix, or a label to reconsider).
+
 ## The boundary the loop itself flagged
 
 `can_dog_eat("dark chocolate")` returns "no" **only because the default is "no"** — the
