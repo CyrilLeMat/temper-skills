@@ -1,0 +1,74 @@
+{
+  "fn_name": "assess_license",
+  "features": ["project_license", "dependency_license", "linking", "distributing", "modified_dependency"],
+  "default_outcome": "review_required",
+  "model": "claude-opus-4-8 via temper-skills",
+  "profile": "audit-grade",
+  "constraints_version": "v1.0",
+  "nodes": [
+    {
+      "condition": "distributing is not True",
+      "outcome": "ok_internal_use",
+      "rounds_survived": 16,
+      "sources": ["domain_expert", "examples#5"],
+      "critic_note": "distribution gates every obligation — checked first; survived 16 rounds",
+      "gray_zone": null
+    },
+    {
+      "condition": "dependency_license == 'AGPL-3.0'",
+      "outcome": "must_offer_source",
+      "rounds_survived": 14,
+      "sources": ["domain_expert"],
+      "critic_note": "AGPL's source obligation reaches even mere-aggregation / network use",
+      "gray_zone": "network-use scope is fact-specific — confirm deployment model"
+    },
+    {
+      "condition": "dependency_license in ('GPL-2.0', 'GPL-3.0') and linking != 'none' and project_license in ('MIT', 'BSD-3-Clause', 'Apache-2.0', 'proprietary', 'LGPL-3.0', 'MPL-2.0')",
+      "outcome": "project_must_be_gpl",
+      "rounds_survived": 13,
+      "sources": ["domain_expert", "edge_case_hunter", "examples#2"],
+      "critic_note": "the license×linking×distribution interaction: copyleft propagates only when linked AND distributed into a non-GPL project",
+      "gray_zone": null
+    },
+    {
+      "condition": "dependency_license in ('GPL-2.0', 'GPL-3.0') and linking != 'none'",
+      "outcome": "compatible",
+      "rounds_survived": 11,
+      "sources": ["domain_expert"],
+      "critic_note": "project is already (A)GPL — linking GPL in is fine",
+      "gray_zone": null
+    },
+    {
+      "condition": "dependency_license == 'Apache-2.0' and project_license == 'GPL-2.0'",
+      "outcome": "incompatible",
+      "rounds_survived": 9,
+      "sources": ["bad_faith_actor", "domain_expert"],
+      "critic_note": "the non-obvious edge a human misses: Apache-2.0 patent terms are incompatible with GPLv2",
+      "gray_zone": null
+    },
+    {
+      "condition": "dependency_license == 'LGPL-3.0' and linking == 'static' and project_license == 'proprietary'",
+      "outcome": "review_required",
+      "rounds_survived": 8,
+      "sources": ["edge_case_hunter"],
+      "critic_note": "LGPL distinguishes static vs dynamic — static linking into proprietary triggers relinking obligations",
+      "gray_zone": "LGPL static-linking obligations are satisfiable (provide object files) — counsel can clear it"
+    },
+    {
+      "condition": "dependency_license in ('MIT', 'BSD-3-Clause', 'Apache-2.0', 'LGPL-3.0', 'MPL-2.0')",
+      "outcome": "compatible",
+      "rounds_survived": 12,
+      "sources": ["domain_expert"],
+      "critic_note": "permissive / weak-copyleft — compatible with attribution (dynamic LGPL/MPL fall here)",
+      "gray_zone": null
+    },
+    {
+      "condition": "dependency_license == 'proprietary'",
+      "outcome": "review_required",
+      "rounds_survived": 10,
+      "sources": ["domain_expert"],
+      "critic_note": null,
+      "gray_zone": null
+    }
+  ]
+}

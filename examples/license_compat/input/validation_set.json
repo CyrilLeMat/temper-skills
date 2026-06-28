@@ -1,0 +1,20 @@
+[
+  {"input": {"project_license": "MIT", "dependency_license": "MIT", "linking": "dynamic", "distributing": true, "modified_dependency": false}, "expected": "compatible"},
+  {"input": {"project_license": "proprietary", "dependency_license": "GPL-3.0", "linking": "static", "distributing": true, "modified_dependency": false}, "expected": "project_must_be_gpl"},
+  {"input": {"project_license": "GPL-3.0", "dependency_license": "GPL-2.0", "linking": "static", "distributing": true, "modified_dependency": false}, "expected": "compatible"},
+  {"input": {"project_license": "proprietary", "dependency_license": "AGPL-3.0", "linking": "dynamic", "distributing": true, "modified_dependency": false}, "expected": "must_offer_source"},
+  {"input": {"project_license": "proprietary", "dependency_license": "GPL-3.0", "linking": "static", "distributing": false, "modified_dependency": false}, "expected": "ok_internal_use"},
+  {"input": {"project_license": "GPL-2.0", "dependency_license": "Apache-2.0", "linking": "static", "distributing": true, "modified_dependency": false}, "expected": "incompatible"},
+  {"input": {"project_license": "proprietary", "dependency_license": "LGPL-3.0", "linking": "static", "distributing": true, "modified_dependency": false}, "expected": "review_required"},
+  {"input": {"project_license": "proprietary", "dependency_license": "LGPL-3.0", "linking": "dynamic", "distributing": true, "modified_dependency": false}, "expected": "compatible"},
+  {"input": {"project_license": "MIT", "dependency_license": "Apache-2.0", "linking": "static", "distributing": true, "modified_dependency": false}, "expected": "compatible"},
+  {"input": {"project_license": "proprietary", "dependency_license": "proprietary", "linking": "none", "distributing": true, "modified_dependency": false}, "expected": "review_required"},
+  {"input": {"project_license": "proprietary", "dependency_license": "GPL-3.0", "linking": "none", "distributing": true, "modified_dependency": false}, "expected": "review_required"},
+  {"input": {"project_license": "MIT", "dependency_license": "BSD-3-Clause", "linking": "dynamic", "distributing": true, "modified_dependency": false}, "expected": "compatible"},
+  {"input": {"project_license": "AGPL-3.0", "dependency_license": "GPL-3.0", "linking": "static", "distributing": true, "modified_dependency": false}, "expected": "compatible"},
+  {"input": {"project_license": "proprietary", "dependency_license": "MPL-2.0", "linking": "static", "distributing": true, "modified_dependency": false}, "expected": "compatible"},
+  {"input": {"project_license": "proprietary", "dependency_license": "GPL-2.0", "linking": "dynamic", "distributing": true, "modified_dependency": false}, "expected": "project_must_be_gpl"},
+  {"input": {"project_license": "proprietary", "dependency_license": "AGPL-3.0", "linking": "none", "distributing": true, "modified_dependency": false}, "expected": "must_offer_source"},
+  {"input": {"project_license": "MIT", "dependency_license": "MIT", "linking": "dynamic", "distributing": null, "modified_dependency": false}, "expected": "ok_internal_use"},
+  {"input": {"project_license": "Apache-2.0", "dependency_license": "GPL-3.0", "linking": "static", "distributing": true, "modified_dependency": false}, "expected": "project_must_be_gpl"}
+]

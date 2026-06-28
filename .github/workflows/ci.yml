@@ -26,3 +26,5 @@ jobs:
             examples/dog_food/input/validation_set.json --fn can_dog_eat
           temper-skills validate examples/ticket_routing/output/route_ticket.py \
             examples/ticket_routing/input/validation_set.json --fn route_ticket --match exact
+          temper-skills validate examples/license_compat/output/assess_license.py \
+            examples/license_compat/input/validation_set.json --fn assess_license --match exact
