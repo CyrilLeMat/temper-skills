@@ -89,7 +89,7 @@ def test_fn_from_pyfile_ambiguous(tmp_path):
 
 def test_canonical_dogfood_tree_passes_its_validation_set():
     """Pins the shipped example tree in CI — the H1 payoff on our own repo."""
-    fn = fn_from_json(str(DOGFOOD / "dog_food_tree.json"))
-    data = json.loads((DOGFOOD / "validation_set.json").read_text())
+    fn = fn_from_json(str(DOGFOOD / "output" / "dog_food_tree.json"))
+    data = json.loads((DOGFOOD / "input" / "validation_set.json").read_text())
     r = run_validation(fn, data, label_match)
     assert r.passed(1.0), [(d.input, d.expected, d.predicted) for d in r.disagreements]

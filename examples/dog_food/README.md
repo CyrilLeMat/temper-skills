@@ -1,77 +1,81 @@
 # Dog food checker — flagship example
 
-> ⚠️ **Educational example, not veterinary advice.** Do not use the generated
-> `dog_food_checker.py` to make real decisions about an animal's health.
+> ⚠️ **Educational example, not veterinary advice.** Do not use the generated code to make
+> real decisions about an animal's health.
 
-Demonstrates the core promise: a 4-line `skill.md` ("known toxic foods → no; when in
-doubt, say no") is distilled, via the adversarial loop, into a deterministic decision
-tree you can read, diff, and run with zero LLM calls.
+A 4-line skill ("known toxic foods → no; when in doubt, say no") compiled into a
+deterministic decision tree via the adversarial loop. The folder is split so you can see
+exactly what you **provide** vs. what the tool **generates**:
 
-## The checked-in artifact
+```
+input/                     ← what you provide
+  skill.md                 the prompt/skill to temper (the only required input)
+  schema.py                optional: an explicit DogFoodQuery feature schema
+  validation_set.json      optional: a held-out labeled set to check the tree against
 
-`dog_food_checker.py` is the **actual output of a `/temper` subagent run** on the Claude
-Code subscription (its provenance is captured in `dog_food_tree.json`). Notable: the loop
-*inferred its own minimal schema* — branching on `food_item` only — and the
-`overengineering_critic` **dropped** `dog_weight_kg`, `food_form`, and dose tables, because
-a skill this thin doesn't justify them. It converged in 2 rounds (min score 2 → 8). The one
-thing the source underdetermines — whether to ever answer "yes" with no ratified safe foods —
-is recorded as the tree's lone **gray zone**, ratified by the human at the gate.
-
-Regenerate it deterministically from its provenance any time:
-
-```bash
-python -m temper_skills.export_tree examples/dog_food/dog_food_tree.json examples/dog_food/dog_food_checker.py
+output/                    ← what temper-skills generates
+  dog_food_tree.json       the tree's provenance (regenerate the .py from this)
+  dog_food_checker.py      the deterministic decision tree — zero LLM calls at inference
+  skill.tempered.md        a new skill that DELEGATES the decision to the tree
 ```
 
-## Producing your own
+`input → temper → output`. The decision logic moves from untestable prose (`input/skill.md`)
+into a reviewable, versionable function (`output/dog_food_checker.py`), and the tempered
+skill (`output/skill.tempered.md`) rewires the agent to *call* that function instead of
+re-deciding every time.
+
+## Produce the outputs
 
 **On a Claude Code subscription (no API key)** — the subagent skill:
 
-```
-/temper examples/dog_food/skill.md
+```bash
+/temper examples/dog_food/input/skill.md
 ```
 
-**As a library / CLI** (API key or agent CLI) — `run.py` uses an explicit, richer
-`DogFoodQuery` schema, which yields a different (form/dose-aware) tree:
+**As a library / CLI** (API key or agent CLI) — `run.py` uses the explicit `input/schema.py`:
 
 ```bash
-python examples/dog_food/run.py
-# or: temper-skills ingest examples/dog_food/skill.md --backend auto --profile standard \
-#       --out examples/dog_food/dog_food_checker.py
+python examples/dog_food/run.py        # writes output/dog_food_checker.generated.py
+# or:
+temper-skills ingest examples/dog_food/input/skill.md --backend auto --profile standard \
+  --out examples/dog_food/output/dog_food_checker.py
 ```
 
 > The subscription run and the explicit-schema run produce **different, both-defensible**
-> trees — that's expected (compile-time non-determinism; the tree is a reviewed, versioned
-> artifact, not a guaranteed-reproducible output).
+> trees (compile-time non-determinism — the tree is a reviewed artifact, not a reproducible
+> output).
 
-## Verify zero-LLM inference
-
-```python
-from examples.dog_food.dog_food_checker import can_dog_eat
-can_dog_eat({"food_item": "chocolate"})        # 'no — toxic, never feed'
-can_dog_eat({"food_item": "carrot"})           # 'yes — safe in moderation'
-can_dog_eat({"food_item": "dark chocolate"})   # 'no — when in doubt …' (see boundary note below)
-```
-
-## Validate it (§4.5)
-
-`validation_set.json` is a held-out labeled set; the shipped tree passes it 100%
-(and `tests/test_validate.py` pins that in CI):
+Regenerate the committed `.py` deterministically from its provenance any time:
 
 ```bash
-temper-skills validate examples/dog_food/dog_food_checker.py \
-  examples/dog_food/validation_set.json --fn can_dog_eat
+python -m temper_skills.export_tree \
+  examples/dog_food/output/dog_food_tree.json examples/dog_food/output/dog_food_checker.py
+```
+
+## About the committed output
+
+`output/dog_food_checker.py` is the real output of a `/temper` subagent run. The loop
+inferred a `food_item`-only schema and the `overengineering_critic` **dropped**
+`dog_weight_kg`/`food_form`/dose tables — a thin skill doesn't justify them. The one thing
+the source underdetermines (whether to ever answer "yes") is recorded as the tree's lone
+**gray zone**.
+
+## Verify it (§4.5)
+
+```bash
+temper-skills validate examples/dog_food/output/dog_food_checker.py \
+  examples/dog_food/input/validation_set.json --fn can_dog_eat
 # Agreement: 21/21 (100.0%)
 ```
 
-Add an un-ratified safe food (e.g. `{"food_item": "watermelon", "expected": "yes"}`) and the
-harness surfaces it as a disagreement and exits non-zero — exactly the "the safe-list is
-incomplete" signal §4.5 is for (a tree gap to fix, or a label to reconsider).
+`tests/test_validate.py` pins this in CI. Add an un-ratified safe food
+(`{"food_item": "watermelon", "expected": "yes"}`) to `input/validation_set.json` and the
+harness surfaces it as a disagreement and exits non-zero — the "safe-list is incomplete"
+signal.
 
 ## The boundary the loop itself flagged
 
 `can_dog_eat("dark chocolate")` returns "no" **only because the default is "no"** — the
-exact-match toxin set doesn't contain the literal string `"dark chocolate"`. Two personas
-(`literalist`, `bad_faith_actor`) independently flagged that the real exposure is the
-**upstream normalization** of free text → a `food_item` keyword, which is *outside* the
-tree's determinism guarantee. See the main README's "What it is not".
+exact-match toxin set doesn't contain the literal string `"dark chocolate"`. Turning free
+text into a normalized `food_item` keyword is **upstream and out of scope** (see the main
+README's "What it is not"); the `literalist` / `bad_faith_actor` personas flag it every run.
