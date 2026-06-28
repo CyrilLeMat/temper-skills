@@ -90,6 +90,23 @@ The adversarial loop measures internal **consistency**, not correctness against 
 world. Real correctness comes from your ratified examples and a held-out validation
 set.
 
+It is **not a natural-language feature extractor.** The tree branches on *pre-computed
+structured features*; turning raw input ("a slice of dark chocolate cake") into those
+features (`food_item="chocolate"`) is **upstream and out of scope** — and it's where the
+residual fuzziness lives. The determinism guarantee starts *after* that step. In practice
+the loop's own `literalist` / `bad_faith_actor` personas will flag this: an exact-match
+rule is only as safe as the normalizer feeding it. That normalizer is yours to build:
+
+```python
+# Out of scope of the guarantee — a lightweight layer YOU own, before the tree:
+def normalize(raw: str) -> dict:
+    text = raw.strip().lower()
+    item = next((t for t in KNOWN_FOODS if t in text), text)  # your extraction
+    return {"food_item": item}
+
+can_dog_eat(normalize("a slice of Dark Chocolate cake"))   # -> "no — toxic, never feed"
+```
+
 ## Origin
 
 Mechanism validated in production on medical tooling — deterministic rule engines

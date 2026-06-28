@@ -3,21 +3,60 @@
 > ⚠️ **Educational example, not veterinary advice.** Do not use the generated
 > `dog_food_checker.py` to make real decisions about an animal's health.
 
-Demonstrates the core promise: a `skill.md` that says only "consider known toxic
-foods... when in doubt, say no" is distilled, via the adversarial loop, into a
-deterministic `dog_food_checker.py` that surfaces edge cases the prompt never
-contained — e.g. low-fat peanut butter → xylitol → acutely toxic.
+Demonstrates the core promise: a 4-line `skill.md` ("known toxic foods → no; when in
+doubt, say no") is distilled, via the adversarial loop, into a deterministic decision
+tree you can read, diff, and run with zero LLM calls.
+
+## The checked-in artifact
+
+`dog_food_checker.py` is the **actual output of a `/temper` subagent run** on the Claude
+Code subscription (its provenance is captured in `dog_food_tree.json`). Notable: the loop
+*inferred its own minimal schema* — branching on `food_item` only — and the
+`overengineering_critic` **dropped** `dog_weight_kg`, `food_form`, and dose tables, because
+a skill this thin doesn't justify them. It converged in 2 rounds (min score 2 → 8). The one
+thing the source underdetermines — whether to ever answer "yes" with no ratified safe foods —
+is recorded as the tree's lone **gray zone**, ratified by the human at the gate.
+
+Regenerate it deterministically from its provenance any time:
 
 ```bash
-export ANTHROPIC_API_KEY=...
-python examples/dog_food/run.py          # scripted: runs to convergence, exports the tree
-# or, interactively, with the per-round gate:
-temper-skills ingest examples/dog_food/skill.md --profile standard --out examples/dog_food/dog_food_checker.py
+python -m temper_skills.export_tree examples/dog_food/dog_food_tree.json examples/dog_food/dog_food_checker.py
 ```
 
-Then verify zero-LLM inference:
+## Producing your own
+
+**On a Claude Code subscription (no API key)** — the subagent skill:
+
+```
+/temper examples/dog_food/skill.md
+```
+
+**As a library / CLI** (API key or agent CLI) — `run.py` uses an explicit, richer
+`DogFoodQuery` schema, which yields a different (form/dose-aware) tree:
+
+```bash
+python examples/dog_food/run.py
+# or: temper-skills ingest examples/dog_food/skill.md --backend auto --profile standard \
+#       --out examples/dog_food/dog_food_checker.py
+```
+
+> The subscription run and the explicit-schema run produce **different, both-defensible**
+> trees — that's expected (compile-time non-determinism; the tree is a reviewed, versioned
+> artifact, not a guaranteed-reproducible output).
+
+## Verify zero-LLM inference
 
 ```python
 from examples.dog_food.dog_food_checker import can_dog_eat
-can_dog_eat({"food_item": "peanut butter", "food_form": "low_fat", "dog_weight_kg": 10})
+can_dog_eat({"food_item": "chocolate"})        # 'no — toxic, never feed'
+can_dog_eat({"food_item": "carrot"})           # 'yes — safe in moderation'
+can_dog_eat({"food_item": "dark chocolate"})   # 'no — when in doubt …' (see boundary note below)
 ```
+
+## The boundary the loop itself flagged
+
+`can_dog_eat("dark chocolate")` returns "no" **only because the default is "no"** — the
+exact-match toxin set doesn't contain the literal string `"dark chocolate"`. Two personas
+(`literalist`, `bad_faith_actor`) independently flagged that the real exposure is the
+**upstream normalization** of free text → a `food_item` keyword, which is *outside* the
+tree's determinism guarantee. See the main README's "What it is not".

@@ -1,0 +1,34 @@
+{
+  "fn_name": "can_dog_eat",
+  "features": ["food_item"],
+  "default_outcome": "no — when in doubt, do not feed; verify with a vet",
+  "model": "claude (subscription) via claude-code-subagents",
+  "profile": "standard",
+  "constraints_version": "v1.0",
+  "nodes": [
+    {
+      "condition": "(food_item or \"\").strip().lower() in {\"chocolate\", \"cocoa\", \"grapes\", \"raisins\", \"onion\", \"onions\", \"garlic\", \"chives\", \"leek\", \"leeks\", \"xylitol\", \"alcohol\", \"ethanol\", \"caffeine\", \"coffee\", \"macadamia\", \"macadamia nuts\"}",
+      "outcome": "no — toxic, never feed",
+      "rounds_survived": 2,
+      "sources": ["constraints#1", "domain_expert"],
+      "critic_note": "toxin set kept expert-sized; nutmeg/yeast-dough deliberately excluded — they return 'no' via the default",
+      "gray_zone": null
+    },
+    {
+      "condition": "(food_item or \"\").strip().lower() in {\"carrot\", \"carrots\", \"rice\", \"chicken\", \"banana\", \"blueberries\", \"green beans\", \"pumpkin\"}",
+      "outcome": "yes — safe in moderation",
+      "rounds_survived": 2,
+      "sources": ["edge_case_hunter"],
+      "critic_note": "demoted from a hard rule to a gray zone by the overengineering_critic — the source skill ratifies no safe foods",
+      "gray_zone": "safe-list has no ratified examples in the source skill — ratified by the human at the gate"
+    },
+    {
+      "condition": "(food_item or \"\").strip().lower() == \"apple\"",
+      "outcome": "yes — flesh only, never core/seeds",
+      "rounds_survived": 1,
+      "sources": ["domain_expert"],
+      "critic_note": "apple earns its own node — the cyanogenic core/seed caveat can't fold into the generic safe verdict",
+      "gray_zone": null
+    }
+  ]
+}
