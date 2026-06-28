@@ -44,19 +44,22 @@ class FakeBackend(Backend):
 
     def __init__(self, score: int = 9):
         super().__init__("fake-model")
+        import threading
         self.score = score
         self.personas_seen: list[str] = []
         self.calls = {"tree": 0, "verdict": 0, "arbitration": 0, "inferred": 0, "woven": 0}
+        self._lock = threading.Lock()  # critiques run concurrently in the loop
 
     def complete(self, system: str, user: str, schema):
         if schema is ProposedTree:
             self.calls["tree"] += 1
             return _TREE
         if schema is PersonaVerdict:
-            self.calls["verdict"] += 1
             m = re.search(r"Your angle \((\w+)\)", user)
             persona = m.group(1) if m else "unknown"
-            self.personas_seen.append(persona)
+            with self._lock:
+                self.calls["verdict"] += 1
+                self.personas_seen.append(persona)
             return PersonaVerdict(
                 persona=persona, score=self.score, verdict="ok", detail="fine"
             )

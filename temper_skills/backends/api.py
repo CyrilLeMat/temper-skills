@@ -42,12 +42,15 @@ class ApiBackend(Backend):
         import instructor
         import litellm
 
+        import threading
+
         litellm.suppress_debug_info = True
         self._litellm = litellm
         self._client = instructor.from_litellm(litellm.completion)
         self._route = _route(model)
         self.max_tokens = max_tokens
         self.cost = 0.0
+        self._lock = threading.Lock()  # personas run concurrently — guard the counters
 
     def complete(self, system: str, user: str, schema: type[T]) -> T:
         obj, completion = self._client.chat.completions.create_with_completion(
@@ -63,13 +66,15 @@ class ApiBackend(Backend):
             timeout=120,
         )
         usage = getattr(completion, "usage", None)
-        if usage:
-            self.input_tokens += getattr(usage, "prompt_tokens", 0) or 0
-            self.output_tokens += getattr(usage, "completion_tokens", 0) or 0
         try:
-            self.cost += self._litellm.completion_cost(completion_response=completion) or 0.0
+            call_cost = self._litellm.completion_cost(completion_response=completion) or 0.0
         except Exception:
-            pass  # unknown-model pricing — leave cost as a best-effort sum
+            call_cost = 0.0  # unknown-model pricing — best-effort
+        with self._lock:
+            if usage:
+                self.input_tokens += getattr(usage, "prompt_tokens", 0) or 0
+                self.output_tokens += getattr(usage, "completion_tokens", 0) or 0
+            self.cost += call_cost
         return obj
 
     def cost_estimate(self) -> float | None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -140,6 +141,20 @@ def _critique(backend: Backend, sources: Sources, persona: Persona, tree: Propos
     return backend.complete(PERSONA_SYSTEM, user, PersonaVerdict)
 
 
+def _critique_all(
+    backend: Backend, sources: Sources, personas: list[Persona], tree: ProposedTree
+) -> list[PersonaVerdict]:
+    """Run every persona's critique of the SAME tree concurrently (they're independent).
+
+    Order-preserving (executor.map), so the panel and tests stay deterministic. This is
+    the bulk of a round, so parallelizing it cuts round latency roughly N×.
+    """
+    if len(personas) <= 1:
+        return [_critique(backend, sources, p, tree) for p in personas]
+    with ThreadPoolExecutor(max_workers=len(personas)) as ex:
+        return list(ex.map(lambda p: _critique(backend, sources, p, tree), personas))
+
+
 def _arbitrate(
     backend: Backend, sources: Sources, tree: ProposedTree, verdicts: list[PersonaVerdict],
     incremental: bool = False,
@@ -215,7 +230,7 @@ def distill(
 
     for r in range(1, max_rounds + 1):
         try:
-            verdicts = [_critique(backend, sources, p, tree) for p in personas]
+            verdicts = _critique_all(backend, sources, personas, tree)
             arbitration = _arbitrate(backend, sources, tree, verdicts, incremental=incremental)
         except Exception:
             # A transient backend failure shouldn't throw away the rounds already
