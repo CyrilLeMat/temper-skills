@@ -194,6 +194,19 @@ not just prompt seasoning. Disagreements are surfaced for sign-off. It exits non
 **mandatory** for high-stakes domains (Tier B) — a tree shipped without a held-out set is
 not auditable, no matter how many rounds it survived.
 
+## Examples
+
+- [`examples/ticket_routing/`](examples/ticket_routing/) — **the one to watch converge.**
+  Support-ticket triage: a closed feature space (enums + a score + a bool) where the
+  difficulty is the *interactions* (priority × tier × SLA × security). The loop's sweet
+  spot — it converges to a tight 7-node router.
+- [`examples/dog_food/`](examples/dog_food/) — **relatable, but a weak fit on purpose.**
+  "Can my dog eat that?" is a flat lookup with an unbounded toxin tail; running the live
+  loop on it tends to *thrash* (`domain_expert` always finds one more toxin while
+  `overengineering_critic` wants the list gone — an irreducible conflict). It's the
+  cautionary counterpart that shows what the plan's H4 means by "the difficulty must live
+  in the combinatorics, not a flat list."
+
 ## Development
 
 ```bash

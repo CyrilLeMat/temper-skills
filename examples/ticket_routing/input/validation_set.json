@@ -1,0 +1,20 @@
+[
+  {"input": {"priority": "low", "security_score": 0.99, "customer_tier": "free", "category": "bug", "sla_breached": false}, "expected": "human_review"},
+  {"input": {"priority": "high", "security_score": 0.85, "customer_tier": "pro", "category": "billing", "sla_breached": false}, "expected": "escalate_security"},
+  {"input": {"priority": "medium", "security_score": 0.1, "customer_tier": "enterprise", "category": "security", "sla_breached": false}, "expected": "escalate_security"},
+  {"input": {"priority": "urgent", "security_score": 0.1, "customer_tier": "free", "category": "feature_request", "sla_breached": false}, "expected": "escalate_urgent"},
+  {"input": {"priority": "high", "security_score": 0.2, "customer_tier": "enterprise", "category": "bug", "sla_breached": false}, "expected": "escalate_urgent"},
+  {"input": {"priority": "high", "security_score": 0.2, "customer_tier": "free", "category": "bug", "sla_breached": false}, "expected": "route_engineering"},
+  {"input": {"priority": "medium", "security_score": 0.2, "customer_tier": "pro", "category": "account", "sla_breached": true}, "expected": "escalate_urgent"},
+  {"input": {"priority": "medium", "security_score": 0.2, "customer_tier": "free", "category": "account", "sla_breached": true}, "expected": "route_default"},
+  {"input": {"priority": "low", "security_score": 0.2, "customer_tier": "enterprise", "category": "billing", "sla_breached": false}, "expected": "route_billing"},
+  {"input": {"priority": "low", "security_score": 0.1, "customer_tier": "free", "category": "bug", "sla_breached": false}, "expected": "route_engineering"},
+  {"input": {"priority": "medium", "security_score": 0.5, "customer_tier": "pro", "category": "feature_request", "sla_breached": false}, "expected": "route_default"},
+  {"input": {"priority": "low", "security_score": 0.1, "customer_tier": "free", "category": "other", "sla_breached": false}, "expected": "route_default"},
+  {"input": {"priority": "urgent", "security_score": 0.99, "customer_tier": "enterprise", "category": "security", "sla_breached": true}, "expected": "human_review"},
+  {"input": {"priority": "high", "security_score": 0.81, "customer_tier": "free", "category": "billing", "sla_breached": false}, "expected": "escalate_security"},
+  {"input": {"priority": "medium", "security_score": 0.79, "customer_tier": "enterprise", "category": "billing", "sla_breached": false}, "expected": "route_billing"},
+  {"input": {"priority": "high", "security_score": 0.2, "customer_tier": "pro", "category": "security", "sla_breached": false}, "expected": "escalate_security"},
+  {"input": {"priority": "urgent", "security_score": 0.2, "customer_tier": "enterprise", "category": "billing", "sla_breached": true}, "expected": "escalate_urgent"},
+  {"input": {"priority": "low", "security_score": null, "customer_tier": "free", "category": "bug", "sla_breached": false}, "expected": "route_engineering"}
+]

@@ -1,0 +1,66 @@
+{
+  "fn_name": "route_ticket",
+  "features": ["priority", "security_score", "customer_tier", "category", "sla_breached"],
+  "default_outcome": "route_default",
+  "model": "claude-opus-4-8 via temper-skills",
+  "profile": "standard",
+  "constraints_version": "v1.0",
+  "nodes": [
+    {
+      "condition": "security_score is not None and security_score > 0.95",
+      "outcome": "human_review",
+      "rounds_survived": 12,
+      "sources": ["constraints#H1"],
+      "critic_note": "hard constraint — overrides every routing rule below",
+      "gray_zone": null
+    },
+    {
+      "condition": "category == \"security\" or (security_score is not None and security_score > 0.8)",
+      "outcome": "escalate_security",
+      "rounds_survived": 11,
+      "sources": ["domain_expert", "examples#2"],
+      "critic_note": null,
+      "gray_zone": "the 0.8 score threshold is a tuned cut — calibrate against your incident data"
+    },
+    {
+      "condition": "priority == \"urgent\"",
+      "outcome": "escalate_urgent",
+      "rounds_survived": 9,
+      "sources": ["domain_expert"],
+      "critic_note": "urgent escalates regardless of tier — survived bad_faith_actor",
+      "gray_zone": null
+    },
+    {
+      "condition": "priority == \"high\" and customer_tier in (\"pro\", \"enterprise\")",
+      "outcome": "escalate_urgent",
+      "rounds_survived": 8,
+      "sources": ["edge_case_hunter", "examples#5"],
+      "critic_note": "the priority×tier interaction the source prose only implied",
+      "gray_zone": null
+    },
+    {
+      "condition": "sla_breached is True and customer_tier != \"free\"",
+      "outcome": "escalate_urgent",
+      "rounds_survived": 7,
+      "sources": ["edge_case_hunter", "examples#7"],
+      "critic_note": "sla×tier interaction — a breached SLA escalates only for paying tiers",
+      "gray_zone": null
+    },
+    {
+      "condition": "category == \"billing\"",
+      "outcome": "route_billing",
+      "rounds_survived": 6,
+      "sources": ["domain_expert"],
+      "critic_note": null,
+      "gray_zone": null
+    },
+    {
+      "condition": "category == \"bug\"",
+      "outcome": "route_engineering",
+      "rounds_survived": 6,
+      "sources": ["domain_expert"],
+      "critic_note": "account/feature_request/other collapse into the default — not enumerated (overengineering_critic)",
+      "gray_zone": null
+    }
+  ]
+}
