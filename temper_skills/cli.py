@@ -39,13 +39,14 @@ def _make_gate(interactive: bool):
     def gate(r: RoundResult) -> str:
         body = [
             f"[bold]Round {r.round}/{r.max_rounds}[/]   "
-            f"convergence estimate: {r.arbitration.convergence_estimate}%",
+            f"convergence estimate: {r.arbitration.convergence_estimate}%   "
+            f"scores: min {r.min_score}/10, mean {r.mean_score}/10",
             "",
-            "Persona verdicts:",
+            "Persona scores & verdicts:",
         ]
-        for v in r.verdicts:
+        for v in sorted(r.verdicts, key=lambda x: x.score):
             mark = _VERDICT_MARK.get(v.verdict, "•")
-            body.append(f"  {mark} [bold]{v.persona}[/] ({v.score}/10) — {v.detail}")
+            body.append(f"  {mark} [bold]{v.persona}[/]  [bold]{v.score}/10[/]  — {v.detail}")
         body.append("\nProposer arbitrage log:")
         for e in r.arbitration.entries:
             body.append(f"  [{e.decision}] {e.persona}: {e.rationale}")

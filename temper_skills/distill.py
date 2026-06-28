@@ -18,6 +18,10 @@ PROFILES = {
     "audit-grade": (50, 5, True, True),
 }
 
+# A round only counts toward convergence if every persona scores at least this
+# high (the panel agrees the tree is solid) AND no new gray zone appeared.
+SCORE_BAR = 8
+
 
 @dataclass
 class RoundResult:
@@ -27,6 +31,14 @@ class RoundResult:
     arbitration: ProposerArbitration
     tree: ProposedTree
     survival: dict[str, int]  # condition -> rounds survived
+
+    @property
+    def min_score(self) -> int:
+        return min((v.score for v in self.verdicts), default=0)
+
+    @property
+    def mean_score(self) -> float:
+        return round(sum(v.score for v in self.verdicts) / len(self.verdicts), 1) if self.verdicts else 0.0
 
 
 # A gate decides whether to continue after each round.
@@ -167,10 +179,15 @@ def distill(
 
         new_gray = {n.gray_zone for n in new_tree.nodes if n.gray_zone} - seen_gray_zones
         seen_gray_zones |= new_gray
-        quiet_rounds = quiet_rounds + 1 if not new_gray else 0
 
         tree = new_tree
         result = RoundResult(r, max_rounds, verdicts, arbitration, tree, dict(survival))
+
+        # A round is "quiet" only when the panel both stops finding new gray zones
+        # and scores the tree above the bar — scores, not just gray zones, gate
+        # convergence (the README's "converges when scores stabilize").
+        settled = not new_gray and result.min_score >= SCORE_BAR
+        quiet_rounds = quiet_rounds + 1 if settled else 0
 
         decision = gate(result) if gate else "continue"
         if decision == "abort":
