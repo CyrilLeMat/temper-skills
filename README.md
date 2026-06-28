@@ -84,11 +84,17 @@ Built-in personas:
 
 ## Profiles
 
-| Profile      | Max rounds | Convergence | Interactive gate  | Provenance      |
-| ------------ | ---------- | ----------- | ----------------- | --------------- |
-| `quick`      | ~8         | 2 quiet     | No — draft output | None            |
-| `standard`   | ~20        | 3 quiet     | Yes — per round   | Inline comments |
-| `audit-grade`| ~50        | 5 quiet     | Yes — per round   | Inline comments |
+| Profile      | Max rounds | Personas (+ always-on critic) | Interactive gate  | Provenance      |
+| ------------ | ---------- | ----------------------------- | ----------------- | --------------- |
+| `quick`      | ~8         | 1 (edge_case_hunter)          | No — draft output | None            |
+| `standard`   | ~20        | 2 (edge_case_hunter, domain_expert) | Yes — per round | Inline comments |
+| `audit-grade`| ~50        | 4 (literalist, edge_case_hunter, bad_faith_actor, domain_expert) | Yes — per round | Inline comments |
+
+The panel scales with profile — more personas of one model share blind spots (H5) and add
+cost + convergence surface, so cheap runs stay lean and the full panel is reserved for
+`audit-grade`. Override per run with `distill(adversaries=[...])`. `bad_faith_actor` is
+reserved for audit-grade because it earns its keep on circumvention-sensitive domains
+(routing, compliance), less so on low-stakes ones.
 
 > **Honest scope:** `audit-grade` today is `standard` with more rounds and stricter
 > convergence (5 consecutive quiet rounds). **Tournament orchestration, required citations,

@@ -8,7 +8,15 @@ from typing import Callable
 
 from .backends import Backend, auto_backend
 from .schemas import PersonaVerdict, ProposedTree, ProposerArbitration
-from .sources import DEFAULT_PERSONAS, OVERENGINEERING_CRITIC, Persona, Sources
+from .sources import (
+    BAD_FAITH_ACTOR,
+    DOMAIN_EXPERT,
+    EDGE_CASE_HUNTER,
+    LITERALIST,
+    OVERENGINEERING_CRITIC,
+    Persona,
+    Sources,
+)
 from .tree import DecisionNode, DecisionTree
 
 PROFILES = {
@@ -24,6 +32,16 @@ PROFILES = {
 # A round only counts toward convergence if every persona scores at least this
 # high (the panel agrees the tree is solid) AND no new gray zone appeared.
 SCORE_BAR = 8
+
+# Default adversaries per profile (the overengineering_critic is always appended).
+# More personas of one model share blind spots (H5) and add cost + convergence
+# surface, so the cheap profiles run a lean, diverse panel and the full panel is
+# reserved for audit-grade. Override with distill(adversaries=[...]).
+PROFILE_PERSONAS: dict[str, list[Persona]] = {
+    "quick": [EDGE_CASE_HUNTER],
+    "standard": [EDGE_CASE_HUNTER, DOMAIN_EXPERT],
+    "audit-grade": [LITERALIST, EDGE_CASE_HUNTER, BAD_FAITH_ACTOR, DOMAIN_EXPERT],
+}
 
 
 @dataclass
@@ -177,7 +195,7 @@ def distill(
         raise ValueError(f"unknown profile {profile!r}; choose from {list(PROFILES)}")
     max_rounds, stop_quiet, _interactive, provenance = PROFILES[profile]
 
-    personas = list(adversaries) if adversaries is not None else list(DEFAULT_PERSONAS)
+    personas = list(adversaries) if adversaries is not None else list(PROFILE_PERSONAS[profile])
     # The overengineering_critic is always on (§5.5).
     if not any(p.name == OVERENGINEERING_CRITIC.name for p in personas):
         personas.append(OVERENGINEERING_CRITIC)

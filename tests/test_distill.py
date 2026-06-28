@@ -21,6 +21,15 @@ def test_returns_tree_with_metadata():
     assert tree.model == "fake-model via fake"
 
 
+def test_persona_panel_scales_with_profile():
+    for profile, total in [("quick", 2), ("standard", 3), ("audit-grade", 5)]:
+        be = FakeBackend(score=9)
+        distill(_sources(), backend=be, profile=profile, gate=lambda r: "stop")
+        seen = set(be.personas_seen)  # round-1 panel before the gate stops it
+        assert "overengineering_critic" in seen
+        assert len(seen) == total, (profile, seen)
+
+
 def test_overengineering_critic_always_added():
     be = FakeBackend(score=9)
     distill(_sources(), adversaries=[LITERALIST], backend=be, profile="quick")
