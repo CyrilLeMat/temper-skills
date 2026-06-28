@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Block a commit if the test suite is red. The validation pin lives in the suite,
+# so a tree that disagrees with its held-out set can't be committed.
+# Enable once per clone:  git config core.hooksPath .githooks
+set -euo pipefail
+
+if [ -x ".venv/bin/python" ]; then
+  PY=".venv/bin/python"
+else
+  PY="$(command -v python3 || command -v python || true)"
+fi
+
+if [ -z "${PY:-}" ] || ! "$PY" -c "import pytest" >/dev/null 2>&1; then
+  echo "pre-commit: pytest unavailable — skipping (CI will still gate). Install with: pip install -e '.[dev]'"
+  exit 0
+fi
+
+echo "pre-commit: running test suite…"
+"$PY" -m pytest -q

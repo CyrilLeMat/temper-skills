@@ -182,6 +182,19 @@ not just prompt seasoning. Disagreements are surfaced for sign-off. It exits non
 **mandatory** for high-stakes domains (Tier B) — a tree shipped without a held-out set is
 not auditable, no matter how many rounds it survived.
 
+## Development
+
+```bash
+pip install -e ".[dev]"
+pytest -q                          # 67 tests, no network
+git config core.hooksPath .githooks   # once per clone: block red commits locally
+```
+
+CI (`.github/workflows/ci.yml`) runs the suite on every push/PR across Python 3.10 and
+3.12, and then runs `temper-skills validate` on the canonical example — the tool gating
+itself with its own command. The `.githooks/pre-commit` hook runs the suite before each
+commit (it skips gracefully if test deps aren't installed; CI is the hard gate).
+
 ## Origin
 
 Mechanism validated in production on medical tooling — deterministic rule engines

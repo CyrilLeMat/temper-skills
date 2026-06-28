@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Test suite
+        run: pytest -q
+      - name: Validate the canonical tree (dogfood the CI gate)
+        run: >
+          temper-skills validate
+          examples/dog_food/dog_food_checker.py
+          examples/dog_food/validation_set.json
+          --fn can_dog_eat
