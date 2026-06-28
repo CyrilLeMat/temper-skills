@@ -60,6 +60,12 @@ the matching provider key in the environment — provider integration and struct
 parsing aren't ours. Note: headless agent CLIs (`claude -p`) bill the **API**, not your
 subscription — for a subscription run use mode 1.
 
+**Claude on Vertex AI (GCP billing, no Anthropic key):** `pip install -e ".[vertex]"`,
+`gcloud auth application-default login`, then
+`export VERTEXAI_PROJECT=<project> VERTEXAI_LOCATION=<region>` and run with
+`--backend api --model vertex_ai/<claude-id>`. Requires Claude enabled in your Vertex Model
+Garden for that project/region.
+
 ## How it works
 
 Temper-Skills runs an **adversarial loop**: a proposer drafts a decision tree, and

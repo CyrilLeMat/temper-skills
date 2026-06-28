@@ -21,6 +21,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
+vertex = ["google-auth>=2.0"]   # Claude-on-Vertex via LiteLLM + gcloud ADC (no API key)
 
 [project.scripts]
 temper-skills = "temper_skills.cli:app"
