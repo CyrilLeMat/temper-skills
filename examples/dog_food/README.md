@@ -54,11 +54,18 @@ python -m temper_skills.export_tree \
 
 ## About the committed output
 
-`output/dog_food_checker.py` is the real output of a `/temper` subagent run. The loop
-inferred a `food_item`-only schema and the `overengineering_critic` **dropped**
-`dog_weight_kg`/`food_form`/dose tables — a thin skill doesn't justify them. The one thing
-the source underdetermines (whether to ever answer "yes") is recorded as the tree's lone
-**gray zone**.
+`output/dog_food_checker.py` branches on **`food_item`, `food_form`, `dog_weight_kg`, and
+`quantity_grams`** — the `DogFoodQuery` features that carry signal — and surfaces the §11
+edge cases the source prose never stated: low-fat peanut butter → xylitol, a dose-by-weight
+guard, and a zero/missing-weight case that returns `unknown` rather than `yes`. Underdetermined
+points are recorded as **gray zones** (the unratified safe-list, the concentrated-form rule,
+the placeholder dose threshold).
+
+`dog_breed` is in the schema but the tree doesn't branch on it — a tree needn't use every
+field; the schema is the *ceiling* on what it may use, not a checklist. And a thinner run can
+prune further: a low-effort subscription `/temper` on this same skill often collapses to
+`food_item`-only, because a 4-line skill doesn't compel dose tables (compile-time
+non-determinism — see the note above).
 
 ## Verify it (§4.5)
 
