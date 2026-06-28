@@ -81,6 +81,28 @@ Built-in personas:
 | `standard`   | ~25    | Yes — review        | Inline comments    |
 | `audit-grade`| 50+    | Yes — per gray zone | Full arbitrage log |
 
+## Evolving a tree — incremental mode
+
+A constraint changes, a source guideline updates, field feedback lands. Don't recompile
+from scratch — **re-crystallize** from the existing tree, re-challenge only the deltas, and
+get a reviewable structural diff:
+
+```bash
+temper-skills incremental route_ticket.json \
+  -c "security_score > 0.95 -> always human_review" --out route_ticket.py
+```
+
+```
+structural diff (v_n → v_n+1)
++ added    if (security_score > 0.95) -> human_review
+~ changed  if (priority == "high"): 'escalate_urgent' -> 'escalate_urgent'
+= unchanged 3 node(s)
+```
+
+Surviving nodes keep their `rounds_survived` provenance; the proposer is told to preserve
+everything the change doesn't touch and minimize churn. This is what keeps the tree a
+living artifact instead of the unmaintained legacy the tool exists to replace.
+
 ## What it is not
 
 Temper-Skills is **not a security scanner**. "Adversarial" here means *decision

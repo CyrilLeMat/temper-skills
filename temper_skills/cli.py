@@ -9,8 +9,13 @@ from rich.prompt import Prompt
 
 from .backends import get_backend
 from .distill import PROFILES, RoundResult
+from .export_tree import tree_from_dict
+from .incremental import recrystallize, render_diff
 from .ingest import InferredSchema, ingest_skill
+from .sources import Sources
 from .validate import COMPARATORS, fn_from_json, fn_from_pyfile, load_dataset, run_validation
+
+import json as _json
 
 app = typer.Typer(add_completion=False, help="Temper-Skills: prompt logic -> deterministic code.")
 console = Console()
@@ -100,6 +105,50 @@ def ingest(
     cost_line = f"~${cost:.4f} (metered)" if cost is not None else "subscription — no metered cost"
     console.print(Panel(tree.to_source(), title=f"Exported {out}", border_style="green"))
     console.print(f"[dim]backend {be.describe()} · cost: {cost_line}[/]")
+
+
+@app.command()
+def incremental(
+    prior: str = typer.Argument(..., help="Prior tree.json to evolve."),
+    skill: str = typer.Option(None, help="Updated skill.md to fold in (optional)."),
+    constraint: list[str] = typer.Option([], "--constraint", "-c",
+                                          help="New HARD constraint (repeatable)."),
+    profile: str = typer.Option("standard", help=f"One of {list(PROFILES)}."),
+    out: str = typer.Option("decision_tree.generated.py", help="Output .py path."),
+    model: str = typer.Option("claude-sonnet-4-6", help="Compile-time model."),
+    backend: str = typer.Option("auto", help="auto | api | claude | opencode."),
+    fn: str = typer.Option(None, help="Override the function name."),
+):
+    """Re-crystallize an existing tree against new constraints/sources; show the diff."""
+    prior_tree = tree_from_dict(_json.loads(open(prior).read()))
+    schema = {"type": "object",
+              "properties": {f: {} for f in prior_tree.features},
+              "additionalProperties": True}
+    sources = Sources(
+        schema=schema,
+        constraints=[{"rule": c, "hard": True} for c in constraint],
+        skill_text=open(skill).read() if skill else None,
+    )
+    try:
+        be = get_backend(backend, model)
+    except (ValueError, RuntimeError) as e:
+        console.print(f"[red]Backend error:[/] {e}")
+        raise typer.Exit(1)
+    interactive = PROFILES[profile][2]
+    console.print(f"[cyan]Evolving {prior}[/]  ·  backend: [bold]{be.describe()}[/]  "
+                  f"·  +{len(constraint)} constraint(s)")
+    try:
+        new_tree, diff = recrystallize(
+            prior_tree, sources, profile=profile, backend=be,
+            gate=_make_gate(interactive), fn_name=fn,
+        )
+    except KeyboardInterrupt as e:
+        console.print(f"[red]Aborted:[/] {e}")
+        raise typer.Exit(1)
+    new_tree.export(out)
+    title = "no change" if diff.is_empty else "structural diff (v_n → v_n+1)"
+    console.print(Panel(render_diff(diff), title=title, border_style="magenta"))
+    console.print(Panel(new_tree.to_source(), title=f"Exported {out}", border_style="green"))
 
 
 @app.command()

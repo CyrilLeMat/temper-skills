@@ -117,14 +117,24 @@ def _critique(backend: Backend, sources: Sources, persona: Persona, tree: Propos
 
 
 def _arbitrate(
-    backend: Backend, sources: Sources, tree: ProposedTree, verdicts: list[PersonaVerdict]
+    backend: Backend, sources: Sources, tree: ProposedTree, verdicts: list[PersonaVerdict],
+    incremental: bool = False,
 ) -> ProposerArbitration:
     crit = "\n".join(
         f"  {v.persona} (score {v.score}, {v.verdict}): {v.detail}"
         + (f" | case: {v.proposed_case}" if v.proposed_case else "")
         for v in verdicts
     )
+    incr = (
+        "INCREMENTAL RUN: the CURRENT TREE is an existing, previously-converged tree; a "
+        "change to constraints/sources prompted this run. Preserve every node the change "
+        "does NOT affect — keep its condition and outcome verbatim. Only add, modify, or "
+        "remove nodes the new constraints/sources (or a surviving critique) require. "
+        "Minimize churn.\n\n"
+        if incremental else ""
+    )
     user = (
+        f"{incr}"
         f"{_sources_block(sources)}\n\n"
         f"CURRENT TREE:\n{_render_tree(tree)}\n\n"
         f"PERSONA VERDICTS:\n{crit}\n\n"
@@ -149,8 +159,14 @@ def distill(
     backend: Backend | None = None,
     gate: Gate | None = None,
     fn_name: str = "decide",
+    seed_tree: ProposedTree | None = None,
+    seed_survival: dict[str, int] | None = None,
 ) -> DecisionTree:
-    """Run the adversarial loop and return a deterministic DecisionTree."""
+    """Run the adversarial loop and return a deterministic DecisionTree.
+
+    Pass ``seed_tree`` (with ``seed_survival``) to start from an existing tree
+    instead of a blank draft — incremental mode (see incremental.recrystallize).
+    """
     if profile not in PROFILES:
         raise ValueError(f"unknown profile {profile!r}; choose from {list(PROFILES)}")
     max_rounds, stop_quiet, _interactive, provenance = PROFILES[profile]
@@ -161,16 +177,20 @@ def distill(
         personas.append(OVERENGINEERING_CRITIC)
 
     backend = backend or auto_backend(model)
-    tree = _initial_tree(backend, sources)
-
-    survival: dict[str, int] = {_node_key(n.condition): 1 for n in tree.nodes}
+    incremental = seed_tree is not None
+    if incremental:
+        tree = seed_tree
+        survival = dict(seed_survival or {_node_key(n.condition): 1 for n in tree.nodes})
+    else:
+        tree = _initial_tree(backend, sources)
+        survival = {_node_key(n.condition): 1 for n in tree.nodes}
     seen_gray_zones: set[str] = {n.gray_zone for n in tree.nodes if n.gray_zone}
     quiet_rounds = 0
     last_arbitration: ProposerArbitration | None = None
 
     for r in range(1, max_rounds + 1):
         verdicts = [_critique(backend, sources, p, tree) for p in personas]
-        arbitration = _arbitrate(backend, sources, tree, verdicts)
+        arbitration = _arbitrate(backend, sources, tree, verdicts, incremental=incremental)
         new_tree = arbitration.tree
         last_arbitration = arbitration
 
