@@ -39,7 +39,15 @@ above: stop, make the defensible call, record it, and keep going.
 - Optional `hard` constraints (non-negotiable rules) and a few ratified examples.
 
 Branch only on schema features. Conditions are valid Python boolean expressions over the
-feature names (e.g. `food_item == "chocolate"`).
+feature names (e.g. `food_item == "chocolate"`) and must be **None-safe** — any feature may
+be absent at inference, so guard before comparing (`x is not None and x < 1`, never bare
+`x < 1`) and coerce strings (`(s or "").strip().lower()`). A condition must never raise on a
+missing feature.
+
+Keep the inferred schema **tight**. Drop features that are circular (a feature that *is* the
+answer, like `is_known_toxic_food`) or that the source skill never implies (`dog_age_years`
+for a skill that doesn't mention age). A bloated schema gives the loop infinite surface and
+it won't converge — the schema is the ceiling (§2.5).
 
 ### The one pre-loop human decision: the schema (accept or edit)
 

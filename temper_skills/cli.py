@@ -28,6 +28,22 @@ console = Console()
 def _main() -> None:
     """Temper-Skills CLI. See `ingest`."""
 
+
+def _load_schema(spec: str):
+    """Load a pinned schema: 'file.py:ClassName' (Pydantic model) or a .json JSON Schema."""
+    if spec.endswith(".json"):
+        return _json.loads(open(spec).read())
+    path, sep, cls = spec.partition(":")
+    if not sep:
+        raise ValueError("schema must be 'file.py:ClassName' or a path ending in .json")
+    import importlib.util
+    import sys
+    s = importlib.util.spec_from_file_location("_temper_pinned_schema", path)
+    mod = importlib.util.module_from_spec(s)
+    sys.modules[s.name] = mod  # so Pydantic can resolve string annotations (Literal, etc.)
+    s.loader.exec_module(mod)
+    return getattr(mod, cls)
+
 _VERDICT_MARK = {"ok": "[green]✓[/]", "missing_case": "[yellow]⚠[/]",
                  "collapsible": "[yellow]⚠[/]", "contradiction": "[red]✗[/]"}
 
@@ -95,6 +111,11 @@ def ingest(
     skill_style: str = typer.Option(
         "template", help="Tempered skill style: template (deterministic) | woven (LLM-rewritten)."
     ),
+    schema: str = typer.Option(
+        None, help="Pin a schema: 'file.py:ClassName' (Pydantic) or a .json JSON Schema. "
+        "If omitted, the schema is inferred from the skill."
+    ),
+    fn: str = typer.Option(None, help="Decision function name (used with --schema)."),
 ):
     """Compile a skill's decision logic into a deterministic Python tree."""
     interactive = PROFILES[profile][2]
@@ -103,13 +124,15 @@ def ingest(
     except (ValueError, RuntimeError) as e:
         console.print(f"[red]Backend error:[/] {e}")
         raise typer.Exit(1)
+    pinned = _load_schema(schema) if schema else None
     ratified = load_dataset(examples) if examples else None
     console.print(f"[cyan]Reading {skill}[/]  ·  backend: [bold]{be.describe()}[/]"
+                  + (f"  ·  schema: {schema}" if schema else "  ·  schema: inferred")
                   + (f"  ·  {len(ratified)} ratified example(s)" if ratified else ""))
     try:
         tree = ingest_skill(
-            skill, schema=None, profile=profile, backend=be,
-            gate=_make_gate(interactive), confirm=_confirm_schema, examples=ratified,
+            skill, schema=pinned, profile=profile, backend=be,
+            gate=_make_gate(interactive), confirm=_confirm_schema, examples=ratified, fn_name=fn,
         )
     except KeyboardInterrupt as e:
         console.print(f"[red]Aborted:[/] {e}")

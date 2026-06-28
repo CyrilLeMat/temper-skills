@@ -88,7 +88,10 @@ PROPOSER_SYSTEM = (
     "you know about public guidelines in this domain to propose rules the user did not "
     "list, but keep the tree as simple as the domain truly requires — depth should "
     "reflect domain complexity, not loop richness. Conditions must be valid Python "
-    "boolean expressions referencing feature names directly."
+    "boolean expressions referencing feature names directly, and must be NONE-SAFE: any "
+    "feature may be absent (None) at inference, so guard before comparing — "
+    "`x is not None and x < 1`, never bare `x < 1`; coerce strings with "
+    "`(s or '').strip().lower()`. A condition must never raise on a missing feature."
 )
 
 PERSONA_SYSTEM = (

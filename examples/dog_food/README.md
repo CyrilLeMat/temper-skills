@@ -38,7 +38,9 @@ re-deciding every time.
 python examples/dog_food/run.py        # writes output/dog_food_checker.generated.py
 # or:
 temper-skills ingest examples/dog_food/input/skill.md --backend auto --profile standard \
-  --out examples/dog_food/output/dog_food_checker.py
+  --schema examples/dog_food/input/schema.py:DogFoodQuery --fn can_dog_eat \
+  --out examples/dog_food/output/dog_food_checker.py \
+  --examples examples/dog_food/input/validation_set.json
 ```
 
 > The subscription run and the explicit-schema run produce **different, both-defensible**
