@@ -116,9 +116,11 @@ def ingest(
         "If omitted, the schema is inferred from the skill."
     ),
     fn: str = typer.Option(None, help="Decision function name (used with --schema)."),
+    yes: bool = typer.Option(False, "--yes", "-y",
+                             help="Don't stop at each round — run to convergence/cap (panels still print)."),
 ):
     """Compile a skill's decision logic into a deterministic Python tree."""
-    interactive = PROFILES[profile][2]
+    interactive = PROFILES[profile][2] and not yes
     try:
         be = get_backend(backend, model)
     except (ValueError, RuntimeError) as e:
@@ -189,6 +191,7 @@ def incremental(
     model: str = typer.Option("claude-sonnet-4-6", help="Model: any LiteLLM id (claude-sonnet-4-6, openai/gpt-4o, …)."),
     backend: str = typer.Option("auto", help="auto | api | claude | opencode."),
     fn: str = typer.Option(None, help="Override the function name."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Don't stop at each round."),
 ):
     """Re-crystallize an existing tree against new constraints/sources; show the diff."""
     prior_tree = tree_from_dict(_json.loads(open(prior).read()))
@@ -205,7 +208,7 @@ def incremental(
     except (ValueError, RuntimeError) as e:
         console.print(f"[red]Backend error:[/] {e}")
         raise typer.Exit(1)
-    interactive = PROFILES[profile][2]
+    interactive = PROFILES[profile][2] and not yes
     console.print(f"[cyan]Evolving {prior}[/]  ·  backend: [bold]{be.describe()}[/]  "
                   f"·  +{len(constraint)} constraint(s)")
     try:
