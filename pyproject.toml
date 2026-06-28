@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "temper-skills"
+version = "0.0.1"
+description = "Turn your agent's decision logic from a prompt into deterministic, versionable Python code."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+authors = [{ name = "Cyril", email = "cyril@hellosunrise.com" }]
+keywords = ["llm", "agents", "decision-tree", "adversarial", "determinism"]
+dependencies = [
+    "anthropic>=0.40",
+    "pydantic>=2.0",
+    "typer>=0.12",
+    "rich>=13.0",
+]
+
+[project.scripts]
+temper-skills = "temper_skills.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["temper_skills"]
