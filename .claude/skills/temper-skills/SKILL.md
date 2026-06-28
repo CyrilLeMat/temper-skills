@@ -45,6 +45,12 @@ Each persona subagent returns ONLY this JSON:
  "detail": "<one sentence>", "proposed_case": "<concrete feature assignment it mishandles, or null>"}
 ```
 
+**`score` is always the TREE's robustness from your angle — 0 = the tree fails badly
+through your lens, 10 = solid, nothing to add.** It is NOT how successful your attack
+was: a persona that finds no weakness scores the tree *high* (≈9–10) and returns
+`verdict: "ok"`, `proposed_case: null`. Tell every persona subagent this explicitly so
+the scale is uniform across the panel.
+
 ## The loop
 
 1. **Draft** the initial tree yourself (proposer) from the skill + schema + constraints.
