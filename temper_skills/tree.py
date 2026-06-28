@@ -39,6 +39,9 @@ class DecisionTree:
         default_factory=lambda: datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     )
     include_provenance: bool = True
+    # Result of checking the final tree against the ratified examples, if any were
+    # provided. Metadata only — not emitted into the exported source.
+    example_report: "object | None" = None
 
     def to_source(self) -> str:
         """Render the tree as a zero-dependency Python module."""

@@ -83,6 +83,9 @@ def ingest(
     backend: str = typer.Option(
         "auto", help="LLM backend: auto | api | claude | opencode."
     ),
+    examples: str = typer.Option(
+        None, help="JSON file of ratified examples [{input, expected}] to check the tree against."
+    ),
 ):
     """Compile a skill's decision logic into a deterministic Python tree."""
     interactive = PROFILES[profile][2]
@@ -91,11 +94,13 @@ def ingest(
     except (ValueError, RuntimeError) as e:
         console.print(f"[red]Backend error:[/] {e}")
         raise typer.Exit(1)
-    console.print(f"[cyan]Reading {skill}[/]  ·  backend: [bold]{be.describe()}[/]")
+    ratified = load_dataset(examples) if examples else None
+    console.print(f"[cyan]Reading {skill}[/]  ·  backend: [bold]{be.describe()}[/]"
+                  + (f"  ·  {len(ratified)} ratified example(s)" if ratified else ""))
     try:
         tree = ingest_skill(
             skill, schema=None, profile=profile, backend=be,
-            gate=_make_gate(interactive), confirm=_confirm_schema,
+            gate=_make_gate(interactive), confirm=_confirm_schema, examples=ratified,
         )
     except KeyboardInterrupt as e:
         console.print(f"[red]Aborted:[/] {e}")
@@ -104,7 +109,25 @@ def ingest(
     cost = be.cost_estimate()
     cost_line = f"~${cost:.4f} (metered)" if cost is not None else "subscription — no metered cost"
     console.print(Panel(tree.to_source(), title=f"Exported {out}", border_style="green"))
+    _print_example_check(tree)
     console.print(f"[dim]backend {be.describe()} · cost: {cost_line}[/]")
+
+
+def _print_example_check(tree) -> None:
+    """Surface the ratified-examples check (if any examples were provided)."""
+    r = getattr(tree, "example_report", None)
+    if r is None:
+        return
+    if not r.disagreements:
+        console.print(f"[green]✓ ratified examples: {r.agreements}/{r.total} agree[/]")
+        return
+    lines = [f"[red]{r.agreements}/{r.total} ratified examples agree[/] — "
+             "each disagreement is a tree bug or a mislabeled example; sign off:"]
+    for d in r.disagreements:
+        lines.append(f"  input={d.input}")
+        lines.append(f"    expected [green]{d.expected}[/]  ·  got [red]{d.predicted}[/]")
+    console.print(Panel("\n".join(lines), title="⚠ ratified-example disagreements",
+                        border_style="yellow"))
 
 
 @app.command()

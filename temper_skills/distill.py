@@ -15,6 +15,9 @@ PROFILES = {
     # name:        (max_rounds, stop_after_quiet_rounds, interactive, provenance)
     "quick": (8, 2, False, False),
     "standard": (20, 3, True, True),
+    # audit-grade today = more rounds + stricter convergence (N=5) + the gate.
+    # Tournament orchestration, required citations, and per-gray-zone sign-off
+    # (the deeper audit-grade behaviors in the design doc) are roadmap, not built.
     "audit-grade": (50, 5, True, True),
 }
 
@@ -219,7 +222,19 @@ def distill(
             break
 
     model_tag = f"{backend.model} via {backend.name}"
-    return _finalize(tree, last_arbitration, survival, sources, model_tag, profile, provenance, fn_name)
+    final = _finalize(tree, last_arbitration, survival, sources, model_tag, profile, provenance, fn_name)
+    # The ratified examples are the loop's own correctness signal: check the
+    # converged tree against them and surface any disagreement (§4.1 / §4.5).
+    if sources.examples:
+        final.example_report = _check_examples(final, sources.examples)
+    return final
+
+
+def _check_examples(tree: DecisionTree, examples: list[dict]):
+    from .validate import fn_from_tree, label_match, run_validation
+
+    dataset = [{"input": e["input"], "expected": e["expected"]} for e in examples]
+    return run_validation(fn_from_tree(tree), dataset, label_match)
 
 
 def _finalize(

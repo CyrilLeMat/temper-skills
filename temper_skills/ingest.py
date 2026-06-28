@@ -52,6 +52,7 @@ def ingest_skill(
     gate=None,
     confirm: Callable[[InferredSchema], bool] | None = None,
     fn_name: str | None = None,
+    examples: list[dict] | None = None,
 ) -> DecisionTree:
     """Read a skill.md and distill its routing logic into a DecisionTree.
 
@@ -80,7 +81,8 @@ def ingest_skill(
     elif isinstance(schema, type) and issubclass(schema, BaseModel):
         resolved_fn = fn_name or "decide"
 
-    sources = Sources(schema=schema, constraints=constraints, skill_text=skill_text)
+    sources = Sources(schema=schema, constraints=constraints, skill_text=skill_text,
+                      examples=examples or [])
     return distill(
         sources, profile=profile, backend=backend, gate=gate, fn_name=resolved_fn
     )

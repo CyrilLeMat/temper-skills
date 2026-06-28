@@ -69,3 +69,30 @@ def test_gate_abort_raises():
 def test_unknown_profile_rejected():
     with pytest.raises(ValueError):
         distill(_sources(), backend=FakeBackend(), profile="nope")
+
+
+def test_no_examples_means_no_report():
+    tree = distill(_sources(), backend=FakeBackend(score=9), profile="quick")
+    assert tree.example_report is None
+
+
+def test_ratified_examples_checked_and_agree():
+    src = Sources(schema=TicketSchema, examples=[
+        {"input": {"priority": "high", "security_score": 0.1}, "expected": "escalate_urgent"},
+    ])
+    tree = distill(src, backend=FakeBackend(score=9), profile="quick")
+    assert tree.example_report is not None
+    assert tree.example_report.total == 1
+    assert tree.example_report.disagreements == []
+
+
+def test_ratified_example_disagreement_surfaced():
+    # FakeBackend's tree routes only priority=="high"; a low-priority example that
+    # expects escalate_urgent must surface as a disagreement.
+    src = Sources(schema=TicketSchema, examples=[
+        {"input": {"priority": "low", "security_score": 0.1}, "expected": "escalate_urgent"},
+    ])
+    tree = distill(src, backend=FakeBackend(score=9), profile="quick")
+    rep = tree.example_report
+    assert rep.agreements == 0 and len(rep.disagreements) == 1
+    assert rep.disagreements[0].predicted == "route_default"

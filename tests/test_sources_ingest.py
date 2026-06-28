@@ -57,3 +57,16 @@ def test_ingest_explicit_schema_skips_inference(tmp_path):
                         fn_name="route")
     assert be.calls["inferred"] == 0
     assert tree.fn_name == "route"
+
+
+def test_ingest_threads_examples_to_the_check(tmp_path):
+    skill = tmp_path / "skill.md"
+    skill.write_text("Route tickets.")
+    be = FakeBackend(score=9)
+    tree = ingest_skill(
+        str(skill), schema=TicketSchema, backend=be, profile="quick",
+        examples=[{"input": {"priority": "high", "security_score": 0.1},
+                   "expected": "escalate_urgent"}],
+    )
+    assert tree.example_report is not None
+    assert tree.example_report.total == 1 and tree.example_report.disagreements == []
