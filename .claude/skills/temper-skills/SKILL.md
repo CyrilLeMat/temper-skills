@@ -139,6 +139,12 @@ Show the user both artifacts and what changed: the original skill re-decided eve
 the tempered skill extracts features, calls `route.<fn>`, and relays the verdict — decision
 frozen, model still does NL extraction + phrasing (§2.5).
 
+`export_skill` is the deterministic template (default). If the user wants a **woven**
+variant that reads in the original skill's own voice, you may instead rewrite the original
+prose yourself — preserving its role/tone, deleting only the decision logic, and inserting
+the same delegation contract (extract features → call `route.<fn>` → relay verdict, never
+override; surface the recorded gray zones). Do not invent new rules; only re-route to the tree.
+
 The tree JSON shape:
 ```json
 {

@@ -11,7 +11,7 @@ from pathlib import Path
 
 from .backends import get_backend
 from .distill import PROFILES, RoundResult
-from .export_skill import render_tempered_skill
+from .export_skill import render_tempered_skill, weave_tempered_skill
 from .export_tree import tree_from_dict
 from .incremental import recrystallize, render_diff
 from .ingest import InferredSchema, ingest_skill
@@ -92,6 +92,9 @@ def ingest(
     skill_out: str = typer.Option(
         None, help="Where to write the tempered skill.md (default: <out>.tempered.md)."
     ),
+    skill_style: str = typer.Option(
+        "template", help="Tempered skill style: template (deterministic) | woven (LLM-rewritten)."
+    ),
 ):
     """Compile a skill's decision logic into a deterministic Python tree."""
     interactive = PROFILES[profile][2]
@@ -122,8 +125,16 @@ def ingest(
     md_path = skill_out or str(Path(out).with_suffix("")) + ".tempered.md"
     with open(skill) as f:
         original = f.read()
-    Path(md_path).write_text(render_tempered_skill(tree, module, original_skill_text=original))
-    console.print(f"[green]✓ tempered skill → {md_path}[/]  (delegates the decision to {module}.{tree.fn_name})")
+    if skill_style == "woven":
+        try:
+            md = weave_tempered_skill(tree, module, original, be)
+        except Exception as e:
+            console.print(f"[yellow]weave failed ({e}); falling back to deterministic template[/]")
+            md = render_tempered_skill(tree, module, original_skill_text=original)
+    else:
+        md = render_tempered_skill(tree, module, original_skill_text=original)
+    Path(md_path).write_text(md)
+    console.print(f"[green]✓ tempered skill ({skill_style}) → {md_path}[/]  (delegates the decision to {module}.{tree.fn_name})")
     console.print(f"[dim]backend {be.describe()} · cost: {cost_line}[/]")
 
 

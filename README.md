@@ -154,8 +154,11 @@ features and phrasing the answer — and freezes the *decision* (§2.5):
 > `from dog_food_checker import can_dog_eat`, relay the verdict, don't override it. Gray
 > zones to surface: …
 
-It's a deterministic template (no LLM), and it carries the recorded gray zones forward as
-caveats the agent should mention. That's the full circle: prompt → tree → prompt-that-uses-the-tree.
+By default it's a **deterministic template** (no LLM), carrying the recorded gray zones
+forward as caveats. Pass `--skill-style woven` to instead have the model rewrite the
+original skill *in its own voice* — same delegation contract, nicer prose, at the cost of a
+model call (falls back to the template if the call fails). That's the full circle:
+prompt → tree → prompt-that-uses-the-tree.
 
 ## Validation — pin the tree in CI
 

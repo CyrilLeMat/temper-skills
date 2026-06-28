@@ -7,6 +7,7 @@ import re
 from pydantic import BaseModel
 
 from temper_skills.backends.base import Backend
+from temper_skills.export_skill import WovenSkill
 from temper_skills.ingest import InferredFeature, InferredSchema
 from temper_skills.schemas import (
     ArbitrationEntry,
@@ -45,7 +46,7 @@ class FakeBackend(Backend):
         super().__init__("fake-model")
         self.score = score
         self.personas_seen: list[str] = []
-        self.calls = {"tree": 0, "verdict": 0, "arbitration": 0, "inferred": 0}
+        self.calls = {"tree": 0, "verdict": 0, "arbitration": 0, "inferred": 0, "woven": 0}
 
     def complete(self, system: str, user: str, schema):
         if schema is ProposedTree:
@@ -76,4 +77,7 @@ class FakeBackend(Backend):
                 ],
                 constraints=["when in doubt, human_review"],
             )
+        if schema is WovenSkill:
+            self.calls["woven"] += 1
+            return WovenSkill(markdown="# Woven skill\n\nDelegates to the tree; see code.")
         raise AssertionError(f"unexpected schema {schema}")

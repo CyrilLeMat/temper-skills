@@ -14,6 +14,8 @@ from __future__ import annotations
 import re
 import sys
 
+from pydantic import BaseModel, Field
+
 from .export_tree import tree_from_dict
 from .tree import DecisionTree
 
@@ -80,6 +82,59 @@ def render_tempered_skill(
         "and evolvable (`temper-skills incremental`) — regenerate this skill when the tree changes."
     )
     return "\n".join(out) + "\n"
+
+
+class WovenSkill(BaseModel):
+    markdown: str = Field(description="The complete rewritten skill.md, ready to save.")
+
+
+WEAVE_SYSTEM = (
+    "You revise an agent's skill/prompt so it DELEGATES its decision to a frozen, "
+    "deterministic decision tree, while preserving the skill's voice, role, and any "
+    "instructions unrelated to the decision. You never invent new policy or new rules — "
+    "the tree is the single source of the decision now."
+)
+
+
+def _render_nodes(tree: DecisionTree) -> str:
+    lines = [f"  if ({n.condition}) -> {n.outcome}" for n in tree.nodes]
+    lines.append(f"  default -> {tree.default_outcome}")
+    return "\n".join(lines)
+
+
+def module_call(module: str, fn: str, feats: list[str]) -> str:
+    return f'{fn}({{{", ".join(f"{f!r}: {f}" for f in feats)}}})'
+
+
+def weave_tempered_skill(
+    tree: DecisionTree,
+    module: str,
+    original_skill_text: str,
+    backend,
+    fn: str | None = None,
+) -> str:
+    """LLM-rewrite the original skill to delegate to the tree (preserves voice).
+
+    Falls back to the deterministic template at the call site if the backend fails.
+    """
+    fn = fn or tree.fn_name
+    feats = tree.features or ["<feature>"]
+    gray = [n.gray_zone for n in tree.nodes if n.gray_zone]
+    user = (
+        "ORIGINAL SKILL (preserve its voice, role, and any non-decision instructions):\n"
+        f"{original_skill_text}\n\n"
+        "The decision logic has been compiled into this deterministic tree (do NOT restate "
+        f"its rules as prose — call it):\n{_render_nodes(tree)}\n\n"
+        "Rewrite the skill so it DELEGATES the decision to the tree. Requirements:\n"
+        f"- Keep the original role and voice; drop only the prose that re-derived the decision.\n"
+        f"- Instruct the agent to (1) extract the structured features {feats} from the request, "
+        f"(2) call `from {module} import {fn}` then `verdict = {module_call(module, fn, feats)}`, "
+        f"(3) relay the verdict and NEVER override or re-derive it; pass a missing feature as None.\n"
+        + ("- Surface these gray zones as caveats when relevant: " + "; ".join(gray) + "\n" if gray else "")
+        + "- Do NOT invent new rules, foods, categories, or thresholds — only re-route to the tree.\n"
+        "Return the COMPLETE skill.md as markdown, ready to save, with no preamble."
+    )
+    return backend.complete(WEAVE_SYSTEM, user, WovenSkill).markdown
 
 
 def main(argv: list[str] | None = None) -> int:

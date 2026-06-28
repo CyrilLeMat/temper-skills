@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from temper_skills.export_skill import main, render_tempered_skill
+from conftest import FakeBackend
+
+from temper_skills.export_skill import main, render_tempered_skill, weave_tempered_skill
 from temper_skills.tree import DecisionNode, DecisionTree
 
 
@@ -46,6 +48,14 @@ def test_no_gray_zone_section_when_none():
                      features=["x"], fn_name="decide")
     md = render_tempered_skill(t, "m")
     assert "Gray zones" not in md
+
+
+def test_woven_uses_the_backend():
+    be = FakeBackend()
+    md = weave_tempered_skill(_tree(), "dog_food_checker",
+                              "You are a dog food safety assistant.", be)
+    assert be.calls["woven"] == 1
+    assert "Woven skill" in md  # FakeBackend's canned markdown
 
 
 def test_main_writes_file(tmp_path):
