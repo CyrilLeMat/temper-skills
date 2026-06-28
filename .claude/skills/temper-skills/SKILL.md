@@ -18,12 +18,29 @@ reviewers. Everything runs on the user's Claude Code subscription via the Task t
 
 - A target `skill.md` / prompt (the logic to migrate), path given by the user.
 - A **schema**: the pre-computed structured features the tree may branch on. If the user
-  doesn't supply one, infer it from the skill (feature name + type + one-line meaning) and
-  **show it for confirmation before looping**.
+  doesn't supply one, infer it from the skill (feature name + type + one-line meaning).
 - Optional `hard` constraints (non-negotiable rules) and a few ratified examples.
 
 Branch only on schema features. Conditions are valid Python boolean expressions over the
 feature names (e.g. `food_item == "chocolate"`).
+
+### The one pre-loop human decision: the schema (accept or edit)
+
+When you infer the schema, present it and ask exactly one thing: **"Accept these features,
+or edit the list?"** That's the only legitimate pre-loop gate (§11.4) — the schema caps
+what the tree can ever express, and a silent extraction error would poison everything.
+
+**Do NOT ask the user anything else here.** In particular, do **not** ask them to choose
+the feature-set *breadth*, whether to include dose/weight/form branches, or whether to
+"let the critic collapse." That is the loop's job, not the user's:
+
+- **Seed the loop with the full inferred feature set.** Let the proposer branch on whatever
+  it judges relevant.
+- **The `overengineering_critic` prunes** features and branches a thin skill doesn't justify
+  — that is its entire purpose. Offloading that judgment to the user defeats the tool.
+
+So the human touchpoints are exactly two: (1) accept/edit the schema, once, up front; and
+(2) the per-round Continue / Stop / Abort gate below. Nothing else is a question for them.
 
 ## The personas
 
