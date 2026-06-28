@@ -7,9 +7,8 @@ from typing import Any, Callable
 
 from pydantic import BaseModel, Field
 
+from .backends import Backend, auto_backend
 from .distill import distill
-from .llm import LLM, DEFAULT_MODEL
-from .schemas import ProposerArbitration  # noqa: F401  (kept for type parity)
 from .sources import Sources
 from .tree import DecisionTree
 
@@ -48,7 +47,8 @@ def ingest_skill(
     path: str,
     schema: Any | None = None,
     profile: str = "standard",
-    model: str = DEFAULT_MODEL,
+    model: str = "claude-sonnet-4-6",
+    backend: Backend | None = None,
     gate=None,
     confirm: Callable[[InferredSchema], bool] | None = None,
     fn_name: str | None = None,
@@ -62,12 +62,12 @@ def ingest_skill(
     with open(path) as f:
         skill_text = f.read()
 
+    backend = backend or auto_backend(model)
     constraints: list[dict] = []
     resolved_fn = fn_name or "decide"
 
     if schema is None:
-        llm = LLM(model=model)
-        inferred = llm.parse(
+        inferred = backend.complete(
             INFER_SYSTEM,
             f"SKILL:\n{skill_text}\n\nPropose the schema and constraints.",
             InferredSchema,
@@ -82,5 +82,5 @@ def ingest_skill(
 
     sources = Sources(schema=schema, constraints=constraints, skill_text=skill_text)
     return distill(
-        sources, profile=profile, model=model, gate=gate, fn_name=resolved_fn
+        sources, profile=profile, backend=backend, gate=gate, fn_name=resolved_fn
     )

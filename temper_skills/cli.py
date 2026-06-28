@@ -7,6 +7,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Prompt
 
+from .backends import get_backend
 from .distill import PROFILES, RoundResult
 from .ingest import InferredSchema, ingest_skill
 
@@ -73,20 +74,31 @@ def ingest(
     profile: str = typer.Option("standard", help=f"One of {list(PROFILES)}."),
     out: str = typer.Option("decision_tree.generated.py", help="Output .py path."),
     model: str = typer.Option("claude-sonnet-4-6", help="Compile-time model."),
+    backend: str = typer.Option(
+        "auto", help="LLM backend: auto | api | claude | opencode."
+    ),
 ):
     """Compile a skill's decision logic into a deterministic Python tree."""
     interactive = PROFILES[profile][2]
-    console.print(f"[cyan]Reading {skill}…[/]")
+    try:
+        be = get_backend(backend, model)
+    except (ValueError, RuntimeError) as e:
+        console.print(f"[red]Backend error:[/] {e}")
+        raise typer.Exit(1)
+    console.print(f"[cyan]Reading {skill}[/]  ·  backend: [bold]{be.describe()}[/]")
     try:
         tree = ingest_skill(
-            skill, schema=None, profile=profile, model=model,
+            skill, schema=None, profile=profile, backend=be,
             gate=_make_gate(interactive), confirm=_confirm_schema,
         )
     except KeyboardInterrupt as e:
         console.print(f"[red]Aborted:[/] {e}")
         raise typer.Exit(1)
     tree.export(out)
+    cost = be.cost_estimate()
+    cost_line = f"~${cost:.4f} (metered)" if cost is not None else "subscription — no metered cost"
     console.print(Panel(tree.to_source(), title=f"Exported {out}", border_style="green"))
+    console.print(f"[dim]backend {be.describe()} · cost: {cost_line}[/]")
 
 
 if __name__ == "__main__":

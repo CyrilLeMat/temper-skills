@@ -6,7 +6,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Callable
 
-from .llm import LLM, DEFAULT_MODEL
+from .backends import Backend, auto_backend
 from .schemas import PersonaVerdict, ProposedTree, ProposerArbitration
 from .sources import DEFAULT_PERSONAS, OVERENGINEERING_CRITIC, Persona, Sources
 from .tree import DecisionNode, DecisionTree
@@ -97,27 +97,27 @@ PERSONA_SYSTEM = (
 )
 
 
-def _initial_tree(llm: LLM, sources: Sources) -> ProposedTree:
+def _initial_tree(backend: Backend, sources: Sources) -> ProposedTree:
     user = (
         f"{_sources_block(sources)}\n\n"
         "Draft the initial decision tree. Cover the obvious cases first. Flag any "
         "ambiguous region as a gray_zone rather than guessing."
     )
-    return llm.parse(PROPOSER_SYSTEM, user, ProposedTree)
+    return backend.complete(PROPOSER_SYSTEM, user, ProposedTree)
 
 
-def _critique(llm: LLM, sources: Sources, persona: Persona, tree: ProposedTree) -> PersonaVerdict:
+def _critique(backend: Backend, sources: Sources, persona: Persona, tree: ProposedTree) -> PersonaVerdict:
     user = (
         f"Your angle ({persona.name}): {persona.style}\n\n"
         f"{_sources_block(sources)}\n\n"
         f"CURRENT TREE:\n{_render_tree(tree)}\n\n"
         f"Review the tree strictly from your angle. Set persona to '{persona.name}'."
     )
-    return llm.parse(PERSONA_SYSTEM, user, PersonaVerdict)
+    return backend.complete(PERSONA_SYSTEM, user, PersonaVerdict)
 
 
 def _arbitrate(
-    llm: LLM, sources: Sources, tree: ProposedTree, verdicts: list[PersonaVerdict]
+    backend: Backend, sources: Sources, tree: ProposedTree, verdicts: list[PersonaVerdict]
 ) -> ProposerArbitration:
     crit = "\n".join(
         f"  {v.persona} (score {v.score}, {v.verdict}): {v.detail}"
@@ -134,7 +134,7 @@ def _arbitrate(
         "overengineering_critic flags as unnecessary. Respect every HARD constraint. "
         "Give a convergence_estimate (0-100) for how settled the tree now is."
     )
-    return llm.parse(PROPOSER_SYSTEM, user, ProposerArbitration)
+    return backend.complete(PROPOSER_SYSTEM, user, ProposerArbitration)
 
 
 def _node_key(condition: str) -> str:
@@ -145,7 +145,8 @@ def distill(
     sources: Sources,
     adversaries: list[Persona] | None = None,
     profile: str = "standard",
-    model: str = DEFAULT_MODEL,
+    model: str = "claude-sonnet-4-6",
+    backend: Backend | None = None,
     gate: Gate | None = None,
     fn_name: str = "decide",
 ) -> DecisionTree:
@@ -159,8 +160,8 @@ def distill(
     if not any(p.name == OVERENGINEERING_CRITIC.name for p in personas):
         personas.append(OVERENGINEERING_CRITIC)
 
-    llm = LLM(model=model)
-    tree = _initial_tree(llm, sources)
+    backend = backend or auto_backend(model)
+    tree = _initial_tree(backend, sources)
 
     survival: dict[str, int] = {_node_key(n.condition): 1 for n in tree.nodes}
     seen_gray_zones: set[str] = {n.gray_zone for n in tree.nodes if n.gray_zone}
@@ -168,8 +169,8 @@ def distill(
     last_arbitration: ProposerArbitration | None = None
 
     for r in range(1, max_rounds + 1):
-        verdicts = [_critique(llm, sources, p, tree) for p in personas]
-        arbitration = _arbitrate(llm, sources, tree, verdicts)
+        verdicts = [_critique(backend, sources, p, tree) for p in personas]
+        arbitration = _arbitrate(backend, sources, tree, verdicts)
         new_tree = arbitration.tree
         last_arbitration = arbitration
 
@@ -197,7 +198,8 @@ def distill(
         if quiet_rounds >= stop_quiet:
             break
 
-    return _finalize(tree, last_arbitration, survival, sources, model, profile, provenance, fn_name)
+    model_tag = f"{backend.model} via {backend.name}"
+    return _finalize(tree, last_arbitration, survival, sources, model_tag, profile, provenance, fn_name)
 
 
 def _finalize(
