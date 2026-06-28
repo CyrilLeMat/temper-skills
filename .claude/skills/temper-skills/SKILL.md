@@ -125,11 +125,19 @@ these by **recording them and signing off at review** (§2.5, §4.4) — they ap
 
 ## Export (deterministic — no LLM)
 
-When the loop ends, write the tree to JSON and run the deterministic exporter:
+When the loop ends, write the tree to JSON and run the deterministic exporters — **both
+of them**. The first emits the decision tree; the second closes the loop by emitting a
+**tempered `skill.md`** that delegates the decision to that tree (the whole point: the
+original prompt should now *use* the frozen logic, not re-derive it):
 
 ```bash
-python -m temper_skills.export_tree tree.json route.py
+python -m temper_skills.export_tree  tree.json route.py
+python -m temper_skills.export_skill tree.json route route.tempered.md <original_skill.md>
 ```
+
+Show the user both artifacts and what changed: the original skill re-decided every call;
+the tempered skill extracts features, calls `route.<fn>`, and relays the verdict — decision
+frozen, model still does NL extraction + phrasing (§2.5).
 
 The tree JSON shape:
 ```json

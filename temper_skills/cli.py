@@ -7,8 +7,11 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Prompt
 
+from pathlib import Path
+
 from .backends import get_backend
 from .distill import PROFILES, RoundResult
+from .export_skill import render_tempered_skill
 from .export_tree import tree_from_dict
 from .incremental import recrystallize, render_diff
 from .ingest import InferredSchema, ingest_skill
@@ -86,6 +89,9 @@ def ingest(
     examples: str = typer.Option(
         None, help="JSON file of ratified examples [{input, expected}] to check the tree against."
     ),
+    skill_out: str = typer.Option(
+        None, help="Where to write the tempered skill.md (default: <out>.tempered.md)."
+    ),
 ):
     """Compile a skill's decision logic into a deterministic Python tree."""
     interactive = PROFILES[profile][2]
@@ -110,6 +116,14 @@ def ingest(
     cost_line = f"~${cost:.4f} (metered)" if cost is not None else "subscription — no metered cost"
     console.print(Panel(tree.to_source(), title=f"Exported {out}", border_style="green"))
     _print_example_check(tree)
+
+    # Close the loop: a tempered skill.md that delegates the decision to the tree.
+    module = Path(out).with_suffix("").name
+    md_path = skill_out or str(Path(out).with_suffix("")) + ".tempered.md"
+    with open(skill) as f:
+        original = f.read()
+    Path(md_path).write_text(render_tempered_skill(tree, module, original_skill_text=original))
+    console.print(f"[green]✓ tempered skill → {md_path}[/]  (delegates the decision to {module}.{tree.fn_name})")
     console.print(f"[dim]backend {be.describe()} · cost: {cost_line}[/]")
 
 

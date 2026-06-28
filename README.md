@@ -136,6 +136,27 @@ def normalize(raw: str) -> dict:
 can_dog_eat(normalize("a slice of Dark Chocolate cake"))   # -> "no — toxic, never feed"
 ```
 
+## Closing the loop — a skill that *uses* the tree
+
+Tempering doesn't stop at the `.py`. `ingest` also emits a **tempered `skill.md`** that
+delegates the decision to the tree, so the original prompt actually adopts the frozen logic
+instead of re-deriving it every call:
+
+```
+route_ticket.py            # the deterministic tree
+route_ticket.tempered.md   # a skill that calls it
+```
+
+The tempered skill keeps the model's real jobs — turning the request into structured
+features and phrasing the answer — and freezes the *decision* (§2.5):
+
+> **The decision is frozen.** Extract `food_item` from the request, call
+> `from dog_food_checker import can_dog_eat`, relay the verdict, don't override it. Gray
+> zones to surface: …
+
+It's a deterministic template (no LLM), and it carries the recorded gray zones forward as
+caveats the agent should mention. That's the full circle: prompt → tree → prompt-that-uses-the-tree.
+
 ## Validation — pin the tree in CI
 
 The adversarial loop measures *consistency*; correctness comes from a **held-out labeled

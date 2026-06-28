@@ -1,6 +1,7 @@
 """Temper-Skills — compile an agent's decision logic from a prompt into code."""
 
 from .distill import distill
+from .export_skill import render_tempered_skill
 from .incremental import diff_trees, recrystallize
 from .ingest import ingest_skill
 from .sources import (
@@ -22,6 +23,7 @@ __all__ = [
     "ingest_skill",
     "recrystallize",
     "diff_trees",
+    "render_tempered_skill",
     "Sources",
     "Persona",
     "DecisionTree",

@@ -21,14 +21,15 @@
       "gray_zone": null
     },
     {
-      "condition": "food_item in {\"carrot\", \"carrots\", \"plain rice\", \"plain chicken\", \"banana\", \"blueberries\", \"green beans\", \"plain pumpkin\"}",
+      "condition": "food_item in {\"carrot\", \"rice\", \"chicken\", \"banana\", \"blueberries\", \"green beans\", \"pumpkin\"}",
       "outcome": "yes — safe in moderation",
       "rounds_survived": 2,
       "sources": [
         "proposer-draft",
-        "domain_expert"
+        "domain_expert",
+        "validation_set#§4.5"
       ],
-      "critic_note": null,
+      "critic_note": "keywords are bare/normalized (rice, not 'plain rice'); 'plain'/'cooked' qualifiers are stripped upstream — aligned to the held-out validation convention",
       "gray_zone": "safe-list has no ratified examples in the source skill; user ratified keeping a conservative whitelist (round 1 gate)"
     },
     {
