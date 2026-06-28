@@ -33,6 +33,30 @@ def route_ticket(ticket: dict) -> str:
     # gray_zone: security_score 0.7–0.8 + low priority -> human_review recommended
 ```
 
+## Two ways to run it
+
+**1. On your Claude Code subscription — no API key (subagent mode).**
+Install the skill (`.claude/skills/temper-skills/`) and run it inside Claude Code:
+
+```
+/temper path/to/skill.md
+```
+
+Claude Code drives the adversarial loop using **persona subagents** — billed by your
+Claude Code subscription, zero API credits. The deterministic tree is written by
+`python -m temper_skills.export_tree`. This is the low-friction on-ramp.
+
+**2. As a library / CLI — with an API key or an agent CLI (`distill()` / `temper-skills`).**
+For CI, headless, or non-Claude-Code use:
+
+```
+temper-skills ingest skill.md --backend auto   # api | claude | opencode | auto
+```
+
+`--backend auto` uses `ANTHROPIC_API_KEY` if set, else a detected agent CLI. Note:
+headless agent CLIs (`claude -p`) bill the **API**, not your subscription — for a
+subscription run use mode 1.
+
 ## How it works
 
 Temper-Skills runs an **adversarial loop**: a proposer drafts a decision tree, and
