@@ -12,6 +12,8 @@ from temper_skills.ingest import InferredFeature, InferredSchema
 from temper_skills.schemas import (
     ArbitrationEntry,
     PersonaVerdict,
+    ProposedExample,
+    ProposedExampleSet,
     ProposedNode,
     ProposedTree,
     ProposerArbitration,
@@ -83,6 +85,8 @@ class ScriptedBackend(Backend):
                 entries=[ArbitrationEntry(persona="literalist", decision="kept", rationale="ok")],
                 convergence_estimate=90, tree=tree,
             )
+        if schema is ProposedExampleSet:
+            return ProposedExampleSet(examples=[])
         raise AssertionError(f"unexpected schema {schema}")
 
 
@@ -133,4 +137,12 @@ class FakeBackend(Backend):
         if schema is WovenSkill:
             self.calls["woven"] += 1
             return WovenSkill(markdown="# Woven skill\n\nDelegates to the tree; see code.")
+        if schema is ProposedExampleSet:
+            self.calls["proposed"] = self.calls.get("proposed", 0) + 1
+            return ProposedExampleSet(examples=[
+                ProposedExample(input={"priority": "low", "security_score": 0.5},
+                                expected="human_review", rationale="low priority, mid score"),
+                ProposedExample(input={"priority": "high", "security_score": 0.1},
+                                expected="escalate_urgent", rationale="dup of a ratified case"),
+            ])
         raise AssertionError(f"unexpected schema {schema}")

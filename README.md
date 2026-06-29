@@ -194,6 +194,27 @@ not just prompt seasoning. Disagreements are surfaced for sign-off. It exits non
 **mandatory** for high-stakes domains (Tier B) — a tree shipped without a held-out set is
 not auditable, no matter how many rounds it survived.
 
+### Growing the validation set from the loop
+
+You don't have to write the validation set up front. The loop knows which cells are
+contested — they're its **gray zones** — so it drafts discriminating test cases for exactly
+those cells (on by default; `--no-propose-examples` to skip):
+
+```
+✎ proposed test cases (awaiting ratification)
+  input={'priority': 'urgent', 'security_score': 0.85}
+    proposed escalate_urgent  ·  tree says escalate_security   (differs from tree)
+    pins the urgency-vs-mid-band-security cell no example covers
+→ written to route_ticket.proposed_examples.json
+```
+
+These are **proposals, never ground truth** — the loop must not grade its own homework. Each
+is tagged `"status": "proposed"` and `load_dataset` *ignores* proposed entries, so feeding the
+file straight back changes nothing. You **ratify** by reviewing the label and setting
+`"status": "ratified"` (or moving the case into your validation set); only then does it gate
+CI and anchor that cell on the next run (re-run, or evolve via `incremental`). That's how an
+empty validation set is meant to grow — the rounds draft it, you sign off on it.
+
 ## Examples
 
 - [`examples/license_compat/`](examples/license_compat/) — **the "moat" demo** (plan §8).
@@ -219,7 +240,7 @@ not auditable, no matter how many rounds it survived.
 
 ```bash
 pip install -e ".[dev]"
-pytest -q                          # 67 tests, no network
+pytest -q                          # 86 tests, no network
 git config core.hooksPath .githooks   # once per clone: block red commits locally
 ```
 

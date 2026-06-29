@@ -42,6 +42,10 @@ class DecisionTree:
     # Result of checking the final tree against the ratified examples, if any were
     # provided. Metadata only — not emitted into the exported source.
     example_report: "object | None" = None
+    # Discriminating test cases the loop drafted for its gray zones, each
+    # {input, expected, rationale, tree_prediction, status: "proposed"}. PROPOSALS
+    # for human ratification — they do not gate CI until ratified. Metadata only.
+    proposed_examples: "list | None" = None
 
     def to_source(self) -> str:
         """Render the tree as a zero-dependency Python module."""

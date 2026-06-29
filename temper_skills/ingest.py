@@ -53,6 +53,7 @@ def ingest_skill(
     confirm: Callable[[InferredSchema], bool] | None = None,
     fn_name: str | None = None,
     examples: list[dict] | None = None,
+    propose_examples: bool = False,
 ) -> DecisionTree:
     """Read a skill.md and distill its routing logic into a DecisionTree.
 
@@ -84,5 +85,6 @@ def ingest_skill(
     sources = Sources(schema=schema, constraints=constraints, skill_text=skill_text,
                       examples=examples or [])
     return distill(
-        sources, profile=profile, backend=backend, gate=gate, fn_name=resolved_fn
+        sources, profile=profile, backend=backend, gate=gate, fn_name=resolved_fn,
+        propose_examples=propose_examples,
     )

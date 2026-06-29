@@ -88,6 +88,18 @@ def test_fn_from_pyfile_ambiguous(tmp_path):
         fn_from_pyfile(str(p))
 
 
+def test_load_dataset_skips_unratified_proposed_cases(tmp_path):
+    """The trust boundary: a machine-proposed label must not gate until ratified."""
+    p = tmp_path / "set.json"
+    p.write_text(json.dumps([
+        {"input": {"x": 1}, "expected": "a"},                       # ratified (no status)
+        {"input": {"x": 2}, "expected": "b", "status": "ratified"},  # explicitly ratified
+        {"input": {"x": 3}, "expected": "c", "status": "proposed"},  # must be skipped
+    ]))
+    data = load_dataset(str(p))
+    assert [e["input"] for e in data] == [{"x": 1}, {"x": 2}]
+
+
 def test_canonical_dogfood_tree_passes_its_validation_set():
     """Pins the shipped example tree in CI — the H1 payoff on our own repo."""
     fn = fn_from_json(str(DOGFOOD / "output" / "dog_food_tree.json"))

@@ -171,6 +171,34 @@ def test_genuine_score_improvement_extends_then_plateaus():
     assert be.calls["arbitration"] == 5  # rose through r1-3, flat r4-5 → plateau at 5
 
 
+def test_proposes_examples_when_enabled():
+    tree = distill(_sources(), backend=FakeBackend(score=9), profile="quick",
+                   fn_name="route_ticket", propose_examples=True)
+    assert tree.proposed_examples is not None
+    p = tree.proposed_examples[0]
+    assert p["status"] == "proposed"           # never silently ratified
+    assert "tree_prediction" in p              # what the frozen tree actually returns
+    assert p["input"] == {"priority": "low", "security_score": 0.5}
+
+
+def test_proposed_examples_off_by_default():
+    tree = distill(_sources(), backend=FakeBackend(score=9), profile="quick")
+    assert tree.proposed_examples is None
+
+
+def test_proposed_examples_dedup_against_ratified():
+    # FakeBackend proposes a case whose input duplicates a ratified example — it must
+    # be dropped, leaving only the genuinely new one.
+    src = Sources(schema=TicketSchema, examples=[
+        {"input": {"priority": "high", "security_score": 0.1}, "expected": "escalate_urgent"},
+    ])
+    tree = distill(src, backend=FakeBackend(score=9), profile="quick",
+                   fn_name="route_ticket", propose_examples=True)
+    inputs = [p["input"] for p in tree.proposed_examples]
+    assert {"priority": "high", "security_score": 0.1} not in inputs
+    assert len(tree.proposed_examples) == 1
+
+
 def test_ratified_example_disagreement_surfaced():
     # FakeBackend's tree routes only priority=="high"; a low-priority example that
     # expects escalate_urgent must surface as a disagreement.

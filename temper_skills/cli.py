@@ -124,6 +124,10 @@ def ingest(
     fn: str = typer.Option(None, help="Decision function name (used with --schema)."),
     yes: bool = typer.Option(False, "--yes", "-y",
                              help="Don't stop at each round — run to convergence/cap (panels still print)."),
+    propose_examples: bool = typer.Option(
+        True, "--propose-examples/--no-propose-examples",
+        help="Have the loop draft discriminating test cases for its gray zones, for you "
+             "to ratify and feed back via --examples (written to <out>.proposed_examples.json)."),
 ):
     """Compile a skill's decision logic into a deterministic Python tree."""
     interactive = PROFILES[profile][2] and not yes
@@ -141,6 +145,7 @@ def ingest(
         tree = ingest_skill(
             skill, schema=pinned, profile=profile, backend=be,
             gate=_make_gate(interactive), confirm=_confirm_schema, examples=ratified, fn_name=fn,
+            propose_examples=propose_examples,
         )
     except KeyboardInterrupt as e:
         console.print(f"[red]Aborted:[/] {e}")
@@ -150,6 +155,7 @@ def ingest(
     cost_line = f"~${cost:.4f} (metered)" if cost is not None else "subscription — no metered cost"
     console.print(Panel(tree.to_source(), title=f"Exported {out}", border_style="green"))
     _print_example_check(tree)
+    _write_proposed_examples(tree, out)
 
     # Close the loop: a tempered skill.md that delegates the decision to the tree.
     module = Path(out).with_suffix("").name
@@ -184,6 +190,27 @@ def _print_example_check(tree) -> None:
         lines.append(f"    expected [green]{d.expected}[/]  ·  got [red]{d.predicted}[/]")
     console.print(Panel("\n".join(lines), title="⚠ ratified-example disagreements",
                         border_style="yellow"))
+
+
+def _write_proposed_examples(tree, out: str) -> None:
+    """Write the loop's drafted test cases to a sidecar file for human ratification."""
+    proposed = getattr(tree, "proposed_examples", None)
+    if not proposed:
+        return
+    path = str(Path(out).with_suffix("")) + ".proposed_examples.json"
+    Path(path).write_text(_json.dumps(proposed, indent=2, ensure_ascii=False))
+    lines = [f"The loop drafted [bold]{len(proposed)}[/] test case(s) for its gray zones — "
+             "[bold]proposed labels, not ground truth.[/] Review, fix any label, then set "
+             '[bold]"status": "ratified"[/] (or move them into your validation set) and '
+             "re-run with --examples to anchor these cells:"]
+    for e in proposed:
+        flag = "" if e["expected"] == e.get("tree_prediction") else "  [yellow](differs from tree)[/]"
+        lines.append(f"  input={e['input']}")
+        lines.append(f"    proposed [green]{e['expected']}[/]  ·  tree says [cyan]{e.get('tree_prediction')}[/]{flag}")
+        lines.append(f"    [dim]{e['rationale']}[/]")
+    lines.append(f"\n[dim]written to {path}[/]")
+    console.print(Panel("\n".join(lines), title="✎ proposed test cases (awaiting ratification)",
+                        border_style="magenta"))
 
 
 @app.command()

@@ -8,7 +8,12 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from .backends import Backend, auto_backend
-from .schemas import PersonaVerdict, ProposedTree, ProposerArbitration
+from .schemas import (
+    PersonaVerdict,
+    ProposedExampleSet,
+    ProposedTree,
+    ProposerArbitration,
+)
 from .sources import (
     BAD_FAITH_ACTOR,
     DOMAIN_EXPERT,
@@ -122,6 +127,14 @@ PERSONA_SYSTEM = (
     "review of business logic — not security scanning."
 )
 
+EXAMPLE_PROPOSER_SYSTEM = (
+    "You draft discriminating test cases for the cells a decision tree leaves contested "
+    "or unproven — the inputs a human reviewer should rule on to pin the tree down. Each "
+    "label you give is a PROPOSAL awaiting human ratification, not ground truth: you are "
+    "extending a validation set, not grading your own work. Target gray zones and "
+    "boundary cells; never duplicate an existing ratified example."
+)
+
 
 def _initial_tree(backend: Backend, sources: Sources) -> ProposedTree:
     user = (
@@ -201,11 +214,16 @@ def distill(
     fn_name: str = "decide",
     seed_tree: ProposedTree | None = None,
     seed_survival: dict[str, int] | None = None,
+    propose_examples: bool = False,
 ) -> DecisionTree:
     """Run the adversarial loop and return a deterministic DecisionTree.
 
     Pass ``seed_tree`` (with ``seed_survival``) to start from an existing tree
     instead of a blank draft — incremental mode (see incremental.recrystallize).
+
+    With ``propose_examples=True`` the loop drafts discriminating test cases for its
+    gray zones (attached as ``tree.proposed_examples``) for a human to ratify and feed
+    back as anchors — the way a validation set is meant to grow from an empty start.
     """
     if profile not in PROFILES:
         raise ValueError(f"unknown profile {profile!r}; choose from {list(PROFILES)}")
@@ -290,6 +308,9 @@ def distill(
     # converged tree against them and surface any disagreement (§4.1 / §4.5).
     if sources.examples:
         final.example_report = _check_examples(final, sources.examples)
+    # Draft test cases for the still-contested cells, for a human to ratify (§4.5).
+    if propose_examples:
+        final.proposed_examples = _propose_examples(backend, sources, final, fn_name)
     return final
 
 
@@ -298,6 +319,53 @@ def _check_examples(tree: DecisionTree, examples: list[dict]):
 
     dataset = [{"input": e["input"], "expected": e["expected"]} for e in examples]
     return run_validation(fn_from_tree(tree), dataset, label_match)
+
+
+def _propose_examples(
+    backend: Backend, sources: Sources, tree: DecisionTree, fn_name: str
+) -> list[dict]:
+    """Draft discriminating test cases for the tree's gray zones / uncovered cells.
+
+    The loop knows which cells are contested (they are its gray zones), so it is well
+    placed to propose the cases a human should ratify. Each returned dict is tagged
+    ``status="proposed"`` and carries what the tree currently returns — it does NOT
+    gate anything until a human ratifies the label (the trust boundary: the loop must
+    not author the ground truth it is then scored against).
+    """
+    from .validate import fn_from_tree
+
+    gray = [n.gray_zone for n in tree.nodes if n.gray_zone]
+    gray_block = "\n".join(f"  - {g}" for g in gray) or "  (none explicitly flagged)"
+    user = (
+        f"{_sources_block(sources)}\n\n"
+        f"FROZEN TREE (the decision is now exactly this):\n{tree.to_source()}\n\n"
+        f"GRAY ZONES still unresolved:\n{gray_block}\n\n"
+        "Propose a small set of discriminating test cases (at most one or two per gray "
+        "zone) that pin down these contested cells — the inputs a human reviewer should "
+        "rule on. Give the outcome you believe is correct for each, as a PROPOSAL to be "
+        "ratified. Do not duplicate any EXAMPLES already listed. If the tree is already "
+        "fully pinned by the existing examples, return an empty list."
+    )
+    proposed = backend.complete(EXAMPLE_PROPOSER_SYSTEM, user, ProposedExampleSet)
+
+    fn = fn_from_tree(tree)
+    existing = {json.dumps(e["input"], sort_keys=True) for e in sources.examples}
+    out: list[dict] = []
+    for ex in proposed.examples:
+        if json.dumps(ex.input, sort_keys=True) in existing:
+            continue
+        try:
+            prediction = fn(ex.input)
+        except Exception as e:  # a case that crashes the tree is itself worth surfacing
+            prediction = f"ERROR: {type(e).__name__}: {e}"
+        out.append({
+            "input": ex.input,
+            "expected": ex.expected,
+            "rationale": ex.rationale,
+            "tree_prediction": prediction,
+            "status": "proposed",
+        })
+    return out
 
 
 def _agreement(tree: ProposedTree, sources: Sources, fn_name: str) -> float | None:

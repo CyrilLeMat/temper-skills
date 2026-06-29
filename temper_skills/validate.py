@@ -106,4 +106,11 @@ def fn_from_pyfile(path: str, fn_name: str | None = None) -> Callable[[dict], st
 
 
 def load_dataset(path: str) -> list[dict]:
-    return json.loads(open(path).read())
+    """Load a labeled set, dropping cases not yet ratified.
+
+    The loop can *propose* test cases (tagged ``"status": "proposed"``), but a
+    machine-authored label must never gate anything until a human ratifies it — so
+    proposed entries are skipped here. An entry with no ``status`` is treated as
+    ratified (the hand-authored sets predate the field)."""
+    data = json.loads(open(path).read())
+    return [e for e in data if e.get("status") != "proposed"]
