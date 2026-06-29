@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from temper_skills.export_tree import main, tree_from_dict
+from temper_skills.export_tree import enrich_proposed, main, tree_from_dict
 
 TREE = {
     "fn_name": "can_dog_eat",
@@ -52,3 +52,36 @@ def test_main_reads_stdin(tmp_path, monkeypatch, capsys):
 
 def test_main_usage_error():
     assert main(["only-one-arg"]) == 2
+
+
+def test_enrich_proposed_computes_prediction_and_status():
+    t = tree_from_dict(TREE)
+    raw = [{"input": {"food_item": "chocolate"}, "expected": "toxic", "rationale": "r"},
+           {"input": {"food_item": "carrot"}, "expected": "toxic", "rationale": "contested"}]
+    enriched = enrich_proposed(t, raw)
+    assert all(e["status"] == "proposed" for e in enriched)          # never auto-ratified
+    assert enriched[0]["tree_prediction"] == "toxic"                 # agrees with the tree
+    assert enriched[1]["tree_prediction"] == "unknown"               # differs → worth a human
+
+
+def test_main_writes_proposed_examples_sidecar(tmp_path):
+    tree_with_proposed = {**TREE, "proposed_examples": [
+        {"input": {"food_item": "macadamia"}, "expected": "toxic", "rationale": "nut gray zone"},
+    ]}
+    src = tmp_path / "tree.json"
+    src.write_text(json.dumps(tree_with_proposed))
+    out = tmp_path / "checker.py"
+    assert main([str(src), str(out)]) == 0
+    side = tmp_path / "checker.proposed_examples.json"
+    assert side.exists()
+    data = json.loads(side.read_text())
+    assert data[0]["status"] == "proposed"
+    assert data[0]["tree_prediction"] == "unknown"  # exporter computed it, not the LLM
+
+
+def test_main_no_sidecar_without_proposed(tmp_path):
+    src = tmp_path / "tree.json"
+    src.write_text(json.dumps(TREE))
+    out = tmp_path / "checker.py"
+    main([str(src), str(out)])
+    assert not (tmp_path / "checker.proposed_examples.json").exists()

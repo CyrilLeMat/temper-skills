@@ -115,6 +115,22 @@ the scale is uniform across the panel.
 6. **Converge** — stop when **every persona scores ≥ 8 AND no new gray zone appeared** for
    the round, or the user stops, or you hit the round cap (`quick` ~8, `standard` ~20).
 
+### After convergence — draft proposed test cases for the gray zones
+
+The cells you couldn't settle (the recorded gray zones) are exactly the cases a human
+should rule on. Once the loop ends, **draft one or two discriminating test cases per gray
+zone** — concrete feature assignments that pin down each contested cell — and give the
+outcome you believe is correct for each.
+
+These are **proposals, not ground truth.** You are extending the validation set, not
+grading your own work: never treat a label you authored as a ratified anchor, and never
+let it gate anything. Emit them in `tree.json` under `proposed_examples` (just `input` /
+`expected` / `rationale` — the deterministic exporter computes what the tree returns and
+tags them `"status": "proposed"`). At export you surface them for the user to ratify: they
+review each label, fix any that are wrong, and set `"status": "ratified"` (or fold the case
+into their validation set) — only then does it gate CI and anchor that cell on a re-run.
+Do **not** ask the user to ratify mid-run; it's a review-the-output step, like gray zones.
+
 ### Gray zones are recorded, not interrogated
 
 A gray zone is where the source genuinely underdetermines the answer. The plan resolves
@@ -147,6 +163,12 @@ Show the user both artifacts and what changed: the original skill re-decided eve
 the tempered skill extracts features, calls `route.<fn>`, and relays the verdict — decision
 frozen, model still does NL extraction + phrasing (§2.5).
 
+If `tree.json` carries `proposed_examples`, `export_tree` also writes
+`route.proposed_examples.json` (each case stamped with the tree's own prediction and
+`"status": "proposed"`). Show these to the user as **cases awaiting ratification**, flagging
+any whose proposed label differs from what the tree returns — those are the highest-value
+disagreements to rule on.
+
 `export_skill` is the deterministic template (default). If the user wants a **woven**
 variant that reads in the original skill's own voice, you may instead rewrite the original
 prose yourself — preserving its role/tone, deleting only the decision logic, and inserting
@@ -165,9 +187,17 @@ The tree JSON shape:
     {"condition": "food_item == \"chocolate\"", "outcome": "toxic — never",
      "rounds_survived": 14, "sources": ["domain_expert", "constraints#1"],
      "gray_zone": null, "critic_note": null}
+  ],
+  "proposed_examples": [
+    {"input": {"food_item": "macadamia"}, "expected": "toxic — never",
+     "rationale": "pins the nut gray zone the skill never lists"}
   ]
 }
 ```
+
+`proposed_examples` is optional and **proposals only** — `input` / `expected` / `rationale`
+per case; the exporter adds the tree's prediction and `"status": "proposed"`. Omit the key
+if the existing ratified examples already pin every contested cell.
 
 The exported `route.py` carries a `generated_at` + `model` header (mandatory — a tree
 without a timestamp is not auditable), one inline provenance comment per node, and gray
