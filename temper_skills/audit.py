@@ -18,8 +18,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from .backends import Backend, auto_backend
-from .export_schema import _looks_enum_like
-from .ingest import InferredSchema, ingest_skill
+from .ingest import InferredFeature, InferredSchema, ingest_skill
 
 
 class JudgeScores(BaseModel):
@@ -53,6 +52,9 @@ class FitnessReport(BaseModel):
     combinatorics: int
     stakes: int
     schema_closure: float  # 0-1, computed from the schema shape — not judged
+    open_features: list[str] = []  # free-text fields whose value space ISN'T bounded
+    n_features: int = 0
+    rationale: dict[str, str] = {}  # the model's one-line reason per judged axis
     reasons: list[str]
     caveats: list[str]
 
@@ -73,21 +75,36 @@ AUDIT_SYSTEM = (
 )
 
 
-def schema_closure(inferred: InferredSchema) -> float:
-    """Fraction of features that pin to a closed space.
+def _is_closed(f: InferredFeature) -> bool:
+    """Does this feature pin to a BOUNDED value space?
 
-    An open free-text ``str`` reopens a feature space a ``Literal`` would close — the
-    determinism guarantee leaks there (export_schema.normalization_notes). A schema
-    dominated by open strings is the thrash failure mode wearing a schema.
+    Numbers/bools are bounded enough to branch on. A string is bounded only if it's a
+    genuine small enum — and an inferred schema can't *prove* that, so we credit it only
+    on a strong signal ("one of …" or quoted alternatives). We deliberately DON'T treat a
+    comma-listing description as an enum: a free-text identifier like ``food_item`` whose
+    description happens to give examples ("chocolate, grapes, onion") is the unbounded tail,
+    not a closed set. Crediting it was the false-100%-closure bug that let dog_food read as
+    a clean fit.
     """
+    if f.type != "string":
+        return True
+    d = (f.description or "").lower()
+    return "one of" in d or (f.description or "").count('"') >= 4
+
+
+def schema_closure(inferred: InferredSchema) -> float:
+    """Fraction of features that pin to a bounded value space. A schema dominated by open
+    free-text strings is the thrash failure mode wearing a schema."""
     feats = inferred.features
     if not feats:
         return 0.0
-    closed = sum(
-        1 for f in feats
-        if f.type != "string" or _looks_enum_like(f.description)
-    )
-    return closed / len(feats)
+    return sum(1 for f in feats if _is_closed(f)) / len(feats)
+
+
+def open_features(inferred: InferredSchema) -> list[str]:
+    """Names of the free-text fields whose value space ISN'T bounded — where the
+    determinism guarantee leaks into the normalizer you own (README, "What it is not")."""
+    return [f.name for f in inferred.features if not _is_closed(f)]
 
 
 def verdict_of(
@@ -110,6 +127,11 @@ def verdict_of(
     if closure < 0.7:
         caveats.append(
             f"schema only {closure:.0%} closed — the guarantee rests on YOUR normalizer"
+        )
+    if j.combinatorics <= 5:
+        caveats.append(
+            f"borderline combinatorics ({j.combinatorics}/10) — the hardness is partly a flat "
+            "lookup, so the loop may thrash on an unbounded tail (H4)"
         )
     if n_features <= 1:
         caveats.append("single feature — confirm the tree isn't just a lookup table")
@@ -148,6 +170,9 @@ def audit_skill(
         combinatorics=j.combinatorics,
         stakes=j.stakes,
         schema_closure=closure,
+        open_features=open_features(schema),
+        n_features=len(schema.features),
+        rationale=j.rationale,
         reasons=reasons,
         caveats=caveats,
     )

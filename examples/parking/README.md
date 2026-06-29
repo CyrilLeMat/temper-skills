@@ -29,13 +29,17 @@ and tempered skill land after a live loop run; the schema and validation set are
 Run the fitness pre-flight on both and the contrast is the whole point:
 
 ```bash
-temper-skills audit examples/parking/input/skill.md     # verdict: TEMPER
-temper-skills audit examples/dog_food/input/skill.md     # verdict: SKIP (flat lookup, H4)
+temper-skills audit examples/parking/input/skill.md     # verdict: TEMPER  (clean)
+temper-skills audit examples/dog_food/input/skill.md     # verdict: CAVEATS (borderline — see below)
 ```
 
 Parking scores high on **combinatorics** (the verdict turns on how zone, day, hour, holiday,
 and permit interact) and the schema **closes** (enums + a bounded `hour` + two bools, low
-normalization burden) — the two axes dog_food fails.
+normalization burden). dog_food is the cautionary contrast: the judge scores its
+combinatorics only ~5/10 (mostly a flat toxin lookup with a little dose-by-weight logic) and
+its `food_item` field is free text, so closure is ~50% — it lands on **CAVEATS** ("temperable,
+but you'll fight the unbounded tail"), not a clean fit. A *truly* flat skill (no dose logic at
+all) is what drops to `SKIP`.
 
 ## Run it
 

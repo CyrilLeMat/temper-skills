@@ -12,6 +12,7 @@ from temper_skills.audit import (
     FitnessReport,
     JudgeScores,
     audit_skill,
+    open_features,
     schema_closure,
     verdict_of,
 )
@@ -54,6 +55,21 @@ def test_closure_enum_like_string_counts_closed():
     assert schema_closure(s) == 0.5
 
 
+def test_comma_list_description_is_not_credited_as_closed():
+    # The false-100% bug: a free-text identifier whose description lists examples with
+    # commas must NOT count as a closed enum — that's the unbounded tail (dog_food).
+    f = InferredFeature(name="food_item", type="string",
+                        description="the food, e.g. chocolate, grapes, onion, xylitol")
+    assert schema_closure(_schema(f)) == 0.0
+    assert open_features(_schema(f)) == ["food_item"]
+
+
+def test_open_features_lists_only_free_text():
+    s = _schema(_enum("priority"), _free("food_item"),
+                InferredFeature(name="qty", type="number"))
+    assert open_features(s) == ["food_item"]
+
+
 # ---- verdict_of: the rubric, keyed to the shipped examples ----
 
 def test_generation_skill_skips():
@@ -63,11 +79,21 @@ def test_generation_skill_skips():
     assert "generation" in reasons[0]
 
 
-def test_dog_food_flat_lookup_skips():
-    # flat free-text lookup: closure 0, combinatorics low — the documented thrash mode
+def test_clearly_flat_lookup_skips():
+    # closure 0 AND combinatorics < 4: the hard-skip — a genuinely flat free-text lookup
     v, reasons, _ = verdict_of(JudgeScores(decisiveness=6, combinatorics=2, stakes=5), 0.0, 1)
     assert v == "skip"
     assert "H4" in reasons[0]
+
+
+def test_dog_food_realistic_lands_on_caveats_not_clean_temper():
+    # What the LIVE judge actually returns for dog_food: decisive, but borderline
+    # combinatorics (5) and a half-open schema (food_item is free text). Must NOT read as a
+    # clean TEMPER — the borderline + leaky-schema caveats fire.
+    v, _, caveats = verdict_of(JudgeScores(decisiveness=8, combinatorics=5, stakes=6), 0.5, 4)
+    assert v == "caveats"
+    assert any("borderline combinatorics" in c for c in caveats)
+    assert any("normalizer" in c for c in caveats)
 
 
 def test_ticket_routing_tempers_clean():
@@ -149,6 +175,24 @@ def test_audit_skill_pinned_schema_skips_inference(tmp_path):
     report = audit_skill(str(skill), backend=be, schema=pinned)
     assert report.verdict == "skip"
     assert report.fn_name == "can_dog_eat"
+
+
+def test_audit_skill_surfaces_rationale_and_open_features(tmp_path):
+    # The explainability payload the CLI renders: the model's per-axis reasons and the
+    # names of the free-text fields where the determinism guarantee leaks.
+    skill = tmp_path / "skill.md"
+    skill.write_text("# can my dog eat that?")
+    scores = JudgeScores(
+        decisiveness=8, combinatorics=5, stakes=6,
+        rationale={"combinatorics": "mostly a flat toxin lookup with a little dose logic"},
+    )
+    pinned = _schema(_free("food_item"), InferredFeature(name="quantity_grams", type="number"),
+                     fn_name="can_dog_eat")
+    report = audit_skill(str(skill), backend=_AuditBackend(scores, pinned), schema=pinned)
+    assert report.verdict == "caveats"            # not a clean temper
+    assert report.open_features == ["food_item"]
+    assert report.n_features == 2
+    assert "flat toxin lookup" in report.rationale["combinatorics"]
 
 
 def test_audit_system_prompt_names_the_axes():

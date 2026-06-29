@@ -391,18 +391,62 @@ def audit(
     if json_out:
         console.print_json(report.model_dump_json())
     else:
-        color = {"temper": "green", "caveats": "yellow", "skip": "red"}[report.verdict]
-        body = [
-            f"[{color}]verdict: {report.verdict.upper()}[/]  ·  fn: [bold]{report.fn_name}[/]",
-            f"decisiveness {report.decisiveness}/10 · combinatorics {report.combinatorics}/10 "
-            f"· stakes {report.stakes}/10 · schema closure {report.schema_closure:.0%}",
-            "",
-        ]
-        body += [f"  • {r}" for r in report.reasons]
-        body += [f"  [yellow]⚠[/] {c}" for c in report.caveats]
-        console.print(Panel("\n".join(body), title="Temper fitness", border_style=color))
+        _print_fitness(report, skill)
     if report.verdict == "skip":
         raise typer.Exit(3)
+
+
+_VERDICT = {
+    "temper":  ("green",  "worth freezing into a deterministic tree"),
+    "caveats": ("yellow", "temperable — but read the ⚠ before you commit to it"),
+    "skip":    ("red",    "don't bother — the loop won't converge on a clean tree"),
+}
+_AXIS_Q = {
+    "decisiveness":  "does it resolve to a finite verdict, or is it open-ended generation?",
+    "combinatorics": "is the hardness in feature INTERACTIONS, or a flat unbounded lookup?",
+    "stakes":        "is it repeated/auditable enough that freezing pays off?",
+}
+
+
+def _band(score: int) -> str:
+    return "weak" if score <= 3 else "moderate" if score <= 6 else "strong"
+
+
+def _print_fitness(report, skill: str) -> None:
+    color, gloss = _VERDICT[report.verdict]
+    body = [
+        f"[{color}][bold]{report.verdict.upper()}[/] — {gloss}[/]",
+        f"fn: [bold]{report.fn_name}[/]   ·   {skill}",
+        "",
+        "[dim]Scores 0–10 (judged by the model) · what each axis asks:[/]",
+    ]
+    for axis in ("decisiveness", "combinatorics", "stakes"):
+        score = getattr(report, axis)
+        body.append(f"  [bold]{axis:<13}[/] {score}/10  [dim]{_band(score):<8}[/]  {_AXIS_Q[axis]}")
+        why = report.rationale.get(axis)
+        if why:
+            body.append(f"       [dim]“{why}”[/]")
+
+    body.append(
+        f"  [bold]{'closure':<13}[/] {report.schema_closure:.0%}        "
+        f"[dim]share of the {report.n_features} feature(s) with a bounded value space "
+        "(computed, not judged)[/]"
+    )
+    if report.open_features:
+        body.append(
+            "       [dim]free-text (value space NOT bounded — your normalizer owns these): [/]"
+            + ", ".join(report.open_features)
+        )
+
+    body += ["", "[bold]Why this verdict[/]"]
+    body += [f"  [green]✓[/] {r}" for r in report.reasons]
+    body += [f"  [yellow]⚠[/] {c}" for c in report.caveats]
+    body += [
+        "",
+        "[dim]TEMPER = freeze it · CAVEATS = freeze but mind the ⚠ · "
+        "SKIP (exit 3) = don't bother[/]",
+    ]
+    console.print(Panel("\n".join(body), title="Temper fitness", border_style=color))
 
 
 if __name__ == "__main__":
