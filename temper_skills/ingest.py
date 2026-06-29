@@ -31,7 +31,17 @@ class InferredSchema(BaseModel):
 INFER_SYSTEM = (
     "You read an agent skill/prompt and propose the structured features its decision "
     "logic branches on, plus any hard constraints it states. Features must be "
-    "pre-computable inputs, not free text evaluated at runtime."
+    "pre-computable inputs, not free text evaluated at runtime.\n\n"
+    "CRITICAL — features must be RAW, observable properties of the input, never a feature "
+    "that restates or presupposes the verdict. Forbidden: any feature that is essentially "
+    "the answer — e.g. is_toxic, is_safe, is_known_toxic_food, is_dangerous, is_allowed, "
+    "should_block, is_harmful. They are circular: you would already need the decision to "
+    "compute them, so the tree collapses to `if is_toxic: unsafe` and learns nothing. "
+    "Instead expose the underlying observables the verdict is DERIVED from (the item's "
+    "identity/name, its category, quantity, form/preparation, and attributes of the "
+    "subject) and let the tree do the deriving. If the skill names specific trigger values "
+    "(particular foods, statuses, categories), expose the raw identifier feature (e.g. "
+    "food_item) so the tree can enumerate them itself."
 )
 
 
@@ -54,12 +64,17 @@ def ingest_skill(
     fn_name: str | None = None,
     examples: list[dict] | None = None,
     propose_examples: bool = True,
-) -> DecisionTree:
+    propose_schema_only: bool = False,
+) -> DecisionTree | InferredSchema:
     """Read a skill.md and distill its routing logic into a DecisionTree.
 
     If ``schema`` is None, one LLM call infers a schema + constraints; ``confirm``
     (if given) is shown the inference and may veto. The ingest call happens once,
     at compile time — distinct from the loop. "Zero LLM at inference" is unaffected.
+
+    If ``propose_schema_only`` is set, the inference is returned without distilling, so
+    the caller can persist it for ratification and stop. The loop never runs on an
+    unratified schema this way — the contract is drafted, not yet frozen.
     """
     with open(path) as f:
         skill_text = f.read()
@@ -74,6 +89,8 @@ def ingest_skill(
             f"SKILL:\n{skill_text}\n\nPropose the schema and constraints.",
             InferredSchema,
         )
+        if propose_schema_only:
+            return inferred
         if confirm is not None and not confirm(inferred):
             raise KeyboardInterrupt("schema rejected at ingest gate")
         schema = _to_json_schema(inferred)
