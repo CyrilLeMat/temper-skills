@@ -12,6 +12,7 @@ venv/
 *.proposed_examples.json
 schema.proposed.py
 .DS_Store
+tmp/*
 
 # concurrent session worktrees
 .claude/worktrees/
