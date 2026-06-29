@@ -118,6 +118,59 @@ def test_ratified_examples_checked_and_agree():
     assert tree.example_report.disagreements == []
 
 
+def _node_tree(condition, outcome, gray_zone=None):
+    from temper_skills.schemas import ProposedNode, ProposedTree
+    return ProposedTree(
+        nodes=[ProposedNode(condition=condition, outcome=outcome, sources=["c#1"], gray_zone=gray_zone)],
+        default_outcome="route_default",
+    )
+
+
+def test_buzzer_beating_regression_is_not_shipped():
+    """A late round that breaks a ratified example must NOT be the finalized tree.
+
+    Reproduces the observed failure: the loop reached a tree passing all examples,
+    then a later round reordered nodes in a way that broke one — and that broken tree
+    got exported. distill must finalize the best tree it ever saw, not the last one.
+    """
+    from conftest import ScriptedBackend
+
+    passing = _node_tree("security_score is not None and security_score >= 0.95", "human_review")
+    regressed = _node_tree('(priority or "").strip().lower() == "high"', "escalate_urgent")
+    be = ScriptedBackend(trees=[passing, regressed, regressed, regressed], scores=[5])
+
+    src = Sources(schema=TicketSchema, examples=[
+        {"input": {"priority": "high", "security_score": 0.99}, "expected": "human_review"},
+    ])
+    tree = distill(src, backend=be, profile="quick", fn_name="route_ticket")
+    assert tree.example_report.agreement_rate == 1.0
+    assert tree.nodes[0].outcome == "human_review"  # the passing tree, not escalate_urgent
+
+
+def test_gray_zone_churn_does_not_block_plateau():
+    """The exact shape of bug #2: the tree's logic is settled but each round emits a
+    freshly-worded gray zone. That used to read as 'progress' and burn every round.
+    With no score/agreement gain it must plateau (quick: stop at round 3, not cap 8)."""
+    from conftest import ScriptedBackend
+
+    churn = [_node_tree('priority == "high"', "escalate_urgent", gray_zone=f"reworded zone {i}")
+             for i in range(1, 9)]
+    be = ScriptedBackend(trees=churn, scores=[6])
+    distill(_sources(), backend=be, profile="quick")
+    assert be.calls["arbitration"] == 3
+
+
+def test_genuine_score_improvement_extends_then_plateaus():
+    """The flip side of the plateau fix: a real, rising score is progress and keeps the
+    loop going; once the score goes flat it plateaus. Guards against over-eager stopping."""
+    from conftest import ScriptedBackend
+
+    be = ScriptedBackend(trees=[_node_tree('priority == "high"', "escalate_urgent")],
+                         scores=[5, 6, 7, 7, 7, 7, 7, 7])
+    distill(_sources(), backend=be, profile="quick")
+    assert be.calls["arbitration"] == 5  # rose through r1-3, flat r4-5 → plateau at 5
+
+
 def test_ratified_example_disagreement_surfaced():
     # FakeBackend's tree routes only priority=="high"; a low-priority example that
     # expects escalate_urgent must surface as a disagreement.

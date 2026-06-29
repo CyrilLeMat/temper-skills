@@ -53,6 +53,7 @@ class RoundResult:
     arbitration: ProposerArbitration
     tree: ProposedTree
     survival: dict[str, int]  # condition -> rounds survived
+    agreement: float | None = None  # ratified-example agreement, if examples were given
 
     @property
     def min_score(self) -> int:
@@ -223,10 +224,18 @@ def distill(
     else:
         tree = _initial_tree(backend, sources)
         survival = {_node_key(n.condition): 1 for n in tree.nodes}
-    seen_gray_zones: set[str] = {n.gray_zone for n in tree.nodes if n.gray_zone}
     stale_rounds = 0
-    best_mean = -1.0
     last_arbitration: ProposerArbitration | None = None
+
+    # The loop wobbles: it reorders nodes back and forth and can REGRESS at the buzzer
+    # (a late round breaking a ratified example it had been passing). So we track the
+    # best tree we ever saw — ranked by (example agreement, then mean persona score) —
+    # and finalize THAT, never merely the last round. Progress is measured against this
+    # best: a round that only reshuffles or rewords a gray zone is not progress, which
+    # is what kept the loop spinning for all its rounds at a flat score.
+    best_tree = tree
+    best_arbitration: ProposerArbitration | None = None
+    best_key = (_agreement(tree, sources, fn_name) or 0.0, -1.0)
 
     for r in range(1, max_rounds + 1):
         try:
@@ -235,7 +244,7 @@ def distill(
         except Exception:
             # A transient backend failure shouldn't throw away the rounds already
             # paid for. With nothing to salvage (round 1), re-raise; otherwise keep
-            # the last good tree and finalize it.
+            # the best tree so far and finalize it.
             if last_arbitration is None:
                 raise
             break
@@ -246,20 +255,23 @@ def distill(
         for key in new_keys:
             survival[key] = survival.get(key, 0) + 1
 
-        new_gray = {n.gray_zone for n in new_tree.nodes if n.gray_zone} - seen_gray_zones
-        seen_gray_zones |= new_gray
-
         tree = new_tree
-        result = RoundResult(r, max_rounds, verdicts, arbitration, tree, dict(survival))
 
         # Convergence = the scores *stabilize* (the plan's actual criterion), not an
-        # absolute bar that may never be reached. A round makes progress if the mean
-        # score improved or a new gray zone surfaced; once neither happens for
-        # `stop_quiet` rounds the loop has plateaued — stop, whether the plateau is
-        # high (good tree) or low (the loop can't do better on this schema).
-        progressed = result.mean_score > best_mean + 0.1 or bool(new_gray)
-        best_mean = max(best_mean, result.mean_score)
-        stale_rounds = 0 if progressed else stale_rounds + 1
+        # absolute bar that may never be reached. A round makes progress only if it
+        # beats the best tree so far on (example agreement, then mean score). Once no
+        # round beats the best for `stop_quiet` rounds the loop has plateaued — stop,
+        # whether the plateau is high (good tree) or low (can't do better on this schema).
+        agreement = _agreement(tree, sources, fn_name)
+        result = RoundResult(r, max_rounds, verdicts, arbitration, tree, dict(survival), agreement)
+        round_key = (agreement if agreement is not None else 0.0, result.mean_score)
+        if round_key > best_key:
+            best_key = round_key
+            best_tree = tree
+            best_arbitration = arbitration
+            stale_rounds = 0
+        else:
+            stale_rounds += 1
 
         decision = gate(result) if gate else "continue"
         if decision == "abort":
@@ -269,8 +281,11 @@ def distill(
         if stale_rounds >= stop_quiet:
             break
 
+    # `survival` is keyed by condition and accumulated across every round, so it gives
+    # the right rounds_survived for whichever nodes the best tree happens to contain.
+    arb_for_final = best_arbitration if best_arbitration is not None else last_arbitration
     model_tag = f"{backend.model} via {backend.name}"
-    final = _finalize(tree, last_arbitration, survival, sources, model_tag, profile, provenance, fn_name)
+    final = _finalize(best_tree, arb_for_final, survival, sources, model_tag, profile, provenance, fn_name)
     # The ratified examples are the loop's own correctness signal: check the
     # converged tree against them and surface any disagreement (§4.1 / §4.5).
     if sources.examples:
@@ -283,6 +298,24 @@ def _check_examples(tree: DecisionTree, examples: list[dict]):
 
     dataset = [{"input": e["input"], "expected": e["expected"]} for e in examples]
     return run_validation(fn_from_tree(tree), dataset, label_match)
+
+
+def _agreement(tree: ProposedTree, sources: Sources, fn_name: str) -> float | None:
+    """Ratified-example agreement for an in-flight ProposedTree (zero LLM — pure Python).
+
+    The loop's own correctness signal each round: used both to keep the best tree and
+    to catch a buzzer-beating regression where a late round breaks a ratified example.
+    Returns None when there are no examples to score against.
+    """
+    if not sources.examples:
+        return None
+    dt = DecisionTree(
+        nodes=[DecisionNode(condition=n.condition, outcome=n.outcome) for n in tree.nodes],
+        default_outcome=tree.default_outcome,
+        features=sources.feature_names,
+        fn_name=fn_name,
+    )
+    return _check_examples(dt, sources.examples).agreement_rate
 
 
 def _finalize(

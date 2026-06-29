@@ -63,10 +63,16 @@ def _confirm_schema(inferred: InferredSchema) -> bool:
 
 def _make_gate(interactive: bool):
     def gate(r: RoundResult) -> str:
+        if r.agreement is None:
+            examples = ""
+        elif r.agreement >= 1.0:
+            examples = "   [green]examples: 100% ✓[/]"
+        else:
+            examples = f"   [red]examples: {r.agreement * 100:.0f}% ⚠ regressed[/]"
         body = [
             f"[bold]Round {r.round}/{r.max_rounds}[/]   "
             f"convergence estimate: {r.arbitration.convergence_estimate}%   "
-            f"scores: min {r.min_score}/10, mean {r.mean_score}/10",
+            f"scores: min {r.min_score}/10, mean {r.mean_score}/10{examples}",
             "",
             "Persona scores & verdicts:",
         ]
