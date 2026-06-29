@@ -1,0 +1,22 @@
+[
+  {"input": {"zone_type": "no_stopping", "day": "monday", "hour": 10, "is_public_holiday": false, "has_resident_permit": false}, "expected": "prohibited"},
+  {"input": {"zone_type": "no_stopping", "day": "sunday", "hour": 3, "is_public_holiday": true, "has_resident_permit": true}, "expected": "prohibited"},
+  {"input": {"zone_type": "unrestricted", "day": "tuesday", "hour": 11, "is_public_holiday": false, "has_resident_permit": false}, "expected": "no_parking_street_cleaning"},
+  {"input": {"zone_type": "unrestricted", "day": "tuesday", "hour": 11, "is_public_holiday": true, "has_resident_permit": false}, "expected": "free"},
+  {"input": {"zone_type": "residential_permit", "day": "friday", "hour": 12, "is_public_holiday": false, "has_resident_permit": true}, "expected": "no_parking_street_cleaning"},
+  {"input": {"zone_type": "metered", "day": "tuesday", "hour": 11, "is_public_holiday": false, "has_resident_permit": false}, "expected": "no_parking_street_cleaning"},
+  {"input": {"zone_type": "metered", "day": "monday", "hour": 10, "is_public_holiday": false, "has_resident_permit": false}, "expected": "pay_and_display_2h"},
+  {"input": {"zone_type": "metered", "day": "saturday", "hour": 14, "is_public_holiday": false, "has_resident_permit": false}, "expected": "pay_and_display_2h"},
+  {"input": {"zone_type": "metered", "day": "sunday", "hour": 12, "is_public_holiday": false, "has_resident_permit": false}, "expected": "free"},
+  {"input": {"zone_type": "metered", "day": "monday", "hour": 10, "is_public_holiday": true, "has_resident_permit": false}, "expected": "free"},
+  {"input": {"zone_type": "metered", "day": "monday", "hour": 18, "is_public_holiday": false, "has_resident_permit": false}, "expected": "free"},
+  {"input": {"zone_type": "metered", "day": "monday", "hour": 8, "is_public_holiday": false, "has_resident_permit": false}, "expected": "free"},
+  {"input": {"zone_type": "residential_permit", "day": "monday", "hour": 9, "is_public_holiday": false, "has_resident_permit": false}, "expected": "permit_required"},
+  {"input": {"zone_type": "residential_permit", "day": "monday", "hour": 9, "is_public_holiday": false, "has_resident_permit": true}, "expected": "free"},
+  {"input": {"zone_type": "residential_permit", "day": "saturday", "hour": 10, "is_public_holiday": false, "has_resident_permit": false}, "expected": "free"},
+  {"input": {"zone_type": "residential_permit", "day": "monday", "hour": 20, "is_public_holiday": false, "has_resident_permit": false}, "expected": "free"},
+  {"input": {"zone_type": "residential_permit", "day": "wednesday", "hour": 19, "is_public_holiday": false, "has_resident_permit": false}, "expected": "permit_required"},
+  {"input": {"zone_type": "residential_permit", "day": "monday", "hour": 9, "is_public_holiday": true, "has_resident_permit": false}, "expected": "free"},
+  {"input": {"zone_type": "unrestricted", "day": "monday", "hour": 3, "is_public_holiday": false, "has_resident_permit": false}, "expected": "free"},
+  {"input": {"zone_type": "residential_permit", "day": "friday", "hour": 13, "is_public_holiday": false, "has_resident_permit": false}, "expected": "permit_required"}
+]
