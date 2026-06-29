@@ -69,10 +69,11 @@ def _make_gate(interactive: bool):
             examples = "   [green]examples: 100% ✓[/]"
         else:
             examples = f"   [red]examples: {r.agreement * 100:.0f}% ⚠ regressed[/]"
+        proposed = f"   ✎ proposed cases: {r.proposed_count}" if r.proposed_count else ""
         body = [
             f"[bold]Round {r.round}/{r.max_rounds}[/]   "
             f"convergence estimate: {r.arbitration.convergence_estimate}%   "
-            f"scores: min {r.min_score}/10, mean {r.mean_score}/10{examples}",
+            f"scores: min {r.min_score}/10, mean {r.mean_score}/10{examples}{proposed}",
             "",
             "Persona scores & verdicts:",
         ]

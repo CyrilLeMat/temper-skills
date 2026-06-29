@@ -59,6 +59,7 @@ class RoundResult:
     tree: ProposedTree
     survival: dict[str, int]  # condition -> rounds survived
     agreement: float | None = None  # ratified-example agreement, if examples were given
+    proposed_count: int = 0  # proposed validation cases accumulated so far
 
     @property
     def min_score(self) -> int:
@@ -307,7 +308,8 @@ def distill(
         # round beats the best for `stop_quiet` rounds the loop has plateaued — stop,
         # whether the plateau is high (good tree) or low (can't do better on this schema).
         agreement = _agreement(tree, sources, fn_name)
-        result = RoundResult(r, max_rounds, verdicts, arbitration, tree, dict(survival), agreement)
+        result = RoundResult(r, max_rounds, verdicts, arbitration, tree, dict(survival),
+                             agreement, proposed_count=len(proposed))
         round_key = (agreement if agreement is not None else 0.0, result.mean_score)
         if round_key > best_key:
             best_key = round_key
