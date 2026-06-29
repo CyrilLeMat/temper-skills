@@ -60,6 +60,7 @@ class RoundResult:
     survival: dict[str, int]  # condition -> rounds survived
     agreement: float | None = None  # ratified-example agreement, if examples were given
     proposed_count: int = 0  # proposed validation cases accumulated so far
+    proposed_passed: int = 0  # of those, how many the current tree satisfies
     ratified_count: int = 0  # ratified examples supplied as input
 
     @property
@@ -309,8 +310,10 @@ def distill(
         # round beats the best for `stop_quiet` rounds the loop has plateaued — stop,
         # whether the plateau is high (good tree) or low (can't do better on this schema).
         agreement = _agreement(tree, sources, fn_name)
+        prop_items = list(proposed.values())
         result = RoundResult(r, max_rounds, verdicts, arbitration, tree, dict(survival),
-                             agreement, proposed_count=len(proposed),
+                             agreement, proposed_count=len(prop_items),
+                             proposed_passed=_score(tree, prop_items, sources.feature_names, fn_name),
                              ratified_count=len(sources.examples))
         round_key = (agreement if agreement is not None else 0.0, result.mean_score)
         if round_key > best_key:
@@ -426,6 +429,31 @@ def _propose_examples(
     proposed = backend.complete(EXAMPLE_PROPOSER_SYSTEM, user, ProposedExampleSet)
     return [{"input": ex.input, "expected": ex.expected, "rationale": ex.rationale}
             for ex in proposed.examples]
+
+
+def _score(tree: ProposedTree, items: list[dict], features: list[str], fn_name: str) -> int:
+    """How many of ``items`` (validation cases) the current tree satisfies (label match).
+
+    The proposed cases are the gaps personas found, so this pass-rate rising round over
+    round is the loop visibly closing them — the per-iteration validation score."""
+    if not items:
+        return 0
+    from .validate import fn_from_tree, label_match
+
+    dt = DecisionTree(
+        nodes=[DecisionNode(condition=n.condition, outcome=n.outcome) for n in tree.nodes],
+        default_outcome=tree.default_outcome, features=features, fn_name=fn_name,
+    )
+    fn = fn_from_tree(dt)
+    passed = 0
+    for it in items:
+        try:
+            pred = fn(it["input"])
+        except Exception as e:
+            pred = f"ERROR: {type(e).__name__}: {e}"
+        if label_match(pred, it["expected"]):
+            passed += 1
+    return passed
 
 
 def _agreement(tree: ProposedTree, sources: Sources, fn_name: str) -> float | None:

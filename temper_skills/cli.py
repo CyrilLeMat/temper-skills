@@ -14,6 +14,7 @@ from .distill import PROFILES, RoundResult
 from .export_skill import render_tempered_skill, weave_tempered_skill
 from .export_tree import tree_from_dict
 from .incremental import recrystallize, render_diff
+from .export_schema import _classname, normalization_notes, render_schema_source
 from .ingest import InferredSchema, ingest_skill
 from .sources import Sources
 from .validate import COMPARATORS, fn_from_json, fn_from_pyfile, load_dataset, run_validation
@@ -63,20 +64,21 @@ def _confirm_schema(inferred: InferredSchema) -> bool:
 
 def _make_gate(interactive: bool):
     def gate(r: RoundResult) -> str:
-        if r.agreement is None:
-            examples = ""
-        elif r.agreement >= 1.0:
-            examples = "   [green]examples: 100% ✓[/]"
-        else:
-            examples = f"   [red]examples: {r.agreement * 100:.0f}% ⚠ regressed[/]"
+        bits = []
         if r.ratified_count:
-            validation = f"   ✎ validation set: {r.ratified_count} ratified + {r.proposed_count} proposed"
-        else:
-            validation = f"   ✎ validation set: {r.proposed_count} proposed"
+            pct = (r.agreement or 0) * 100
+            color = "green" if (r.agreement or 0) >= 1.0 else "red"
+            flag = "" if (r.agreement or 0) >= 1.0 else " ⚠ regressed"
+            passed = round((r.agreement or 0) * r.ratified_count)
+            bits.append(f"[{color}]{passed}/{r.ratified_count} ratified ({pct:.0f}%){flag}[/]")
+        if r.proposed_count:
+            ppct = 100 * r.proposed_passed / r.proposed_count
+            bits.append(f"[cyan]{r.proposed_passed}/{r.proposed_count} proposed ({ppct:.0f}%)[/]")
+        validation = "   ✎ validation set — tree passes " + (", ".join(bits) if bits else "0 cases (none yet)")
         body = [
             f"[bold]Round {r.round}/{r.max_rounds}[/]   "
             f"convergence estimate: {r.arbitration.convergence_estimate}%   "
-            f"scores: min {r.min_score}/10, mean {r.mean_score}/10{examples}",
+            f"persona scores: min {r.min_score}/10, mean {r.mean_score}/10",
             validation,
             "",
             "Persona scores & verdicts:",
@@ -126,6 +128,11 @@ def ingest(
         None, help="Pin a schema: 'file.py:ClassName' (Pydantic) or a .json JSON Schema. "
         "If omitted, the schema is inferred from the skill."
     ),
+    propose_schema: bool = typer.Option(
+        False, "--propose-schema",
+        help="Draft the schema from the skill, write it to schema.proposed.py for you to "
+             "review/edit, then STOP. Re-run pinning it with --schema to distill. The loop "
+             "never runs on an unratified schema."),
     fn: str = typer.Option(None, help="Decision function name (used with --schema)."),
     yes: bool = typer.Option(False, "--yes", "-y",
                              help="Don't stop at each round — run to convergence/cap (panels still print)."),
@@ -141,6 +148,17 @@ def ingest(
     except (ValueError, RuntimeError) as e:
         console.print(f"[red]Backend error:[/] {e}")
         raise typer.Exit(1)
+    if propose_schema:
+        if schema:
+            console.print("[red]--propose-schema and --schema are mutually exclusive[/] "
+                          "(--propose-schema drafts a schema; --schema pins one).")
+            raise typer.Exit(2)
+        inferred = ingest_skill(skill, schema=None, backend=be, propose_schema_only=True)
+        out_path = Path("schema.proposed.py")
+        out_path.write_text(render_schema_source(inferred))
+        _print_proposed_schema(inferred, out_path, skill)
+        raise typer.Exit(0)
+
     pinned = _load_schema(schema) if schema else None
     ratified = load_dataset(examples) if examples else None
     console.print(f"[cyan]Reading {skill}[/]  ·  backend: [bold]{be.describe()}[/]"
@@ -195,6 +213,30 @@ def _print_example_check(tree) -> None:
         lines.append(f"    expected [green]{d.expected}[/]  ·  got [red]{d.predicted}[/]")
     console.print(Panel("\n".join(lines), title="⚠ ratified-example disagreements",
                         border_style="yellow"))
+
+
+def _print_proposed_schema(inferred: InferredSchema, path: Path, skill: str) -> None:
+    """Surface the drafted contract + its normalization burden, awaiting ratification."""
+    notes = normalization_notes(inferred)
+    lines = [f"Decision function: [bold]{inferred.fn_name}[/]",
+             f"Class: [bold]{_classname(inferred.fn_name)}[/]", "", "Fields:"]
+    for f in inferred.features:
+        warn = f"   [yellow]⚠ {notes[f.name]}[/]" if f.name in notes else ""
+        lines.append(f"  • {f.name}: {f.type}{warn}")
+    if inferred.constraints:
+        lines.append("\nInferred constraints (review, then pass via --constraint):")
+        for c in inferred.constraints:
+            lines.append(f"  • {c}  [hard]")
+    if notes:
+        lines.append("\n[dim]The tree is only as safe as the normalizer feeding these "
+                     "exact-match fields. A Literal closes the space and helps the loop "
+                     "converge; a bare str reopens it.[/]")
+    cls = _classname(inferred.fn_name)
+    lines.append(f"\n[bold]proposed labels, not ground truth.[/] Review/edit [bold]{path}[/], "
+                 f"then re-run to distill:\n  [bold]temper-skills ingest {skill} "
+                 f"--schema {path}:{cls}[/]")
+    console.print(Panel("\n".join(lines), title="✎ proposed schema (awaiting ratification)",
+                        border_style="magenta"))
 
 
 def _write_proposed_examples(tree, out: str) -> None:
