@@ -35,6 +35,30 @@ class ProposedTree(BaseModel):
     default_outcome: str = Field(description="The fallthrough decision when no branch matches.")
 
 
+class ProposedExample(BaseModel):
+    """A discriminating test case drafted for a contested/uncovered cell.
+
+    The label is a PROPOSAL for a human to ratify, never ground truth — the loop
+    must not grade its own homework (see distill._harvest_proposed)."""
+
+    input: dict = Field(
+        description="A concrete feature assignment (feature_name -> value) targeting a "
+        "cell the tree may mishandle or that no ratified example covers. Use only schema "
+        "feature names and realistic values."
+    )
+    expected: str = Field(
+        description="The outcome you believe is correct for this input — a PROPOSAL to be "
+        "ratified by a human reviewer, not asserted ground truth."
+    )
+    rationale: str = Field(
+        description="Why this case matters: the gap or contested cell it pins down."
+    )
+
+
+class ProposedExampleSet(BaseModel):
+    examples: list[ProposedExample] = Field(default_factory=list)
+
+
 class PersonaVerdict(BaseModel):
     persona: str
     score: int = Field(ge=0, le=10, description="0 = the tree fails this persona's lens; 10 = solid.")
@@ -44,6 +68,12 @@ class PersonaVerdict(BaseModel):
         default=None,
         description="A concrete feature assignment the tree mishandles (as a short "
         "description or JSON-ish string), if verdict != ok.",
+    )
+    proposed_tests: list[ProposedExample] = Field(
+        default_factory=list,
+        description="Concrete test cases to ADD to the validation set: a full input + the "
+        "best-guess expected outcome + a rationale. Populate whenever you find a flaw. "
+        "MUST be empty for the overengineering_critic (it removes complexity, not adds cases).",
     )
 
 
@@ -61,26 +91,3 @@ class ProposerArbitration(BaseModel):
         ge=0, le=100, description="Rough percent: how settled is the tree (0–100)."
     )
     tree: ProposedTree
-
-
-class ProposedExample(BaseModel):
-    """A discriminating test case the loop drafts for a contested/uncovered cell.
-
-    The label is a PROPOSAL for a human to ratify, never ground truth — the loop
-    must not grade its own homework (see distill._propose_examples)."""
-
-    input: dict = Field(
-        description="A concrete feature assignment (feature_name -> value) targeting a "
-        "gray zone or a cell no ratified example covers. Use only schema feature names."
-    )
-    expected: str = Field(
-        description="The outcome you believe is correct for this input — a PROPOSAL to be "
-        "ratified by a human reviewer, not asserted ground truth."
-    )
-    rationale: str = Field(
-        description="Why this case discriminates: which gray zone or contested cell it pins down."
-    )
-
-
-class ProposedExampleSet(BaseModel):
-    examples: list[ProposedExample] = Field(default_factory=list)

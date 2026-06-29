@@ -53,7 +53,7 @@ def ingest_skill(
     confirm: Callable[[InferredSchema], bool] | None = None,
     fn_name: str | None = None,
     examples: list[dict] | None = None,
-    propose_examples: bool = False,
+    propose_examples: bool = True,
 ) -> DecisionTree:
     """Read a skill.md and distill its routing logic into a DecisionTree.
 

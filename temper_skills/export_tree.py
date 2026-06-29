@@ -38,13 +38,16 @@ def enrich_proposed(tree: DecisionTree, raw: list[dict]) -> list[dict]:
             prediction = fn(case["input"])
         except Exception as e:
             prediction = f"ERROR: {type(e).__name__}: {e}"
-        out.append({
+        record = {
             "input": case["input"],
             "expected": case.get("expected", ""),
             "rationale": case.get("rationale", ""),
             "tree_prediction": prediction,
             "status": "proposed",
-        })
+        }
+        if case.get("source"):
+            record["source"] = case["source"]
+        out.append(record)
     return out
 
 

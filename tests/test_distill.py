@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from conftest import FakeBackend, TicketSchema
 
-from temper_skills import LITERALIST, Sources, distill
+from temper_skills import DOMAIN_EXPERT, EDGE_CASE_HUNTER, LITERALIST, Sources, distill
 
 
 def _sources():
@@ -171,32 +171,83 @@ def test_genuine_score_improvement_extends_then_plateaus():
     assert be.calls["arbitration"] == 5  # rose through r1-3, flat r4-5 → plateau at 5
 
 
-def test_proposes_examples_when_enabled():
+def test_proposed_examples_on_by_default():
+    # Always produce a proposed validation set, even with no input examples (req 1).
     tree = distill(_sources(), backend=FakeBackend(score=9), profile="quick",
-                   fn_name="route_ticket", propose_examples=True)
+                   fn_name="route_ticket")
     assert tree.proposed_examples is not None
     p = tree.proposed_examples[0]
     assert p["status"] == "proposed"           # never silently ratified
     assert "tree_prediction" in p              # what the frozen tree actually returns
-    assert p["input"] == {"priority": "low", "security_score": 0.5}
 
 
-def test_proposed_examples_off_by_default():
-    tree = distill(_sources(), backend=FakeBackend(score=9), profile="quick")
+def test_propose_examples_can_be_disabled():
+    tree = distill(_sources(), backend=FakeBackend(score=9), profile="quick",
+                   propose_examples=False)
     assert tree.proposed_examples is None
 
 
 def test_proposed_examples_dedup_against_ratified():
-    # FakeBackend proposes a case whose input duplicates a ratified example — it must
-    # be dropped, leaving only the genuinely new one.
+    # FakeBackend (fallback path) proposes a case whose input duplicates a ratified
+    # example — it must be dropped, leaving only the genuinely new one.
     src = Sources(schema=TicketSchema, examples=[
         {"input": {"priority": "high", "security_score": 0.1}, "expected": "escalate_urgent"},
     ])
     tree = distill(src, backend=FakeBackend(score=9), profile="quick",
-                   fn_name="route_ticket", propose_examples=True)
+                   fn_name="route_ticket")
     inputs = [p["input"] for p in tree.proposed_examples]
     assert {"priority": "high", "security_score": 0.1} not in inputs
     assert len(tree.proposed_examples) == 1
+
+
+def test_personas_build_validation_set_excluding_critic():
+    """Req 2: every persona except the overengineering_critic contributes cases, and they
+    accumulate (deduped) across rounds into the proposed set — no extra generation call."""
+    import re
+    from temper_skills.backends.base import Backend
+    from temper_skills.schemas import (
+        ArbitrationEntry, PersonaVerdict, ProposedExample, ProposedExampleSet,
+        ProposedNode, ProposedTree, ProposerArbitration,
+    )
+
+    tree = ProposedTree(
+        nodes=[ProposedNode(condition='priority == "high"', outcome="escalate_urgent")],
+        default_outcome="route_default")
+
+    class PanelBackend(Backend):
+        name = "fake"
+
+        def __init__(self):
+            super().__init__("fake-model")
+
+        def complete(self, system, user, schema):
+            if schema is ProposedTree:
+                return tree
+            if schema is PersonaVerdict:
+                p = re.search(r"Your angle \((\w+)\)", user).group(1)
+                # EVERY persona (even the critic) emits a case keyed by its own name;
+                # the critic's must be dropped by the harvester regardless.
+                return PersonaVerdict(
+                    persona=p, score=9, verdict="ok", detail="d",
+                    proposed_tests=[ProposedExample(
+                        input={"priority": p, "security_score": 0.5},
+                        expected="human_review", rationale=f"{p} case")])
+            if schema is ProposerArbitration:
+                return ProposerArbitration(
+                    entries=[ArbitrationEntry(persona="x", decision="kept", rationale="ok")],
+                    convergence_estimate=95, tree=tree)
+            if schema is ProposedExampleSet:
+                return ProposedExampleSet(examples=[])  # fallback must not be needed
+            raise AssertionError(schema)
+
+    t = distill(_sources(), backend=PanelBackend(), profile="standard", fn_name="route_ticket",
+                adversaries=[EDGE_CASE_HUNTER, DOMAIN_EXPERT])
+    by_input = {p["input"]["priority"] for p in t.proposed_examples}
+    assert "overengineering_critic" not in by_input          # critic contributes nothing
+    assert {"edge_case_hunter", "domain_expert"} <= by_input  # the attackers do
+    assert all(p["status"] == "proposed" for p in t.proposed_examples)
+    # same input each round → deduped to one entry per persona
+    assert len(t.proposed_examples) == len(by_input)
 
 
 def test_ratified_example_disagreement_surfaced():

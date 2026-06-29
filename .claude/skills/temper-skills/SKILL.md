@@ -84,8 +84,15 @@ and self-contained** — do not make them read this skill or the repo.
 Each persona subagent returns ONLY this JSON:
 ```json
 {"persona": "<name>", "score": 0-10, "verdict": "ok|missing_case|collapsible|contradiction",
- "detail": "<one sentence>", "proposed_case": "<concrete feature assignment it mishandles, or null>"}
+ "detail": "<one sentence>", "proposed_case": "<concrete feature assignment it mishandles, or null>",
+ "proposed_tests": [{"input": {<feature: value>}, "expected": "<best-guess outcome>", "rationale": "<one line>"}]}
 ```
+
+`proposed_tests` is how the validation set gets built (see below). **Every persona except
+`overengineering_critic` must add a case here whenever it finds a flaw** — a full feature
+assignment plus the outcome it believes correct. Tell each subagent these are proposals a
+human will ratify, not ground truth. The `overengineering_critic` always returns
+`proposed_tests: []` — it removes complexity, it doesn't add cases.
 
 **`score` is always the TREE's robustness from your angle — 0 = the tree fails badly
 through your lens, 10 = solid, nothing to add.** It is NOT how successful your attack
@@ -115,21 +122,24 @@ the scale is uniform across the panel.
 6. **Converge** — stop when **every persona scores ≥ 8 AND no new gray zone appeared** for
    the round, or the user stops, or you hit the round cap (`quick` ~8, `standard` ~20).
 
-### After convergence — draft proposed test cases for the gray zones
+### Build the validation set as you go (always — even with no input examples)
 
-The cells you couldn't settle (the recorded gray zones) are exactly the cases a human
-should rule on. Once the loop ends, **draft one or two discriminating test cases per gray
-zone** — concrete feature assignments that pin down each contested cell — and give the
-outcome you believe is correct for each.
+Every round, harvest the `proposed_tests` from each persona EXCEPT the
+`overengineering_critic`, and accumulate them across all rounds into one set — **deduped by
+input, dropping any input that matches a ratified example.** This is the validation set; it
+is built from the panel's own findings, so it always exists even when the user supplied no
+examples. Keep a running accumulator (input → case) so the same case found in two rounds
+counts once. Record which persona/round each came from.
 
-These are **proposals, not ground truth.** You are extending the validation set, not
-grading your own work: never treat a label you authored as a ratified anchor, and never
-let it gate anything. Emit them in `tree.json` under `proposed_examples` (just `input` /
-`expected` / `rationale` — the deterministic exporter computes what the tree returns and
-tags them `"status": "proposed"`). At export you surface them for the user to ratify: they
-review each label, fix any that are wrong, and set `"status": "ratified"` (or fold the case
-into their validation set) — only then does it gate CI and anchor that cell on a re-run.
-Do **not** ask the user to ratify mid-run; it's a review-the-output step, like gray zones.
+These are **proposals, not ground truth.** You are extending the validation set, not grading
+your own work: never treat a label the panel authored as a ratified anchor, and never let it
+gate anything. Emit the accumulated set in `tree.json` under `proposed_examples` (each case:
+`input` / `expected` / `rationale`, optionally `source` — the deterministic exporter computes
+what the tree returns and tags them `"status": "proposed"`). At export you surface them for
+the user to ratify: they review each label, fix any that are wrong, and set
+`"status": "ratified"` (or fold the case into their validation set) — only then does it gate
+CI and anchor that cell on a re-run. Do **not** ask the user to ratify mid-run; it's a
+review-the-output step, like gray zones.
 
 ### Gray zones are recorded, not interrogated
 

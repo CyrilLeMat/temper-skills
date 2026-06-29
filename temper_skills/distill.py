@@ -146,11 +146,25 @@ def _initial_tree(backend: Backend, sources: Sources) -> ProposedTree:
 
 
 def _critique(backend: Backend, sources: Sources, persona: Persona, tree: ProposedTree) -> PersonaVerdict:
+    if persona.name == OVERENGINEERING_CRITIC.name:
+        tests_clause = (
+            "Leave `proposed_tests` EMPTY — your job is to remove unjustified complexity, "
+            "not to add test cases."
+        )
+    else:
+        tests_clause = (
+            "Whenever you find a flaw, ALSO populate `proposed_tests`: one or more concrete "
+            "cases, each a full `input` (a feature assignment over the schema features), the "
+            "`expected` outcome you believe is correct, and a one-line `rationale`. These "
+            "extend a human-ratified validation set — give your best-judgment label; a human "
+            "ratifies it, it is not trusted blindly. Use exact schema feature names and values."
+        )
     user = (
         f"Your angle ({persona.name}): {persona.style}\n\n"
         f"{_sources_block(sources)}\n\n"
         f"CURRENT TREE:\n{_render_tree(tree)}\n\n"
-        f"Review the tree strictly from your angle. Set persona to '{persona.name}'."
+        f"Review the tree strictly from your angle. Set persona to '{persona.name}'.\n\n"
+        f"{tests_clause}"
     )
     return backend.complete(PERSONA_SYSTEM, user, PersonaVerdict)
 
@@ -214,16 +228,19 @@ def distill(
     fn_name: str = "decide",
     seed_tree: ProposedTree | None = None,
     seed_survival: dict[str, int] | None = None,
-    propose_examples: bool = False,
+    propose_examples: bool = True,
 ) -> DecisionTree:
     """Run the adversarial loop and return a deterministic DecisionTree.
 
     Pass ``seed_tree`` (with ``seed_survival``) to start from an existing tree
     instead of a blank draft — incremental mode (see incremental.recrystallize).
 
-    With ``propose_examples=True`` the loop drafts discriminating test cases for its
-    gray zones (attached as ``tree.proposed_examples``) for a human to ratify and feed
-    back as anchors — the way a validation set is meant to grow from an empty start.
+    ``propose_examples`` (on by default) builds a proposed validation set as the loop
+    runs: every persona except the overengineering_critic contributes discriminating
+    test cases each round, accumulated and attached as ``tree.proposed_examples`` for a
+    human to ratify and feed back as anchors. The labels are proposals, never ground
+    truth — so the loop never gates on its own homework. This is how a validation set is
+    meant to grow from an empty start; set ``propose_examples=False`` to skip it.
     """
     if profile not in PROFILES:
         raise ValueError(f"unknown profile {profile!r}; choose from {list(PROFILES)}")
@@ -255,9 +272,18 @@ def distill(
     best_arbitration: ProposerArbitration | None = None
     best_key = (_agreement(tree, sources, fn_name) or 0.0, -1.0)
 
+    # The proposed validation set grows as the loop runs: every persona (except the
+    # overengineering_critic) contributes discriminating cases each round, deduped here
+    # by input and against any ratified examples. Zero extra LLM calls — these ride
+    # along in the critiques the personas already return.
+    proposed: dict[str, dict] = {}
+    existing_inputs = {_canon(e["input"]) for e in sources.examples}
+
     for r in range(1, max_rounds + 1):
         try:
             verdicts = _critique_all(backend, sources, personas, tree)
+            if propose_examples:
+                _harvest_proposed(verdicts, r, proposed, existing_inputs)
             arbitration = _arbitrate(backend, sources, tree, verdicts, incremental=incremental)
         except Exception:
             # A transient backend failure shouldn't throw away the rounds already
@@ -308,9 +334,15 @@ def distill(
     # converged tree against them and surface any disagreement (§4.1 / §4.5).
     if sources.examples:
         final.example_report = _check_examples(final, sources.examples)
-    # Draft test cases for the still-contested cells, for a human to ratify (§4.5).
+    # Attach the validation set the personas drafted as the loop ran, for a human to
+    # ratify (§4.5). If the panel happened to propose nothing, fall back to one targeted
+    # generation call over the gray zones so we never finalize without a proposed set.
     if propose_examples:
-        final.proposed_examples = _propose_examples(backend, sources, final, fn_name)
+        items = list(proposed.values())
+        if not items:
+            items = [i for i in _propose_examples(backend, sources, final, fn_name)
+                     if _canon(i["input"]) not in existing_inputs]
+        final.proposed_examples = _stamp_proposed(final, items)
     return final
 
 
@@ -321,19 +353,61 @@ def _check_examples(tree: DecisionTree, examples: list[dict]):
     return run_validation(fn_from_tree(tree), dataset, label_match)
 
 
+def _canon(inp: dict) -> str:
+    return json.dumps(inp, sort_keys=True, default=str)
+
+
+def _harvest_proposed(
+    verdicts: list[PersonaVerdict], rnd: int, acc: dict[str, dict], existing_inputs: set[str]
+) -> None:
+    """Collect each non-critic persona's drafted test cases into ``acc`` (deduped).
+
+    The cases ride along in the verdicts the personas already return, so this is free.
+    The overengineering_critic is skipped — it removes complexity, it doesn't add cases."""
+    for v in verdicts:
+        if v.persona == OVERENGINEERING_CRITIC.name:
+            continue
+        for ex in v.proposed_tests:
+            if not ex.input:
+                continue
+            key = _canon(ex.input)
+            if key in existing_inputs or key in acc:
+                continue
+            acc[key] = {
+                "input": ex.input,
+                "expected": ex.expected,
+                "rationale": ex.rationale,
+                "source": f"{v.persona} (round {rnd})",
+            }
+
+
+def _stamp_proposed(tree: DecisionTree, items: list[dict]) -> list[dict]:
+    """Add the frozen tree's own prediction + the un-ratified status to each case.
+
+    The prediction is computed here, deterministically — a machine-authored label never
+    masquerades as ground truth, and a case whose proposed label differs from the tree's
+    output is the highest-value one for a human to rule on."""
+    from .validate import fn_from_tree
+
+    fn = fn_from_tree(tree)
+    out: list[dict] = []
+    for it in items:
+        try:
+            prediction = fn(it["input"])
+        except Exception as e:  # a case that crashes the tree is itself worth surfacing
+            prediction = f"ERROR: {type(e).__name__}: {e}"
+        out.append({**it, "tree_prediction": prediction, "status": "proposed"})
+    return out
+
+
 def _propose_examples(
     backend: Backend, sources: Sources, tree: DecisionTree, fn_name: str
 ) -> list[dict]:
-    """Draft discriminating test cases for the tree's gray zones / uncovered cells.
+    """Fallback generator: ask the model for cases targeting the gray zones directly.
 
-    The loop knows which cells are contested (they are its gray zones), so it is well
-    placed to propose the cases a human should ratify. Each returned dict is tagged
-    ``status="proposed"`` and carries what the tree currently returns — it does NOT
-    gate anything until a human ratifies the label (the trust boundary: the loop must
-    not author the ground truth it is then scored against).
-    """
-    from .validate import fn_from_tree
-
+    Only used when the persona panel happened to propose nothing, so the run never
+    finalizes without a proposed set. Returns raw {input, expected, rationale} items;
+    the caller dedups and stamps them."""
     gray = [n.gray_zone for n in tree.nodes if n.gray_zone]
     gray_block = "\n".join(f"  - {g}" for g in gray) or "  (none explicitly flagged)"
     user = (
@@ -343,29 +417,11 @@ def _propose_examples(
         "Propose a small set of discriminating test cases (at most one or two per gray "
         "zone) that pin down these contested cells — the inputs a human reviewer should "
         "rule on. Give the outcome you believe is correct for each, as a PROPOSAL to be "
-        "ratified. Do not duplicate any EXAMPLES already listed. If the tree is already "
-        "fully pinned by the existing examples, return an empty list."
+        "ratified. Do not duplicate any EXAMPLES already listed."
     )
     proposed = backend.complete(EXAMPLE_PROPOSER_SYSTEM, user, ProposedExampleSet)
-
-    fn = fn_from_tree(tree)
-    existing = {json.dumps(e["input"], sort_keys=True) for e in sources.examples}
-    out: list[dict] = []
-    for ex in proposed.examples:
-        if json.dumps(ex.input, sort_keys=True) in existing:
-            continue
-        try:
-            prediction = fn(ex.input)
-        except Exception as e:  # a case that crashes the tree is itself worth surfacing
-            prediction = f"ERROR: {type(e).__name__}: {e}"
-        out.append({
-            "input": ex.input,
-            "expected": ex.expected,
-            "rationale": ex.rationale,
-            "tree_prediction": prediction,
-            "status": "proposed",
-        })
-    return out
+    return [{"input": ex.input, "expected": ex.expected, "rationale": ex.rationale}
+            for ex in proposed.examples]
 
 
 def _agreement(tree: ProposedTree, sources: Sources, fn_name: str) -> float | None:

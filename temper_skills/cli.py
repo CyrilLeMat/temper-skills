@@ -205,7 +205,8 @@ def _write_proposed_examples(tree, out: str) -> None:
              "re-run with --examples to anchor these cells:"]
     for e in proposed:
         flag = "" if e["expected"] == e.get("tree_prediction") else "  [yellow](differs from tree)[/]"
-        lines.append(f"  input={e['input']}")
+        src = f" [dim]— {e['source']}[/]" if e.get("source") else ""
+        lines.append(f"  input={e['input']}{src}")
         lines.append(f"    proposed [green]{e['expected']}[/]  ·  tree says [cyan]{e.get('tree_prediction')}[/]{flag}")
         lines.append(f"    [dim]{e['rationale']}[/]")
     lines.append(f"\n[dim]written to {path}[/]")

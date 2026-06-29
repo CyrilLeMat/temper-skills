@@ -196,13 +196,16 @@ not auditable, no matter how many rounds it survived.
 
 ### Growing the validation set from the loop
 
-You don't have to write the validation set up front. The loop knows which cells are
-contested — they're its **gray zones** — so it drafts discriminating test cases for exactly
-those cells (on by default; `--no-propose-examples` to skip):
+You don't have to write the validation set up front — the loop **always builds one** (on by
+default; `--no-propose-examples` to skip). Every round, each persona *except* the
+`overengineering_critic` contributes the concrete cases it found — a full input plus the
+outcome it believes correct — and they accumulate (deduped) across all rounds. This rides
+along in the critiques the panel already produces, so it costs no extra model calls and is
+robust: the cases come from dozens of findings, not one post-hoc guess.
 
 ```
 ✎ proposed test cases (awaiting ratification)
-  input={'priority': 'urgent', 'security_score': 0.85}
+  input={'priority': 'urgent', 'security_score': 0.85}  — edge_case_hunter (round 4)
     proposed escalate_urgent  ·  tree says escalate_security   (differs from tree)
     pins the urgency-vs-mid-band-security cell no example covers
 → written to route_ticket.proposed_examples.json
@@ -240,7 +243,7 @@ empty validation set is meant to grow — the rounds draft it, you sign off on i
 
 ```bash
 pip install -e ".[dev]"
-pytest -q                          # 86 tests, no network
+pytest -q                          # 87 tests, no network
 git config core.hooksPath .githooks   # once per clone: block red commits locally
 ```
 
