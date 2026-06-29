@@ -14,7 +14,7 @@ from temper_skills.decompose import (
     coupling,
     decompose_skill,
 )
-from temper_skills.ingest import InferredFeature
+from temper_skills.ingest import InferredFeature, InferredSchema
 
 
 def _feat(name, type="string", desc=""):
@@ -134,3 +134,29 @@ def test_temper_each_compiles_trees_and_orchestrator(tmp_path, monkeypatch):
     text = orch.read_text()
     assert "classify_ticket" in text and "decide_escalation" in text
     assert "consumes" in text.lower() or "chain" in text.lower()   # coupling surfaced
+
+
+# ---- guide: the one-command end-to-end demo (no network, non-tty) ----
+
+class _GuideBe(FakeBackend):
+    """audit → a single closed-schema decision routed to `temper`, then the distill loop."""
+
+    def complete(self, system, user, schema):
+        if schema is JudgeScores:
+            return JudgeScores(decisiveness=9, combinatorics=8, stakes=8, distinct_decisions=1)
+        if schema is InferredSchema:
+            return InferredSchema(fn_name="route_ticket", features=[
+                InferredFeature(name="priority", type="string", description="one of low, high"),
+                InferredFeature(name="security_score", type="number"),
+            ])
+        return super().complete(system, user, schema)
+
+
+def test_guide_audits_then_tempers_to_a_full_skill(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "get_backend", lambda *a, **k: _GuideBe(score=9))
+    skill = tmp_path / "skill.md"
+    skill.write_text("# route a ticket by priority and security")
+    # non-tty: the [1] prompts are skipped, the guide runs straight through the temper route
+    cli.guide(skill=str(skill), model="x", backend="auto", profile="quick", out_dir=str(tmp_path))
+    assert (tmp_path / "route_ticket.py").exists()
+    assert (tmp_path / "route_ticket.tempered.md").exists()

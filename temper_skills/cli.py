@@ -372,6 +372,8 @@ def audit(
     skill: str = typer.Argument(..., help="Path to the skill.md to assess for temper-fitness."),
     model: str = typer.Option("claude-sonnet-4-6", help="Model: any LiteLLM id."),
     backend: str = typer.Option("auto", help="LLM backend: auto | api | claude | opencode."),
+    profile: str = typer.Option("standard", help=f"Temper profile if you follow the action: {list(PROFILES)}."),
+    out_dir: str = typer.Option(".", help="Where to write trees/skill if you follow the action."),
     json_out: bool = typer.Option(False, "--json", help="Emit the FitnessReport as JSON (for a pipeline / the Evolve Server)."),
 ):
     """Decide whether a skill's logic is worth tempering, before spending the loop.
@@ -390,8 +392,22 @@ def audit(
 
     if json_out:
         console.print_json(report.model_dump_json())
-    else:
-        _print_fitness(report, skill)
+        if report.verdict == "skip":
+            raise typer.Exit(3)
+        return
+
+    _print_fitness(report, skill)
+    action = report.recommended_action
+    # Continuity: offer to follow the Next action right here (the threaded press-[1]).
+    if console.is_terminal and action in ("temper", "decompose"):
+        if Prompt.ask(f"[bold]1[/] run `{action}` now · [bold]2[/] just the audit",
+                      choices=["1", "2"], default="2") == "1":
+            if action == "decompose":
+                _decompose_pipeline(skill, be, out_dir, profile, temper_each=True,
+                                    yes_unratified=False, emit_schemas=False, json_out=False)
+            else:
+                _temper_pipeline(skill, be, out_dir, profile)
+            return
     if report.verdict == "skip":
         raise typer.Exit(3)
 
@@ -460,39 +476,12 @@ def _print_fitness(report, skill: str) -> None:
     console.print(Panel("\n".join(body), title="Temper fitness", border_style=color))
 
 
-@app.command()
-def decompose(
-    skill: str = typer.Argument(..., help="Path to a big skill.md (a flow) to split into decisions."),
-    model: str = typer.Option("claude-sonnet-4-6", help="Model: any LiteLLM id."),
-    backend: str = typer.Option("auto", help="LLM backend: auto | api | claude | opencode."),
-    emit_schemas: bool = typer.Option(
-        False, "--emit-schemas",
-        help="Write a per-decision mini-schema (<fn>.schema.py) you can ratify then `ingest`."),
-    temper_each: bool = typer.Option(
-        False, "--temper-each",
-        help="Run the whole plan: emit a schema per decision and STOP for ratification; once "
-             "ratified, re-run to temper each into a tree + emit the orchestrator skill."),
-    yes_unratified: bool = typer.Option(
-        False, "--yes-unratified",
-        help="With --temper-each: don't stop — temper now on the raw inferred schemas "
-             "(expect open free-text fields)."),
-    profile: str = typer.Option("standard", help=f"Temper profile for --temper-each: {list(PROFILES)}."),
-    out_dir: str = typer.Option(".", help="Where schemas, trees, and the orchestrator are written."),
-    json_out: bool = typer.Option(False, "--json", help="Emit the Decomposition + per-decision audits as JSON."),
-):
-    """Split a flow-shaped skill into its decision points, audit each, and (optionally) temper them.
-
-    A big skill is a graph of {decisions + generation}; temper freezes one decision at a
-    time. `--temper-each` runs the full chain: a tree per decision + a thin orchestrator skill.
-    """
+def _decompose_pipeline(skill, be, out_dir, profile, *, temper_each, yes_unratified,
+                        emit_schemas, json_out, interactive=True):
+    """The decompose flow, shared by the `decompose` command and `guide`. Returns the path
+    to the orchestrator skill if it compiled, else None (plan-only or stopped to ratify)."""
     from .decompose import audit_decision, coupling, decompose_skill, Decomposition, InferredSchema
     from .export_skill import render_orchestrator_skill
-
-    try:
-        be = get_backend(backend, model)
-    except (ValueError, RuntimeError) as e:
-        console.print(f"[red]Backend error:[/] {e}")
-        raise typer.Exit(1)
 
     out = Path(out_dir)
     # Reuse a persisted plan so re-running --temper-each after ratifying doesn't re-decompose
@@ -504,7 +493,6 @@ def decompose(
         decomp = decompose_skill(skill, backend=be)
     coup = coupling(decomp)
 
-    # Emit a mini-schema per decision; never overwrite an existing one (preserves ratification).
     fresh: list[str] = []
     if emit_schemas or temper_each:
         out.mkdir(parents=True, exist_ok=True)
@@ -540,12 +528,10 @@ def decompose(
             console.print(f"\n[yellow]Emitted {len(fresh)} schema(s) to {out}/ — ratify them "
                           "(tighten free-text str → Literal) so the open-text actions become "
                           "`temper`.[/]")
-            if console.is_terminal and not json_out:
-                choice = Prompt.ask(
-                    "Next  [bold]1[/] temper each now (on these unratified schemas) · "
-                    "[bold]2[/] stop — I'll ratify first",
-                    choices=["1", "2"], default="2")
-                if choice == "1":
+            if interactive and console.is_terminal and not json_out:
+                if Prompt.ask("Next  [bold]1[/] temper each now (on these unratified schemas) · "
+                              "[bold]2[/] stop — I'll ratify first",
+                              choices=["1", "2"], default="2") == "1":
                     run = True
             if not run:
                 console.print(f"[dim]when ready: temper-skills decompose {skill} --temper-each "
@@ -554,9 +540,8 @@ def decompose(
             for fn in fresh:
                 console.print(f"[green]wrote[/] {out / f'{fn}.schema.py'}")
     if not run:
-        return
+        return None
 
-    # --- run: temper each decision against its (ratified) schema, then emit the orchestrator ---
     original = open(skill).read()
     items = []
     for d in decomp.decisions:
@@ -576,6 +561,101 @@ def decompose(
     orch.write_text(md)
     console.print(Panel(f"{len(items)} tree(s) → {out}/\norchestrator → {orch}",
                         title="Tempered the flow", border_style="green"))
+    return orch
+
+
+def _temper_pipeline(skill, be, out_dir, profile, *, schema_spec=None, fn=None):
+    """Freeze a single decision: run the loop, write the tree + a tempered skill. Returns
+    the path to the tempered skill.md."""
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    pinned = _load_schema(schema_spec) if schema_spec else None
+    tree = ingest_skill(skill, schema=pinned, profile=profile, backend=be,
+                        gate=lambda r: "continue", confirm=lambda i: True, fn_name=fn,
+                        propose_examples=False)
+    module = fn or tree.fn_name
+    tree.export(str(out / f"{module}.py"))
+    md = render_tempered_skill(tree, module, original_skill_text=open(skill).read())
+    mdp = out / f"{module}.tempered.md"
+    mdp.write_text(md)
+    console.print(Panel(f"tree → {out / f'{module}.py'}\ntempered skill → {mdp}",
+                        title="Tempered the decision", border_style="green"))
+    return mdp
+
+
+@app.command()
+def decompose(
+    skill: str = typer.Argument(..., help="Path to a big skill.md (a flow) to split into decisions."),
+    model: str = typer.Option("claude-sonnet-4-6", help="Model: any LiteLLM id."),
+    backend: str = typer.Option("auto", help="LLM backend: auto | api | claude | opencode."),
+    emit_schemas: bool = typer.Option(
+        False, "--emit-schemas",
+        help="Write a per-decision mini-schema (<fn>.schema.py) you can ratify then `ingest`."),
+    temper_each: bool = typer.Option(
+        False, "--temper-each",
+        help="Run the whole plan: emit a schema per decision and STOP for ratification; once "
+             "ratified, re-run to temper each into a tree + emit the orchestrator skill."),
+    yes_unratified: bool = typer.Option(
+        False, "--yes-unratified",
+        help="With --temper-each: don't stop — temper now on the raw inferred schemas."),
+    profile: str = typer.Option("standard", help=f"Temper profile for --temper-each: {list(PROFILES)}."),
+    out_dir: str = typer.Option(".", help="Where schemas, trees, and the orchestrator are written."),
+    json_out: bool = typer.Option(False, "--json", help="Emit the Decomposition + per-decision audits as JSON."),
+):
+    """Split a flow-shaped skill into its decision points, audit each, and (optionally) temper them."""
+    try:
+        be = get_backend(backend, model)
+    except (ValueError, RuntimeError) as e:
+        console.print(f"[red]Backend error:[/] {e}")
+        raise typer.Exit(1)
+    _decompose_pipeline(skill, be, out_dir, profile, temper_each=temper_each,
+                        yes_unratified=yes_unratified, emit_schemas=emit_schemas, json_out=json_out)
+
+
+@app.command()
+def guide(
+    skill: str = typer.Argument(..., help="Path to a skill.md to drive end-to-end, press-[1] style."),
+    model: str = typer.Option("claude-sonnet-4-6", help="Model: any LiteLLM id."),
+    backend: str = typer.Option("auto", help="LLM backend: auto | api | claude | opencode."),
+    profile: str = typer.Option("standard", help=f"Temper profile: {list(PROFILES)}."),
+    out_dir: str = typer.Option(".", help="Where trees and the (orchestrator) skill are written."),
+):
+    """Guided demo: audit a skill, follow the recommended action with a few [1]s, and end with
+    a full generated skill. The one-command tour of the whole pipeline."""
+    from .audit import audit_skill
+
+    try:
+        be = get_backend(backend, model)
+    except (ValueError, RuntimeError) as e:
+        console.print(f"[red]Backend error:[/] {e}")
+        raise typer.Exit(1)
+
+    console.rule("[bold]1 — audit[/]")
+    report = audit_skill(skill, backend=be)
+    _print_fitness(report, skill)
+    if console.is_terminal:
+        if Prompt.ask("[bold]1[/] follow the recommendation · [bold]2[/] quit",
+                      choices=["1", "2"], default="1") != "1":
+            raise typer.Exit(0)
+
+    action = report.recommended_action
+    final = None
+    if action == "decompose":
+        console.rule("[bold]2 — decompose → temper each[/]")
+        final = _decompose_pipeline(skill, be, out_dir, profile, temper_each=True,
+                                    yes_unratified=False, emit_schemas=False, json_out=False)
+    elif action == "temper":
+        console.rule("[bold]2 — temper[/]")
+        final = _temper_pipeline(skill, be, out_dir, profile)
+    else:
+        console.print(f"\n[yellow]Recommended action: {action}[/] — {report.action_hint}")
+        console.print("[dim]This action isn't auto-run by the guide (see the hint above).[/]")
+        raise typer.Exit(0)
+
+    if final is None:
+        raise typer.Exit(0)   # decompose stopped for ratification — re-run guide after ratifying
+    console.rule("[bold green]✓ full skill[/]")
+    console.print(Panel(final.read_text(), title=str(final), border_style="green"))
 
 
 if __name__ == "__main__":

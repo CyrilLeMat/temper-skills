@@ -20,6 +20,12 @@ skill.md ──audit──▶ verdict + recommended action
 The pipeline is three steps — **audit → (decompose) → temper** — and you can stop after any of
 them. The rest of this README walks them in order.
 
+**Just want the tour?** `temper-skills guide skill.md` runs the whole thing interactively: it
+audits, follows the recommended action with a few `[1]` presses, and ends by printing the full
+generated skill — one tree (a tempered skill) or, for a flow, N trees + an orchestrator. The
+individual commands (`audit`, `decompose`) also offer the next step as a `[1]` prompt when run
+in a terminal.
+
 ---
 
 ## Step 1 — `audit`: is there a decision here worth freezing?
