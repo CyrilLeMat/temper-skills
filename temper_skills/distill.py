@@ -35,10 +35,6 @@ PROFILES = {
     "audit-grade": (50, 5, True, True),
 }
 
-# A round only counts toward convergence if every persona scores at least this
-# high (the panel agrees the tree is solid) AND no new gray zone appeared.
-SCORE_BAR = 8
-
 # Default adversaries per profile (the overengineering_critic is always appended).
 # More personas of one model share blind spots (H5) and add cost + convergence
 # surface, so the cheap profiles run a lean, diverse panel and the full panel is
@@ -148,7 +144,8 @@ def _initial_tree(backend: Backend, sources: Sources) -> ProposedTree:
     return backend.complete(PROPOSER_SYSTEM, user, ProposedTree)
 
 
-def _critique(backend: Backend, sources: Sources, persona: Persona, tree: ProposedTree) -> PersonaVerdict:
+def _critique(backend: Backend, sources: Sources, persona: Persona, tree: ProposedTree,
+              closed: list[str] | None = None) -> PersonaVerdict:
     if persona.name == OVERENGINEERING_CRITIC.name:
         tests_clause = (
             "Leave `proposed_tests` EMPTY — your job is to remove unjustified complexity, "
@@ -162,18 +159,30 @@ def _critique(backend: Backend, sources: Sources, persona: Persona, tree: Propos
             "extend a human-ratified validation set — give your best-judgment label; a human "
             "ratifies it, it is not trusted blindly. Use exact schema feature names and values."
         )
+    # Settled trade-offs the proposer has already ruled on. Without this, a persona re-raises
+    # the same rejected point every round and pins its own score low forever — so the panel
+    # never climbs even on a tree that's as good as it will get.
+    closed_clause = ""
+    if closed:
+        closed_clause = (
+            "\n\nSETTLED — the proposer has deliberately accepted these as gray zones or "
+            "rejected a prior critique about them. Do NOT re-raise them or lower your score "
+            "for them; they are decided. Score only on NEW issues:\n"
+            + "\n".join(f"  - {c}" for c in closed)
+        )
     user = (
         f"Your angle ({persona.name}): {persona.style}\n\n"
         f"{_sources_block(sources)}\n\n"
         f"CURRENT TREE:\n{_render_tree(tree)}\n\n"
         f"Review the tree strictly from your angle. Set persona to '{persona.name}'.\n\n"
-        f"{tests_clause}"
+        f"{tests_clause}{closed_clause}"
     )
     return backend.complete(PERSONA_SYSTEM, user, PersonaVerdict)
 
 
 def _critique_all(
-    backend: Backend, sources: Sources, personas: list[Persona], tree: ProposedTree
+    backend: Backend, sources: Sources, personas: list[Persona], tree: ProposedTree,
+    closed: list[str] | None = None,
 ) -> list[PersonaVerdict]:
     """Run every persona's critique of the SAME tree concurrently (they're independent).
 
@@ -181,9 +190,9 @@ def _critique_all(
     the bulk of a round, so parallelizing it cuts round latency roughly N×.
     """
     if len(personas) <= 1:
-        return [_critique(backend, sources, p, tree) for p in personas]
+        return [_critique(backend, sources, p, tree, closed) for p in personas]
     with ThreadPoolExecutor(max_workers=len(personas)) as ex:
-        return list(ex.map(lambda p: _critique(backend, sources, p, tree), personas))
+        return list(ex.map(lambda p: _critique(backend, sources, p, tree, closed), personas))
 
 
 def _arbitrate(
@@ -320,8 +329,14 @@ def distill(
     stop_key = (_agreement(tree, sources, fn_name) or 1.0, -1.0, -1.0)
 
     for r in range(1, max_rounds + 1):
+        # Feed the panel the proposer's settled trade-offs (the working tree's gray zones +
+        # last round's rejected critiques) so a persona stops re-scoring a decided point down.
+        closed = [n.gray_zone for n in tree.nodes if n.gray_zone]
+        if last_arbitration:
+            closed += [f"{e.persona}: {e.rationale}" for e in last_arbitration.entries
+                       if e.decision == "rejected"]
         try:
-            verdicts = _critique_all(backend, sources, personas, tree)
+            verdicts = _critique_all(backend, sources, personas, tree, closed)
             if propose_examples:
                 _harvest_proposed(verdicts, r, proposed, existing_inputs)
             arbitration = _arbitrate(backend, sources, tree, verdicts,

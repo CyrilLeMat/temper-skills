@@ -87,10 +87,13 @@ def _make_gate(interactive: bool):
             ppct = 100 * r.proposed_passed / r.proposed_count
             bits.append(f"[cyan]{r.proposed_passed}/{r.proposed_count} proposed ({ppct:.0f}%)[/]")
         validation = "   ✎ validation set — tree passes " + (", ".join(bits) if bits else "0 cases (none yet)")
+        conv = r.arbitration.convergence_estimate
+        ccolor = "green" if conv >= 80 else "yellow" if conv >= 50 else "red"
         body = [
             f"[bold]Round {r.round}/{r.max_rounds}[/]   "
-            f"convergence estimate: {r.arbitration.convergence_estimate}%   "
-            f"persona scores: min {r.min_score}/10, mean {r.mean_score}/10",
+            f"[{ccolor}]settled: {conv}%[/]   "
+            f"[dim]panel: harshest critic {r.min_score}/10 · mean {r.mean_score}/10 "
+            "(opposing critics — a mid spread is normal)[/]",
             f"{validation}   ·   tree: {len(r.tree.nodes)} nodes",
             "",
         ]
@@ -632,7 +635,7 @@ def guide(
     skill: str = typer.Argument(..., help="Path to a skill.md to drive end-to-end, press-[1] style."),
     model: str = typer.Option("claude-sonnet-4-6", help="Model: any LiteLLM id."),
     backend: str = typer.Option("auto", help="LLM backend: auto | api | claude | opencode."),
-    profile: str = typer.Option("standard", help=f"Temper profile: {list(PROFILES)}."),
+    profile: str = typer.Option("quick", help=f"Temper profile (quick keeps the demo short): {list(PROFILES)}."),
     out_dir: str = typer.Option(".", help="Where trees and the (orchestrator) skill are written."),
 ):
     """Guided demo: audit a skill, follow the recommended action with a few [1]s, and end with
