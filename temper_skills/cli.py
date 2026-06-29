@@ -49,7 +49,7 @@ _VERDICT_MARK = {"ok": "[green]✓[/]", "missing_case": "[yellow]⚠[/]",
                  "collapsible": "[yellow]⚠[/]", "contradiction": "[red]✗[/]"}
 
 
-def _confirm_schema(inferred: InferredSchema) -> bool:
+def _confirm_schema(inferred: InferredSchema, auto: bool = False) -> bool:
     lines = [f"Decision function: [bold]{inferred.fn_name}[/]", "", "Inferred schema:"]
     for f in inferred.features:
         desc = f"  — {f.description}" if f.description else ""
@@ -59,7 +59,19 @@ def _confirm_schema(inferred: InferredSchema) -> bool:
         for c in inferred.constraints:
             lines.append(f"  • {c}  [hard]")
     console.print(Panel("\n".join(lines), title="Inferred from skill", border_style="cyan"))
+    if auto:
+        console.print("[dim]schema auto-accepted (-y) — inferred, not human-ratified[/]")
+        return True
     return Prompt.ask("Accept schema?", choices=["y", "n"], default="y") == "y"
+
+
+def _clip(text: str, limit: int = 200) -> str:
+    """First sentence (or a hard cap) — round panels show the gist, not paragraphs."""
+    text = " ".join((text or "").split())
+    cut = text.find(". ")
+    if 0 < cut + 1 <= limit:
+        return text[: cut + 1]
+    return text if len(text) <= limit else text[:limit].rstrip() + "…"
 
 
 def _make_gate(interactive: bool):
@@ -79,20 +91,12 @@ def _make_gate(interactive: bool):
             f"[bold]Round {r.round}/{r.max_rounds}[/]   "
             f"convergence estimate: {r.arbitration.convergence_estimate}%   "
             f"persona scores: min {r.min_score}/10, mean {r.mean_score}/10",
-            validation,
+            f"{validation}   ·   tree: {len(r.tree.nodes)} nodes",
             "",
-            "Persona scores & verdicts:",
         ]
         for v in sorted(r.verdicts, key=lambda x: x.score):
             mark = _VERDICT_MARK.get(v.verdict, "•")
-            body.append(f"  {mark} [bold]{v.persona}[/]  [bold]{v.score}/10[/]  — {v.detail}")
-        body.append("\nProposer arbitrage log:")
-        for e in r.arbitration.entries:
-            body.append(f"  [{e.decision}] {e.persona}: {e.rationale}")
-        body.append("\nCurrent tree:")
-        for i, n in enumerate(r.tree.nodes, 1):
-            body.append(f"  n{i}: if ({n.condition}) -> {n.outcome}")
-        body.append(f"  default -> {r.tree.default_outcome}")
+            body.append(f"  {mark} [bold]{v.persona}[/] {v.score}/10 — {_clip(v.detail)}")
         console.print(Panel("\n".join(body), border_style="blue"))
 
         if not interactive:
@@ -135,7 +139,8 @@ def ingest(
              "never runs on an unratified schema."),
     fn: str = typer.Option(None, help="Decision function name (used with --schema)."),
     yes: bool = typer.Option(False, "--yes", "-y",
-                             help="Don't stop at each round — run to convergence/cap (panels still print)."),
+                             help="Non-interactive: auto-accept the inferred schema and don't stop "
+                                  "at each round — run to convergence/cap (panels still print)."),
     propose_examples: bool = typer.Option(
         True, "--propose-examples/--no-propose-examples",
         help="Have the loop draft discriminating test cases for its gray zones, for you "
@@ -167,7 +172,9 @@ def ingest(
     try:
         tree = ingest_skill(
             skill, schema=pinned, profile=profile, backend=be,
-            gate=_make_gate(interactive), confirm=_confirm_schema, examples=ratified, fn_name=fn,
+            gate=_make_gate(interactive),
+            confirm=(lambda i: _confirm_schema(i, auto=True)) if yes else _confirm_schema,
+            examples=ratified, fn_name=fn,
             propose_examples=propose_examples,
         )
     except KeyboardInterrupt as e:
