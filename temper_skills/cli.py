@@ -538,11 +538,22 @@ def decompose(
             console.print(Panel("\n".join(body), title="Skill decomposition", border_style="cyan"))
         if temper_each and fresh:
             console.print(f"\n[yellow]Emitted {len(fresh)} schema(s) to {out}/ — ratify them "
-                          "(tighten free-text str → Literal), then re-run [bold]--temper-each[/] "
-                          "to compile.[/]  [dim](or --yes-unratified to temper now)[/]")
+                          "(tighten free-text str → Literal) so the open-text actions become "
+                          "`temper`.[/]")
+            if console.is_terminal and not json_out:
+                choice = Prompt.ask(
+                    "Next  [bold]1[/] temper each now (on these unratified schemas) · "
+                    "[bold]2[/] stop — I'll ratify first",
+                    choices=["1", "2"], default="2")
+                if choice == "1":
+                    run = True
+            if not run:
+                console.print(f"[dim]when ready: temper-skills decompose {skill} --temper-each "
+                              f"--out-dir {out}  (re-run reuses your ratified schemas)[/]")
         elif emit_schemas:
             for fn in fresh:
                 console.print(f"[green]wrote[/] {out / f'{fn}.schema.py'}")
+    if not run:
         return
 
     # --- run: temper each decision against its (ratified) schema, then emit the orchestrator ---
