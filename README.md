@@ -66,9 +66,17 @@ temper-skills decompose skill.md --emit-schemas   # writes <fn>.schema.py per de
 ```
 
 You then `ingest` each decision into its own tree, and the skill becomes a **thin orchestrator**
-that chains them. See [`examples/dog_day/`](examples/dog_day/) — a daily dog-care assistant split
-into `decide_walk` / `decide_meal` (chained) / `decide_vet` + the owner's note, the first
-complete decompose chain in the examples.
+that chains them. `--temper-each` runs that whole chain in one command — it emits the schemas
+and **stops for ratification** by default, then on re-run tempers each into a tree and writes
+the orchestrator skill (`--yes-unratified` to skip the stop):
+
+```bash
+temper-skills decompose skill.md --temper-each --out-dir out/   # emit + stop; re-run to compile
+```
+
+See [`examples/dog_day/`](examples/dog_day/) — a daily dog-care assistant split into
+`decide_walk` / `decide_meal` (chained) / `decide_vet` + the owner's note, the first complete
+decompose chain in the examples.
 
 ## Step 3 — `temper`: freeze one decision into a tree
 
@@ -331,8 +339,9 @@ a good citizen of that ecosystem, not a replacement for it.
   mini-schemas), the adversarial `temper` loop, `validate`, incremental mode, the tempered-skill
   emitter.
 - **Deferred:** the `clarify` and `generate_examples` actions (they need a signal the audit
-  doesn't yet collect); `decompose --temper-each` (today you `ingest` each decision yourself);
-  `audit_decision` can over-count `distinct_decisions` on an already-atomic decision.
+  doesn't yet collect); the `--temper-each` orchestrator is a deterministic template (no woven
+  variant yet); `audit_decision` can over-count `distinct_decisions` on an already-atomic
+  decision.
 - **`audit-grade`** today is `standard` with more rounds and stricter convergence. **Tournament
   orchestration, required citations, and per-gray-zone sign-off are roadmap, not built** — don't
   rely on them.

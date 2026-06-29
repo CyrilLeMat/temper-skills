@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from conftest import FakeBackend
+
+from temper_skills import cli
 from temper_skills.audit import JudgeScores
 from temper_skills.backends.base import Backend
 from temper_skills.decompose import (
@@ -78,3 +81,56 @@ def test_audit_decision_flags_open_text_field():
     report = audit_decision(d, _Be(scores=JudgeScores(decisiveness=8, combinatorics=4, stakes=5)))
     assert report.open_features == ["customer_note"]
     assert report.verdict == "caveats"          # half-open / borderline, not a clean temper
+
+
+# ---- --temper-each end-to-end through the CLI (no network) ----
+
+class _FullBe(FakeBackend):
+    """Decomposition + JudgeScores on top of FakeBackend's distill-loop schemas."""
+
+    def __init__(self, decomp=_DECOMP):
+        super().__init__(score=9)
+        self._decomp = decomp
+
+    def complete(self, system, user, schema):
+        if schema is Decomposition:
+            return self._decomp
+        if schema is JudgeScores:
+            return JudgeScores(decisiveness=8, combinatorics=7, stakes=6)
+        return super().complete(system, user, schema)
+
+
+def _write_skill(tmp_path):
+    p = tmp_path / "skill.md"
+    p.write_text("# a flow: classify the ticket, then decide escalation")
+    return str(p)
+
+
+def test_temper_each_emits_then_stops(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "get_backend", lambda *a, **k: _FullBe())
+    skill = _write_skill(tmp_path)
+    cli.decompose(skill=skill, model="x", backend="auto", emit_schemas=False,
+                  temper_each=True, yes_unratified=False, profile="quick",
+                  out_dir=str(tmp_path), json_out=False)
+    # schemas + persisted plan written; NO trees yet (it stopped for ratification)
+    assert (tmp_path / "classify_ticket.schema.py").exists()
+    assert (tmp_path / "decide_escalation.schema.py").exists()
+    assert (tmp_path / "decomposition.json").exists()
+    assert not (tmp_path / "classify_ticket.py").exists()
+
+
+def test_temper_each_compiles_trees_and_orchestrator(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "get_backend", lambda *a, **k: _FullBe())
+    skill = _write_skill(tmp_path)
+    # 1st call emits + stops; 2nd call finds the (now-existing) schemas → compiles
+    cli.decompose(skill=skill, model="x", backend="auto", emit_schemas=False, temper_each=True,
+                  yes_unratified=False, profile="quick", out_dir=str(tmp_path), json_out=False)
+    cli.decompose(skill=skill, model="x", backend="auto", emit_schemas=False, temper_each=True,
+                  yes_unratified=False, profile="quick", out_dir=str(tmp_path), json_out=False)
+    assert (tmp_path / "classify_ticket.py").exists()
+    assert (tmp_path / "decide_escalation.py").exists()
+    orch = tmp_path / "skill.tempered.md"
+    assert orch.exists()
+    text = orch.read_text()
+    assert "classify_ticket" in text and "decide_escalation" in text
+    assert "consumes" in text.lower() or "chain" in text.lower()   # coupling surfaced

@@ -468,55 +468,103 @@ def decompose(
     emit_schemas: bool = typer.Option(
         False, "--emit-schemas",
         help="Write a per-decision mini-schema (<fn>.schema.py) you can ratify then `ingest`."),
-    out_dir: str = typer.Option(".", help="Where --emit-schemas writes the mini-schemas."),
+    temper_each: bool = typer.Option(
+        False, "--temper-each",
+        help="Run the whole plan: emit a schema per decision and STOP for ratification; once "
+             "ratified, re-run to temper each into a tree + emit the orchestrator skill."),
+    yes_unratified: bool = typer.Option(
+        False, "--yes-unratified",
+        help="With --temper-each: don't stop — temper now on the raw inferred schemas "
+             "(expect open free-text fields)."),
+    profile: str = typer.Option("standard", help=f"Temper profile for --temper-each: {list(PROFILES)}."),
+    out_dir: str = typer.Option(".", help="Where schemas, trees, and the orchestrator are written."),
     json_out: bool = typer.Option(False, "--json", help="Emit the Decomposition + per-decision audits as JSON."),
 ):
-    """Split a flow-shaped skill into its decision points, audit each, and print the plan.
+    """Split a flow-shaped skill into its decision points, audit each, and (optionally) temper them.
 
     A big skill is a graph of {decisions + generation}; temper freezes one decision at a
-    time. This finds the decisions so each becomes its own tree and the skill becomes a
-    thin orchestrator.
+    time. `--temper-each` runs the full chain: a tree per decision + a thin orchestrator skill.
     """
-    from .decompose import audit_decision, coupling, decompose_skill
+    from .decompose import audit_decision, coupling, decompose_skill, Decomposition, InferredSchema
+    from .export_skill import render_orchestrator_skill
 
     try:
         be = get_backend(backend, model)
     except (ValueError, RuntimeError) as e:
         console.print(f"[red]Backend error:[/] {e}")
         raise typer.Exit(1)
-    decomp = decompose_skill(skill, backend=be)
-    coup = coupling(decomp)
-    reports = {d.fn_name: audit_decision(d, be) for d in decomp.decisions}
 
-    if json_out:
-        payload = {"decomposition": _json.loads(decomp.model_dump_json()),
-                   "audits": {k: _json.loads(r.model_dump_json()) for k, r in reports.items()}}
-        console.print_json(_json.dumps(payload))
+    out = Path(out_dir)
+    # Reuse a persisted plan so re-running --temper-each after ratifying doesn't re-decompose
+    # (another LLM call) or drift the fn_names the ratified schemas are keyed to.
+    plan_json = out / "decomposition.json"
+    if (emit_schemas or temper_each) and plan_json.exists():
+        decomp = Decomposition.model_validate_json(plan_json.read_text())
     else:
-        n = len(decomp.decisions)
-        body = [f"[bold]{n} decision(s) + {len(decomp.generative_steps)} generative step(s)[/]", ""]
-        vcolor = {"temper": "green", "caveats": "yellow", "skip": "red"}
-        for d in decomp.decisions:
-            r = reports[d.fn_name]
-            c = vcolor[r.verdict]
-            chain = "" if coup[d.fn_name] == "independent" else f"  ·  chain: {coup[d.fn_name]}"
-            body.append(f"  [bold]{d.fn_name}[/]  [{c}]audit: {r.verdict.upper()}[/]"
-                        f"  ·  → {r.recommended_action}{chain}")
-            body.append(f"      [dim]{d.description}[/]")
-        for g in decomp.generative_steps:
-            body.append(f"  [dim]generative:[/] {g}  [dim](left to the model)[/]")
-        body += ["", f"[bold]Plan:[/] {n} tree(s) + an orchestrator skill that chains them"
-                 + (" and runs the generative step(s)" if decomp.generative_steps else "")]
-        console.print(Panel("\n".join(body), title="Skill decomposition", border_style="cyan"))
+        decomp = decompose_skill(skill, backend=be)
+    coup = coupling(decomp)
 
-    if emit_schemas:
-        from .decompose import InferredSchema
-        out = Path(out_dir)
+    # Emit a mini-schema per decision; never overwrite an existing one (preserves ratification).
+    fresh: list[str] = []
+    if emit_schemas or temper_each:
         out.mkdir(parents=True, exist_ok=True)
+        plan_json.write_text(decomp.model_dump_json(indent=2))
         for d in decomp.decisions:
             p = out / f"{d.fn_name}.schema.py"
-            p.write_text(render_schema_source(InferredSchema(fn_name=d.fn_name, features=d.features)))
-            console.print(f"[green]wrote[/] {p}  [dim](ratify, then: temper-skills ingest … --schema {p}:{_classname(d.fn_name)})[/]")
+            if not p.exists():
+                p.write_text(render_schema_source(InferredSchema(fn_name=d.fn_name, features=d.features)))
+                fresh.append(d.fn_name)
+
+    run = temper_each and (not fresh or yes_unratified)
+
+    if not run:
+        reports = {d.fn_name: audit_decision(d, be) for d in decomp.decisions}
+        if json_out:
+            console.print_json(_json.dumps({"decomposition": _json.loads(decomp.model_dump_json()),
+                "audits": {k: _json.loads(r.model_dump_json()) for k, r in reports.items()}}))
+        else:
+            n = len(decomp.decisions)
+            body = [f"[bold]{n} decision(s) + {len(decomp.generative_steps)} generative step(s)[/]", ""]
+            vcolor = {"temper": "green", "caveats": "yellow", "skip": "red"}
+            for d in decomp.decisions:
+                r = reports[d.fn_name]
+                chain = "" if coup[d.fn_name] == "independent" else f"  ·  chain: {coup[d.fn_name]}"
+                body.append(f"  [bold]{d.fn_name}[/]  [{vcolor[r.verdict]}]audit: {r.verdict.upper()}[/]"
+                            f"  ·  → {r.recommended_action}{chain}")
+                body.append(f"      [dim]{d.description}[/]")
+            for g in decomp.generative_steps:
+                body.append(f"  [dim]generative:[/] {g}  [dim](left to the model)[/]")
+            body += ["", f"[bold]Plan:[/] {n} tree(s) + an orchestrator skill that chains them"]
+            console.print(Panel("\n".join(body), title="Skill decomposition", border_style="cyan"))
+        if temper_each and fresh:
+            console.print(f"\n[yellow]Emitted {len(fresh)} schema(s) to {out}/ — ratify them "
+                          "(tighten free-text str → Literal), then re-run [bold]--temper-each[/] "
+                          "to compile.[/]  [dim](or --yes-unratified to temper now)[/]")
+        elif emit_schemas:
+            for fn in fresh:
+                console.print(f"[green]wrote[/] {out / f'{fn}.schema.py'}")
+        return
+
+    # --- run: temper each decision against its (ratified) schema, then emit the orchestrator ---
+    original = open(skill).read()
+    items = []
+    for d in decomp.decisions:
+        schema_path = f"{out / f'{d.fn_name}.schema.py'}:{_classname(d.fn_name)}"
+        console.print(f"[cyan]tempering[/] {d.fn_name} …")
+        tree = ingest_skill(skill, schema=_load_schema(schema_path), profile=profile, backend=be,
+                            gate=lambda r: "continue", fn_name=d.fn_name, propose_examples=False)
+        tree.export(str(out / f"{d.fn_name}.py"))
+        items.append({"fn": d.fn_name, "module": d.fn_name, "features": tree.features,
+                      "consumes": d.consumes,
+                      "gray_zones": [n.gray_zone for n in tree.nodes if n.gray_zone]})
+
+    sp = Path(skill)
+    name = sp.parent.parent.name if sp.parent.name == "input" else sp.stem
+    md = render_orchestrator_skill(name, items, decomp.generative_steps, original)
+    orch = out / f"{name}.tempered.md"
+    orch.write_text(md)
+    console.print(Panel(f"{len(items)} tree(s) → {out}/\norchestrator → {orch}",
+                        title="Tempered the flow", border_style="green"))
 
 
 if __name__ == "__main__":
