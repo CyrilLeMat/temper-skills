@@ -30,3 +30,5 @@ jobs:
             examples/license_compat/output/validation_set.json --fn assess_license --match exact
           temper-skills validate examples/ankle_sprain/output/assess_ankle.py \
             examples/ankle_sprain/output/validation_set.json --fn assess_ankle --match exact
+          temper-skills validate examples/parking/output/can_i_park.py \
+            examples/parking/output/validation_set.json --fn can_i_park --match exact

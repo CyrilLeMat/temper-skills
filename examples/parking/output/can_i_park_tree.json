@@ -1,0 +1,66 @@
+{
+  "fn_name": "can_i_park",
+  "features": ["zone_type", "day", "hour", "is_public_holiday", "has_resident_permit"],
+  "default_outcome": "prohibited",
+  "model": "claude-sonnet-4-6 via temper-skills",
+  "profile": "standard",
+  "constraints_version": "v1.0",
+  "nodes": [
+    {
+      "condition": "(zone_type or '').strip().lower() == 'no_stopping'",
+      "outcome": "prohibited",
+      "rounds_survived": 6,
+      "sources": ["skill.md", "constraints#precedence"],
+      "critic_note": "no_stopping beats everything — checked first, no exemption for holiday/permit/hour",
+      "gray_zone": null
+    },
+    {
+      "condition": "(day or '').strip().lower() in ('tuesday', 'friday') and hour is not None and 11 <= hour < 13 and not is_public_holiday",
+      "outcome": "no_parking_street_cleaning",
+      "rounds_survived": 5,
+      "sources": ["skill.md", "constraints#precedence"],
+      "critic_note": "active street-cleaning window beats meter/permit rules and applies to every zone; a resident permit does NOT exempt it",
+      "gray_zone": "Suspended on public holidays (is_public_holiday true falls through). Window is the clock hours 11 and 12 (>=11 and <13)."
+    },
+    {
+      "condition": "(zone_type or '').strip().lower() == 'metered' and (day or '').strip().lower() != 'sunday' and not is_public_holiday and hour is not None and 9 <= hour < 18",
+      "outcome": "pay_and_display_2h",
+      "rounds_survived": 4,
+      "sources": ["skill.md"],
+      "critic_note": "meter enforced Mon-Sat 09:00-18:00 on non-holidays; pay, 2-hour limit",
+      "gray_zone": "The 2-hour cap can't be enforced by the tree alone; a downstream system must track elapsed duration."
+    },
+    {
+      "condition": "(zone_type or '').strip().lower() == 'metered'",
+      "outcome": "free",
+      "rounds_survived": 4,
+      "sources": ["skill.md"],
+      "critic_note": "metered but outside enforcement — Sunday, public holiday, or before 09:00 / from 18:00 — meter is free",
+      "gray_zone": null
+    },
+    {
+      "condition": "(zone_type or '').strip().lower() == 'residential_permit' and (day or '').strip().lower() in ('monday', 'tuesday', 'wednesday', 'thursday', 'friday') and not is_public_holiday and hour is not None and 8 <= hour < 20 and not has_resident_permit",
+      "outcome": "permit_required",
+      "rounds_survived": 3,
+      "sources": ["skill.md"],
+      "critic_note": "permit enforced Mon-Fri 08:00-20:00 on non-holidays; no permit -> not allowed",
+      "gray_zone": null
+    },
+    {
+      "condition": "(zone_type or '').strip().lower() == 'residential_permit'",
+      "outcome": "free",
+      "rounds_survived": 4,
+      "sources": ["skill.md"],
+      "critic_note": "residential block open to all: permit holder during enforcement, or anyone off-hours / weekend / holiday",
+      "gray_zone": null
+    },
+    {
+      "condition": "(zone_type or '').strip().lower() == 'unrestricted'",
+      "outcome": "free",
+      "rounds_survived": 6,
+      "sources": ["skill.md"],
+      "critic_note": null,
+      "gray_zone": null
+    }
+  ]
+}

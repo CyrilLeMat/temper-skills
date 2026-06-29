@@ -16,13 +16,15 @@ input/
 output/
   schema.py               ParkingQuery — zone_type, day, hour, is_public_holiday, has_resident_permit
   validation_set.json     20 ratified cases exercising the interactions + the holiday/permit edges
-  can_i_park.py           the deterministic advisor — zero LLM at inference (after a live run)
-  skill.tempered.md       a parking skill that calls the advisor (after a live run)
+  can_i_park_tree.json    the tree + provenance (the canonical, CI-pinned artifact)
+  can_i_park.py           the deterministic advisor — zero LLM at inference
+  skill.tempered.md       a parking skill that calls the advisor
 ```
 
 `input/` is just the skill (the prose). Everything else — the schema the loop is pinned to,
-the validation set it's graded against, and the tree it emits — lives in `output/`. The tree
-and tempered skill land after a live loop run; the schema and validation set are committed.
+the validation set it's graded against, and the tree it emits — lives in `output/`. The
+committed tree passes the validation set 20/20 and is pinned in CI (`tests/test_validate.py`);
+re-running the loop regenerates `can_i_park.py` from the prose.
 
 ## Why it's a good fit (and dog_food isn't)
 
