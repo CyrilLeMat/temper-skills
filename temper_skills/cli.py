@@ -476,6 +476,27 @@ def _print_fitness(report, skill: str) -> None:
     console.print(Panel("\n".join(body), title="Temper fitness", border_style=color))
 
 
+def _plan_body(decomp, coup, reports) -> str:
+    """The decomposition plan panel. With ``reports`` (audited) shows each verdict/action;
+    without (we're about to temper anyway) shows the decision's outcomes instead."""
+    vcolor = {"temper": "green", "caveats": "yellow", "skip": "red"}
+    n = len(decomp.decisions)
+    body = [f"[bold]{n} decision(s) + {len(decomp.generative_steps)} generative step(s)[/]", ""]
+    for d in decomp.decisions:
+        chain = "" if coup[d.fn_name] == "independent" else f"  ·  chain: {coup[d.fn_name]}"
+        if reports:
+            r = reports[d.fn_name]
+            body.append(f"  [bold]{d.fn_name}[/]  [{vcolor[r.verdict]}]audit: {r.verdict.upper()}[/]"
+                        f"  ·  → {r.recommended_action}{chain}")
+        else:
+            body.append(f"  [bold]{d.fn_name}[/]  →  {' / '.join(d.outcomes)}{chain}")
+        body.append(f"      [dim]{d.description}[/]")
+    for g in decomp.generative_steps:
+        body.append(f"  [dim]generative:[/] {g}  [dim](left to the model)[/]")
+    body += ["", f"[bold]Plan:[/] {n} tree(s) + an orchestrator skill that chains them"]
+    return "\n".join(body)
+
+
 def _decompose_pipeline(skill, be, out_dir, profile, *, temper_each, yes_unratified,
                         emit_schemas, json_out, interactive=True):
     """The decompose flow, shared by the `decompose` command and `guide`. Returns the path
@@ -505,25 +526,17 @@ def _decompose_pipeline(skill, be, out_dir, profile, *, temper_each, yes_unratif
 
     run = temper_each and (not fresh or yes_unratified)
 
+    # Always show the decomposition plan — audit each decision only when we're NOT about to
+    # temper (the per-decision audit is N extra LLM calls; pointless right before the loops).
+    reports = {} if run else {d.fn_name: audit_decision(d, be) for d in decomp.decisions}
+    if not run and json_out:
+        console.print_json(_json.dumps({"decomposition": _json.loads(decomp.model_dump_json()),
+            "audits": {k: _json.loads(r.model_dump_json()) for k, r in reports.items()}}))
+    elif not json_out:
+        console.print(Panel(_plan_body(decomp, coup, reports),
+                            title="Skill decomposition", border_style="cyan"))
+
     if not run:
-        reports = {d.fn_name: audit_decision(d, be) for d in decomp.decisions}
-        if json_out:
-            console.print_json(_json.dumps({"decomposition": _json.loads(decomp.model_dump_json()),
-                "audits": {k: _json.loads(r.model_dump_json()) for k, r in reports.items()}}))
-        else:
-            n = len(decomp.decisions)
-            body = [f"[bold]{n} decision(s) + {len(decomp.generative_steps)} generative step(s)[/]", ""]
-            vcolor = {"temper": "green", "caveats": "yellow", "skip": "red"}
-            for d in decomp.decisions:
-                r = reports[d.fn_name]
-                chain = "" if coup[d.fn_name] == "independent" else f"  ·  chain: {coup[d.fn_name]}"
-                body.append(f"  [bold]{d.fn_name}[/]  [{vcolor[r.verdict]}]audit: {r.verdict.upper()}[/]"
-                            f"  ·  → {r.recommended_action}{chain}")
-                body.append(f"      [dim]{d.description}[/]")
-            for g in decomp.generative_steps:
-                body.append(f"  [dim]generative:[/] {g}  [dim](left to the model)[/]")
-            body += ["", f"[bold]Plan:[/] {n} tree(s) + an orchestrator skill that chains them"]
-            console.print(Panel("\n".join(body), title="Skill decomposition", border_style="cyan"))
         if temper_each and fresh:
             console.print(f"\n[yellow]Emitted {len(fresh)} schema(s) to {out}/ — ratify them "
                           "(tighten free-text str → Literal) so the open-text actions become "
@@ -546,9 +559,9 @@ def _decompose_pipeline(skill, be, out_dir, profile, *, temper_each, yes_unratif
     items = []
     for d in decomp.decisions:
         schema_path = f"{out / f'{d.fn_name}.schema.py'}:{_classname(d.fn_name)}"
-        console.print(f"[cyan]tempering[/] {d.fn_name} …")
+        console.rule(f"[cyan]tempering {d.fn_name}[/]")
         tree = ingest_skill(skill, schema=_load_schema(schema_path), profile=profile, backend=be,
-                            gate=lambda r: "continue", fn_name=d.fn_name, propose_examples=False)
+                            gate=_make_gate(False), fn_name=d.fn_name, propose_examples=False)
         tree.export(str(out / f"{d.fn_name}.py"))
         items.append({"fn": d.fn_name, "module": d.fn_name, "features": tree.features,
                       "consumes": d.consumes,
@@ -571,7 +584,7 @@ def _temper_pipeline(skill, be, out_dir, profile, *, schema_spec=None, fn=None):
     out.mkdir(parents=True, exist_ok=True)
     pinned = _load_schema(schema_spec) if schema_spec else None
     tree = ingest_skill(skill, schema=pinned, profile=profile, backend=be,
-                        gate=lambda r: "continue", confirm=lambda i: True, fn_name=fn,
+                        gate=_make_gate(False), confirm=lambda i: True, fn_name=fn,
                         propose_examples=False)
     module = fn or tree.fn_name
     tree.export(str(out / f"{module}.py"))
