@@ -71,6 +71,7 @@ def ingest_skill(
     examples: list[dict] | None = None,
     propose_examples: bool = True,
     propose_schema_only: bool = False,
+    checkpoint=None,
 ) -> DecisionTree | InferredSchema:
     """Read a skill.md and distill its routing logic into a DecisionTree.
 
@@ -109,5 +110,5 @@ def ingest_skill(
                       examples=examples or [])
     return distill(
         sources, profile=profile, backend=backend, gate=gate, fn_name=resolved_fn,
-        propose_examples=propose_examples,
+        propose_examples=propose_examples, checkpoint=checkpoint,
     )

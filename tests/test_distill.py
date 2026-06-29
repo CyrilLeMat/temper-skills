@@ -250,6 +250,17 @@ def test_personas_build_validation_set_excluding_critic():
     assert len(t.proposed_examples) == len(by_input)
 
 
+def test_checkpoint_called_every_round():
+    """The caller can persist the current tree each round (follow-along + crash-safety)."""
+    from temper_skills.tree import DecisionTree
+    seen = []
+    be = FakeBackend(score=9)
+    distill(_sources(), backend=be, profile="quick", fn_name="route_ticket",
+            checkpoint=lambda t: seen.append(t))
+    assert len(seen) == be.calls["arbitration"]          # one checkpoint per round
+    assert all(isinstance(t, DecisionTree) for t in seen)
+
+
 def test_malformed_condition_is_dropped_not_shipped():
     """A node whose condition won't compile (e.g. a dangling `in `) must be sanitized
     away so the exported tree always imports — never a SyntaxError on disk."""

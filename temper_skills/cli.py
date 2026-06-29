@@ -179,16 +179,25 @@ def ingest(
 
     pinned = _load_schema(schema) if schema else None
     ratified = load_dataset(examples) if examples else None
+    Path(out).parent.mkdir(parents=True, exist_ok=True)  # don't lose a run to a missing dir
+
+    def _checkpoint(t) -> None:  # write each round's tree so progress is followable + crash-safe
+        try:
+            t.export(out)
+        except OSError as e:
+            console.print(f"[yellow]checkpoint write failed ({e})[/]")
+
     console.print(f"[cyan]Reading {skill}[/]  ·  backend: [bold]{be.describe()}[/]"
                   + (f"  ·  schema: {schema}" if schema else "  ·  schema: inferred")
-                  + (f"  ·  {len(ratified)} ratified example(s)" if ratified else ""))
+                  + (f"  ·  {len(ratified)} ratified example(s)" if ratified else "")
+                  + f"  ·  [dim]writing each round → {out}[/]")
     try:
         tree = ingest_skill(
             skill, schema=pinned, profile=profile, backend=be,
             gate=_make_gate(interactive),
             confirm=(lambda i: _confirm_schema(i, auto=True)) if yes else _confirm_schema,
             examples=ratified, fn_name=fn,
-            propose_examples=propose_examples,
+            propose_examples=propose_examples, checkpoint=_checkpoint,
         )
     except KeyboardInterrupt as e:
         console.print(f"[red]Aborted:[/] {e}")
@@ -203,6 +212,7 @@ def ingest(
     # Close the loop: a tempered skill.md that delegates the decision to the tree.
     module = Path(out).with_suffix("").name
     md_path = skill_out or str(Path(out).with_suffix("")) + ".tempered.md"
+    Path(md_path).parent.mkdir(parents=True, exist_ok=True)
     with open(skill) as f:
         original = f.read()
     if skill_style == "woven":

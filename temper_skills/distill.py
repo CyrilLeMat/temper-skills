@@ -250,6 +250,7 @@ def distill(
     seed_tree: ProposedTree | None = None,
     seed_survival: dict[str, int] | None = None,
     propose_examples: bool = True,
+    checkpoint: "Callable[[DecisionTree], None] | None" = None,
 ) -> DecisionTree:
     """Run the adversarial loop and return a deterministic DecisionTree.
 
@@ -263,6 +264,10 @@ def distill(
     human ratification. Ratified examples, when supplied, rank ahead of the proposed ones
     and are never traded away. The proposed set is attached as ``tree.proposed_examples``
     for the user to ratify and harden later; set ``propose_examples=False`` to skip it.
+
+    ``checkpoint`` (if given) is called with the current finalized tree after every round,
+    so a caller can persist progress — you can follow the tree as it evolves and a late
+    crash never throws away the rounds already paid for.
     """
     if profile not in PROFILES:
         raise ValueError(f"unknown profile {profile!r}; choose from {list(PROFILES)}")
@@ -274,6 +279,7 @@ def distill(
         personas.append(OVERENGINEERING_CRITIC)
 
     backend = backend or auto_backend(model)
+    model_tag = f"{backend.model} via {backend.name}"
     incremental = seed_tree is not None
     if incremental:
         tree = seed_tree
@@ -338,6 +344,9 @@ def distill(
                              proposed_passed=prop_passed,
                              ratified_count=len(sources.examples))
         candidates.append((tree, arbitration, result.mean_score))
+        if checkpoint:  # persist this round's tree so progress is followable + crash-safe
+            checkpoint(_finalize(tree, arbitration, survival, sources, model_tag,
+                                 profile, provenance, fn_name))
         round_key = (agreement if agreement is not None else 1.0,
                      prop_passed / len(prop_items) if prop_items else 0.0,
                      result.mean_score)
@@ -361,7 +370,6 @@ def distill(
     # rounds_survived for whichever tree wins.
     best_tree, best_arbitration = _select_best(candidates, sources, list(proposed.values()), fn_name)
     arb_for_final = best_arbitration if best_arbitration is not None else last_arbitration
-    model_tag = f"{backend.model} via {backend.name}"
     final = _finalize(best_tree, arb_for_final, survival, sources, model_tag, profile, provenance, fn_name)
     _assert_compiles(final)  # never hand back a tree that doesn't import
     # The ratified examples are the loop's own correctness signal: check the
