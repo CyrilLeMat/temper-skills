@@ -23,7 +23,7 @@ jobs:
       - name: Validate the canonical trees (dogfood the CI gate)
         run: |
           temper-skills validate examples/dog_food/output/dog_food_checker.py \
-            examples/dog_food/input/validation_set.json --fn can_dog_eat
+            examples/dog_food/ratified/validation_set.json --fn can_dog_eat
           temper-skills validate examples/ticket_routing/output/route_ticket.py \
             examples/ticket_routing/input/validation_set.json --fn route_ticket --match exact
           temper-skills validate examples/license_compat/output/assess_license.py \
