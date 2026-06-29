@@ -250,6 +250,54 @@ def test_personas_build_validation_set_excluding_critic():
     assert len(t.proposed_examples) == len(by_input)
 
 
+def test_malformed_condition_is_dropped_not_shipped():
+    """A node whose condition won't compile (e.g. a dangling `in `) must be sanitized
+    away so the exported tree always imports — never a SyntaxError on disk."""
+    import re
+    from pydantic import BaseModel
+    from temper_skills.backends.base import Backend
+    from temper_skills.schemas import (
+        ArbitrationEntry, PersonaVerdict, ProposedExampleSet,
+        ProposedNode, ProposedTree, ProposerArbitration,
+    )
+    from temper_skills.validate import fn_from_tree
+
+    class FoodSchema(BaseModel):
+        food_item: str = ""
+
+    bad = ProposedTree(
+        nodes=[
+            ProposedNode(condition="food_item == 'chocolate'", outcome="unsafe"),
+            ProposedNode(condition="(food_item or '').strip().lower() in ", outcome="unsafe"),  # broken
+        ],
+        default_outcome="safe")
+
+    class B(Backend):
+        name = "fake"
+
+        def __init__(self):
+            super().__init__("fake-model")
+
+        def complete(self, system, user, schema):
+            if schema is ProposedTree:
+                return bad
+            if schema is PersonaVerdict:
+                p = re.search(r"Your angle \((\w+)\)", user).group(1)
+                return PersonaVerdict(persona=p, score=9, verdict="ok", detail="d")
+            if schema is ProposerArbitration:
+                return ProposerArbitration(
+                    entries=[ArbitrationEntry(persona="x", decision="kept", rationale="ok")],
+                    convergence_estimate=95, tree=bad)
+            if schema is ProposedExampleSet:
+                return ProposedExampleSet(examples=[])
+            raise AssertionError(schema)
+
+    tree = distill(Sources(schema=FoodSchema), backend=B(), profile="quick", fn_name="can_dog_eat")
+    assert all(not n.condition.strip().endswith("in") for n in tree.nodes)  # broken node gone
+    fn = fn_from_tree(tree)                                             # and the result imports
+    assert fn({"food_item": "chocolate"}) == "unsafe"
+
+
 def test_best_tree_chosen_by_proposed_score_not_persona_score():
     """With no ratified examples, the shipped tree is the one satisfying the most proposed
     (adversary-authored) cases — even when persona scores are flat across rounds."""

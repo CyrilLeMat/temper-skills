@@ -221,6 +221,24 @@ def _node_key(condition: str) -> str:
     return " ".join(condition.split())
 
 
+def _condition_ok(condition: str) -> bool:
+    try:
+        compile(f"({condition})", "<cond>", "eval")
+        return True
+    except SyntaxError:
+        return False
+
+
+def _sanitize(tree: ProposedTree) -> ProposedTree:
+    """Drop nodes whose condition won't compile so a malformed branch from the model can
+    never reach scoring or the exported file — a condition that can't compile can't run,
+    and dropping it is strictly safer than shipping a SyntaxError."""
+    good = [n for n in tree.nodes if _condition_ok(n.condition)]
+    if len(good) == len(tree.nodes):
+        return tree
+    return ProposedTree(nodes=good, default_outcome=tree.default_outcome)
+
+
 def distill(
     sources: Sources,
     adversaries: list[Persona] | None = None,
@@ -261,7 +279,7 @@ def distill(
         tree = seed_tree
         survival = dict(seed_survival or {_node_key(n.condition): 1 for n in tree.nodes})
     else:
-        tree = _initial_tree(backend, sources)
+        tree = _sanitize(_initial_tree(backend, sources))
         survival = {_node_key(n.condition): 1 for n in tree.nodes}
     stale_rounds = 0
     last_arbitration: ProposerArbitration | None = None
@@ -298,7 +316,7 @@ def distill(
             if last_arbitration is None:
                 raise
             break
-        new_tree = arbitration.tree
+        new_tree = _sanitize(arbitration.tree)
         last_arbitration = arbitration
 
         new_keys = {_node_key(n.condition) for n in new_tree.nodes}
@@ -345,6 +363,7 @@ def distill(
     arb_for_final = best_arbitration if best_arbitration is not None else last_arbitration
     model_tag = f"{backend.model} via {backend.name}"
     final = _finalize(best_tree, arb_for_final, survival, sources, model_tag, profile, provenance, fn_name)
+    _assert_compiles(final)  # never hand back a tree that doesn't import
     # The ratified examples are the loop's own correctness signal: check the
     # converged tree against them and surface any disagreement (§4.1 / §4.5).
     if sources.examples:
@@ -462,6 +481,15 @@ def _score(tree: ProposedTree, items: list[dict], features: list[str], fn_name: 
         if label_match(pred, it["expected"]):
             passed += 1
     return passed
+
+
+def _assert_compiles(tree: DecisionTree) -> None:
+    """Belt-and-suspenders: refuse to return a tree whose source won't import."""
+    from .validate import fn_from_tree
+    try:
+        fn_from_tree(tree)
+    except SyntaxError as e:
+        raise RuntimeError(f"refusing to export a tree that does not compile: {e}") from e
 
 
 def _select_best(
