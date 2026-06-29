@@ -1,10 +1,79 @@
 # Temper-Skills
 
-> Turn your agent's decision logic from a prompt into code.
+> Skills are flows of decisions. Temper finds them — and freezes the ones worth freezing into deterministic code.
 
-**Temper-Skills** takes the decision logic living in an LLM agent's skill or prompt
-and compiles it into deterministic, versionable Python — code you can read, review
-in a PR, and maintain like any other module, with **zero LLM calls at inference**.
+A skill or prompt is usually a *flow*: a few decisions (classify, route, escalate, judge)
+tangled together with generation and orchestration. **Temper-Skills works on the decision,
+not the skill.** `audit` tells you which decisions are tree-shaped, `decompose` splits a flow
+into them, and an **adversarial loop** freezes each into deterministic, versionable Python you
+can read, review in a PR, and pin in CI — with **zero LLM calls at inference**.
+
+```
+skill.md ──audit──▶ verdict + recommended action
+                      ├─ temper           → run the loop, get a deterministic tree
+                      ├─ decompose         → it's a flow: split into N decisions, temper each
+                      ├─ externalize_data  → flat lookup: emit a data file + matcher, not a tree
+                      ├─ build_normalizer  → real logic on free-text input: pin the features first
+                      └─ delegate_prose    → no decision here: improve it as prose elsewhere
+```
+
+The pipeline is three steps — **audit → (decompose) → temper** — and you can stop after any of
+them. The rest of this README walks them in order.
+
+---
+
+## Step 1 — `audit`: is there a decision here worth freezing?
+
+Before spending the loop, find out whether a skill is even tree-shaped. `audit` scores it on
+four axes and routes it to an action — cheap enough to fan across a whole skill library.
+
+```bash
+temper-skills audit skill.md          # exit 0 for temper/caveats, 3 for skip — pipeline-friendly
+```
+
+- **decisiveness** — does it resolve to a finite verdict, or is it open-ended generation?
+- **combinatorics** — is the hardness in feature *interactions*, or a flat unbounded lookup?
+- **stakes** — is it repeated/auditable enough that freezing pays off?
+- **schema closure** *(computed, not judged)* — what share of the features pin to a bounded
+  value space? Free-text fields leak into the normalizer you own.
+
+The three judged axes come from **one LLM call**; the verdict (`temper` / `caveats` / `skip`)
+and the recommended action are **pure functions** of the four, so the audit is as reproducible
+and explainable as the tree it gates. The same call also reports `distinct_decisions` — when
+it's ≥2, the skill is a flow and the action becomes `decompose` (Step 2).
+
+| Action | When | Who does it |
+| --- | --- | --- |
+| `temper` | decisive + closed schema | **us** — the loop (Step 3) |
+| `decompose` | ≥2 separable decisions | **us** — `decompose` (Step 2) |
+| `externalize_data` | flat lookup keyed on free text | **us** (small) — a data file + matcher |
+| `build_normalizer` | real logic but un-pinned text inputs | upstream, yours (Instructor / your extractor) |
+| `delegate_prose` | no decision — it's generation | **delegate** → `skill-creator`, DSPy |
+
+That last column is the point: temper **owns the decision-freezing lane** and **delegates the
+commodity** (improving prose, generating generic evals) to tools that already do it well —
+rather than being a mediocre everything-tool. The audit is the triage front door.
+
+## Step 2 — `decompose`: a flow into its decisions
+
+A big skill holds several decisions; the loop freezes *one* at a time, so a flow must be split
+first (DMN-vs-BPMN: factor the decision logic out of the process). `decompose` segments the
+skill into per-decision mini-schemas + the generative steps left to the model, and records
+coupling (which decision consumes another's output).
+
+```bash
+temper-skills decompose skill.md --emit-schemas   # writes <fn>.schema.py per decision to ratify
+```
+
+You then `ingest` each decision into its own tree, and the skill becomes a **thin orchestrator**
+that chains them. See [`examples/dog_day/`](examples/dog_day/) — a daily dog-care assistant split
+into `decide_walk` / `decide_meal` (chained) / `decide_vet` + the owner's note, the first
+complete decompose chain in the examples.
+
+## Step 3 — `temper`: freeze one decision into a tree
+
+This is the engine. Given a decision's schema + constraints (or a skill to infer them from), an
+**adversarial loop** compiles the logic into a deterministic tree:
 
 ```python
 import temper_skills
@@ -32,6 +101,33 @@ def route_ticket(ticket: dict) -> str:
     return "route_default"
     # gray_zone: security_score 0.7–0.8 + low priority -> human_review recommended
 ```
+
+A proposer drafts the tree; several specialized personas challenge it from different angles —
+like senior engineers reviewing an RFC. Each scores the current tree; the proposer arbitrates
+between conflicting critiques and documents its reasoning. The loop converges when no new gray
+zone survives.
+
+Built-in personas:
+
+- `literalist` — exploits ambiguities in the schema
+- `edge_case_hunter` — finds rare input combinations
+- `bad_faith_actor` — tries to circumvent the rules
+- `domain_expert` — tests with plausible domain cases
+- `overengineering_critic` — challenges every node: "is this branch actually necessary?" (always on)
+
+### Profiles
+
+| Profile      | Max rounds | Personas (+ always-on critic) | Interactive gate  | Provenance      |
+| ------------ | ---------- | ----------------------------- | ----------------- | --------------- |
+| `quick`      | ~8         | 1 (edge_case_hunter)          | No — draft output | None            |
+| `standard`   | ~20        | 2 (edge_case_hunter, domain_expert) | Yes — per round | Inline comments |
+| `audit-grade`| ~50        | 4 (literalist, edge_case_hunter, bad_faith_actor, domain_expert) | Yes — per round | Inline comments |
+
+The panel scales with profile — more personas of one model share blind spots (H5) and add
+cost + convergence surface, so cheap runs stay lean and the full panel is reserved for
+`audit-grade`. Override per run with `distill(adversaries=[...])`. `bad_faith_actor` is
+reserved for audit-grade because it earns its keep on circumvention-sensitive domains
+(routing, compliance), less so on low-stakes ones.
 
 ## Two ways to run it
 
@@ -66,89 +162,7 @@ subscription — for a subscription run use mode 1.
 `--backend api --model vertex_ai/<claude-id>`. Requires Claude enabled in your Vertex Model
 Garden for that project/region.
 
-## How it works
-
-Temper-Skills runs an **adversarial loop**: a proposer drafts a decision tree, and
-several specialized personas challenge it from different angles — like senior
-engineers reviewing an RFC. Each persona scores the current tree; the proposer
-arbitrates between conflicting critiques and documents its reasoning. The loop
-converges when no new gray zone survives.
-
-Built-in personas:
-
-- `literalist` — exploits ambiguities in the schema
-- `edge_case_hunter` — finds rare input combinations
-- `bad_faith_actor` — tries to circumvent the rules
-- `domain_expert` — tests with plausible domain cases
-- `overengineering_critic` — challenges every node: "is this branch actually necessary?" (always on)
-
-## Profiles
-
-| Profile      | Max rounds | Personas (+ always-on critic) | Interactive gate  | Provenance      |
-| ------------ | ---------- | ----------------------------- | ----------------- | --------------- |
-| `quick`      | ~8         | 1 (edge_case_hunter)          | No — draft output | None            |
-| `standard`   | ~20        | 2 (edge_case_hunter, domain_expert) | Yes — per round | Inline comments |
-| `audit-grade`| ~50        | 4 (literalist, edge_case_hunter, bad_faith_actor, domain_expert) | Yes — per round | Inline comments |
-
-The panel scales with profile — more personas of one model share blind spots (H5) and add
-cost + convergence surface, so cheap runs stay lean and the full panel is reserved for
-`audit-grade`. Override per run with `distill(adversaries=[...])`. `bad_faith_actor` is
-reserved for audit-grade because it earns its keep on circumvention-sensitive domains
-(routing, compliance), less so on low-stakes ones.
-
-> **Honest scope:** `audit-grade` today is `standard` with more rounds and stricter
-> convergence (5 consecutive quiet rounds). **Tournament orchestration, required citations,
-> and per-gray-zone sign-off are roadmap, not yet built** — don't rely on them.
-
-## Evolving a tree — incremental mode
-
-A constraint changes, a source guideline updates, field feedback lands. Don't recompile
-from scratch — **re-crystallize** from the existing tree, re-challenge only the deltas, and
-get a reviewable structural diff:
-
-```bash
-temper-skills incremental route_ticket.json \
-  -c "security_score > 0.95 -> always human_review" --out route_ticket.py
-```
-
-```
-structural diff (v_n → v_n+1)
-+ added    if (security_score > 0.95) -> human_review
-~ changed  if (priority == "high"): 'escalate_urgent' -> 'escalate_urgent'
-= unchanged 3 node(s)
-```
-
-Surviving nodes keep their `rounds_survived` provenance; the proposer is told to preserve
-everything the change doesn't touch and minimize churn. This is what keeps the tree a
-living artifact instead of the unmaintained legacy the tool exists to replace.
-
-## What it is not
-
-Temper-Skills is **not a security scanner**. "Adversarial" here means *decision
-robustness* — personas that challenge business logic, not prompt injection.
-
-The adversarial loop measures internal **consistency**, not correctness against the
-world. Real correctness comes from your ratified examples and a held-out validation
-set.
-
-It is **not a natural-language feature extractor.** The tree branches on *pre-computed
-structured features*; turning raw input ("a slice of dark chocolate cake") into those
-features (`food_item="chocolate"`) is **upstream and out of scope** — and it's where the
-residual fuzziness lives. The determinism guarantee starts *after* that step. In practice
-the loop's own `literalist` / `bad_faith_actor` personas will flag this: an exact-match
-rule is only as safe as the normalizer feeding it. That normalizer is yours to build:
-
-```python
-# Out of scope of the guarantee — a lightweight layer YOU own, before the tree:
-def normalize(raw: str) -> dict:
-    text = raw.strip().lower()
-    item = next((t for t in KNOWN_FOODS if t in text), text)  # your extraction
-    return {"food_item": item}
-
-can_dog_eat(normalize("a slice of Dark Chocolate cake"))   # -> "no — toxic, never feed"
-```
-
-### Bootstrapping the schema — draft, ratify, freeze
+## Bootstrapping the schema — draft, ratify, freeze
 
 You don't have to write `schema.py` from a blank page. `--propose-schema` reads the skill,
 drafts the feature set as editable Pydantic source, surfaces each field's **normalization
@@ -163,7 +177,8 @@ temper-skills ingest skill.md --schema schema.proposed.py:RouteTicket
 The schema is the contract the determinism guarantee rests on, so the loop only ever runs
 on one a human has pinned — same draft → ratify → freeze lifecycle as proposed examples. The
 draft flags exact-match `str` fields (whose safety lives in *your* normalizer) and enum-like
-ones (where a `Literal` closes the space and helps the loop converge).
+ones (where a `Literal` closes the space and helps the loop converge). `decompose --emit-schemas`
+is the same lifecycle, one mini-schema per decision.
 
 ## Closing the loop — a skill that *uses* the tree
 
@@ -177,7 +192,7 @@ route_ticket.tempered.md   # a skill that calls it
 ```
 
 The tempered skill keeps the model's real jobs — turning the request into structured
-features and phrasing the answer — and freezes the *decision* (§2.5):
+features and phrasing the answer — and freezes the *decision*:
 
 > **The decision is frozen.** Extract `food_item` from the request, call
 > `from dog_food_checker import can_dog_eat`, relay the verdict, don't override it. Gray
@@ -186,8 +201,8 @@ features and phrasing the answer — and freezes the *decision* (§2.5):
 By default it's a **deterministic template** (no LLM), carrying the recorded gray zones
 forward as caveats. Pass `--skill-style woven` to instead have the model rewrite the
 original skill *in its own voice* — same delegation contract, nicer prose, at the cost of a
-model call (falls back to the template if the call fails). That's the full circle:
-prompt → tree → prompt-that-uses-the-tree.
+model call (falls back to the template if the call fails). For a flow, the orchestrator is the
+same idea over *several* trees — see [`examples/dog_day/output/dog_day.tempered.md`](examples/dog_day/output/dog_day.tempered.md).
 
 ## Validation — pin the tree in CI
 
@@ -206,10 +221,9 @@ example, and both are worth knowing before shipping.
 The same check runs **automatically at compile time** against any ratified `examples` you
 anchor with — `temper-skills ingest skill.md --examples ratified.json` (or
 `Sources(examples=[...])`) — so the loop's third anchoring lever is a real correctness gate,
-not just prompt seasoning. Disagreements are surfaced for sign-off. It exits non-zero below
-`--min-agreement` (default 1.0), so it gates a PR. Optional for a relatable demo (Tier A);
-**mandatory** for high-stakes domains (Tier B) — a tree shipped without a held-out set is
-not auditable, no matter how many rounds it survived.
+not just prompt seasoning. It exits non-zero below `--min-agreement` (default 1.0), so it gates
+a PR. Optional for a relatable demo; **mandatory** for high-stakes domains — a tree shipped
+without a held-out set is not auditable, no matter how many rounds it survived.
 
 ### Growing the validation set from the loop
 
@@ -217,73 +231,127 @@ You don't have to write the validation set up front — the loop **always builds
 default; `--no-propose-examples` to skip). Every round, each persona *except* the
 `overengineering_critic` contributes the concrete cases it found — a full input plus the
 outcome it believes correct — and they accumulate (deduped) across all rounds. This rides
-along in the critiques the panel already produces, so it costs no extra model calls and is
-robust: the cases come from dozens of findings, not one post-hoc guess.
+along in the critiques the panel already produces, so it costs no extra model calls.
 
 **The loop scores the tree against these cases each round** — to pick the best tree and to
 decide convergence — so you get a good final result *without* waiting to ratify anything.
 That's not self-grading: the labels are written by the **adversarial personas**, not the
 proposer, so it's "satisfy your critics." Ratified examples, when you supply them, rank
-*ahead* of the proposed ones (lexicographically) and are never traded away to match a
-proposed label.
-
-```
-Round 4/20   persona scores: min 4/10, mean 5.0/10
-   ✎ validation set — tree passes 18 ratified (100%), 41/56 proposed (73%)
-```
+*ahead* of the proposed ones and are never traded away to match a proposed label.
 
 ```
 ✎ proposed test cases (awaiting ratification)
   input={'priority': 'urgent', 'security_score': 0.85}  — edge_case_hunter (round 4)
     proposed escalate_urgent  ·  tree says escalate_security   (differs from tree)
-    pins the urgency-vs-mid-band-security cell no example covers
 → written to route_ticket.proposed_examples.json
 ```
 
-Ratification is then **optional hardening**, not a precondition. Each case is tagged
-`"status": "proposed"`; `load_dataset` *ignores* proposed entries, so they never silently
-become a CI gate. Review the labels, set `"status": "ratified"` (or fold them into your
-validation set), and on the next run they become authoritative ground truth that the loop
-must honor. That's how an empty validation set grows into a trusted one — the rounds draft
-it and score against it, you sign off when you want it to gate CI.
+Each case is tagged `"status": "proposed"`; `load_dataset` *ignores* proposed entries, so they
+never silently become a CI gate. Review the labels, set `"status": "ratified"`, and on the next
+run they become authoritative ground truth the loop must honor. That's how an empty validation
+set grows into a trusted one.
+
+## Evolving a tree — incremental mode
+
+A constraint changes, a source guideline updates, field feedback lands. Don't recompile
+from scratch — **re-crystallize** from the existing tree, re-challenge only the deltas, and
+get a reviewable structural diff:
+
+```bash
+temper-skills incremental route_ticket.json \
+  -c "security_score > 0.95 -> always human_review" --out route_ticket.py
+```
+
+```
+structural diff (v_n → v_n+1)
++ added    if (security_score > 0.95) -> human_review
+= unchanged 3 node(s)
+```
+
+Surviving nodes keep their `rounds_survived` provenance; the proposer is told to preserve
+everything the change doesn't touch and minimize churn. This is what keeps the tree a
+living artifact instead of the unmaintained legacy the tool exists to replace.
+
+## What it is not
+
+Temper-Skills is **not a security scanner**. "Adversarial" here means *decision robustness* —
+personas that challenge business logic, not prompt injection.
+
+The audit judges **fitness** (is this freezable?), not **quality** (is the skill any good?).
+The adversarial loop measures internal **consistency**, not correctness against the world —
+real correctness comes from your ratified examples and a held-out validation set.
+
+It is **not a natural-language feature extractor.** The tree branches on *pre-computed
+structured features*; turning raw input ("a slice of dark chocolate cake") into those features
+(`food_item="chocolate"`) is **upstream and out of scope** — the `build_normalizer` lane is
+exactly when the audit tells you that extraction, not the tree, is the work. The determinism
+guarantee starts *after* that step:
+
+```python
+# Out of scope of the guarantee — a lightweight layer YOU own, before the tree:
+def normalize(raw: str) -> dict:
+    text = raw.strip().lower()
+    item = next((t for t in KNOWN_FOODS if t in text), text)  # your extraction
+    return {"food_item": item}
+
+can_dog_eat(normalize("a slice of Dark Chocolate cake"))   # -> "no — toxic, never feed"
+```
+
+## Where this fits — skill ecosystems
+
+In a system that **evolves and deduplicates skills from sessions** (e.g. SkillClaw), you can't
+hand-pick which skills to harden. The audit is the automated triage: fan it across the library,
+crystallize the decisions worth crystallizing, decompose the flows, and **delegate the rest** —
+prose quality to `skill-creator`, generic eval generation to promptfoo/DeepEval/DSPy. Temper is
+a good citizen of that ecosystem, not a replacement for it.
 
 ## Examples
 
-- [`examples/license_compat/`](examples/license_compat/) — **the "moat" demo** (plan §8).
-  OSS license compatibility: fully public, low-stakes, genuinely hard combinatorics
-  (license × linking × distribution). The loop surfaces edges a human misses
-  (Apache-2.0 + GPLv2 incompatibility; conditional copyleft propagation). Converges to ~8 nodes.
-- [`examples/ankle_sprain/`](examples/ankle_sprain/) — **the "oh merde" demo.** Sprained-ankle
-  first aid: the source prompt gives outdated **RICE** advice; the loop corrects it to
-  **POLICE / PEACE & LOVE** (prolonged ice slows healing — an edge GPs miss) and layers in the
-  Ottawa Ankle Rules (5 interacting fracture criteria). Educational only, not clinical advice.
-- [`examples/ticket_routing/`](examples/ticket_routing/) — **the one to watch converge.**
-  Support-ticket triage: a closed feature space (enums + a score + a bool) where the
-  difficulty is the *interactions* (priority × tier × SLA × security). The loop's sweet
-  spot — it converges to a tight 7-node router.
-- [`examples/dog_food/`](examples/dog_food/) — **relatable, but a weak fit on purpose.**
-  "Can my dog eat that?" is a flat lookup with an unbounded toxin tail; running the live
-  loop on it tends to *thrash* (`domain_expert` always finds one more toxin while
-  `overengineering_critic` wants the list gone — an irreducible conflict). It's the
-  cautionary counterpart that shows what the plan's H4 means by "the difficulty must live
-  in the combinatorics, not a flat list."
+- [`examples/ticket_routing/`](examples/ticket_routing/) — **the one to watch converge.** A
+  closed feature space (enums + a score + a bool) where the difficulty is the *interactions*
+  (priority × tier × SLA × security). The loop's sweet spot. Audit: **TEMPER**.
+- [`examples/parking/`](examples/parking/) — **the everyday good fit.** "Can I park here right
+  now?" — zone × day × hour × holiday × permit, with the holiday/permit edges a flat reading
+  misses. Audit: **TEMPER**.
+- [`examples/license_compat/`](examples/license_compat/) — **the "moat" demo.** OSS license
+  compatibility: public, low-stakes, genuinely hard combinatorics (license × linking ×
+  distribution). Audit: **TEMPER** (audit-grade).
+- [`examples/ankle_sprain/`](examples/ankle_sprain/) — **the "oh merde" demo.** The source
+  prompt gives outdated **RICE** advice; the loop corrects it to **POLICE / PEACE & LOVE** and
+  layers in the Ottawa Ankle Rules. Educational only, not clinical advice. Audit: **TEMPER**.
+- [`examples/dog_food/`](examples/dog_food/) — **the cautionary contrast.** "Can my dog eat
+  that?" is a flat lookup with an unbounded toxin tail. Audit: **CAVEATS** → `externalize_data`
+  (the toxin list wants to be a data file, not a tree); a truly flat skill drops to `skip`.
+- [`examples/dog_day/`](examples/dog_day/) — **the flow.** A daily dog-care assistant holding
+  three decisions + a note. Audit: **DECOMPOSE FIRST** → three trees + a thin orchestrator.
+
+## Honest scope
+
+- **Built and tested:** `audit` (fitness + action routing), `decompose` (flow → per-decision
+  mini-schemas), the adversarial `temper` loop, `validate`, incremental mode, the tempered-skill
+  emitter.
+- **Deferred:** the `clarify` and `generate_examples` actions (they need a signal the audit
+  doesn't yet collect); `decompose --temper-each` (today you `ingest` each decision yourself);
+  `audit_decision` can over-count `distinct_decisions` on an already-atomic decision.
+- **`audit-grade`** today is `standard` with more rounds and stricter convergence. **Tournament
+  orchestration, required citations, and per-gray-zone sign-off are roadmap, not built** — don't
+  rely on them.
+- The `dog_day` trees are **quick-profile drafts** (the header says so); harden with
+  `standard`/`audit-grade` + a held-out set per decision for real use.
 
 ## Development
 
 ```bash
 pip install -e ".[dev]"
-pytest -q                          # 94 tests, no network
+pytest -q                          # the full suite, no network
 git config core.hooksPath .githooks   # once per clone: block red commits locally
 ```
 
-CI (`.github/workflows/ci.yml`) runs the suite on every push/PR across Python 3.10 and
-3.12, and then runs `temper-skills validate` on the canonical example — the tool gating
-itself with its own command. The `.githooks/pre-commit` hook runs the suite before each
-commit (it skips gracefully if test deps aren't installed; CI is the hard gate).
+CI (`.github/workflows/ci.yml`) runs the suite across Python 3.10 and 3.12, then runs
+`temper-skills validate` on the canonical examples — the tool gating itself with its own
+command.
 
 ## Origin
 
-Mechanism validated in production on medical tooling — deterministic rule engines
-built by adversarial loop. Temper-Skills is the open-source generalization.
-
-Apache-2.0.
+Mechanism validated in production on medical tooling — deterministic rule engines built by
+adversarial loop. Temper-Skills is the open-source generalization. Apache-2.0.
