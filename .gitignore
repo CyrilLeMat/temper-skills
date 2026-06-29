@@ -9,6 +9,8 @@ venv/
 .env
 .pytest_cache/
 *.generated.py
+*.proposed_examples.json
+schema.proposed.py
 
 # concurrent session worktrees
 .claude/worktrees/
