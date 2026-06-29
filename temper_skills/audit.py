@@ -17,6 +17,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+Action = Literal["temper", "externalize_data", "build_normalizer", "delegate_prose"]
+
 from .backends import Backend, auto_backend
 from .ingest import InferredFeature, InferredSchema, ingest_skill
 
@@ -55,6 +57,8 @@ class FitnessReport(BaseModel):
     open_features: list[str] = []  # free-text fields whose value space ISN'T bounded
     n_features: int = 0
     rationale: dict[str, str] = {}  # the model's one-line reason per judged axis
+    recommended_action: Action = "temper"  # what to DO with the skill, not just whether it fits
+    action_hint: str = ""
     reasons: list[str]
     caveats: list[str]
 
@@ -105,6 +109,45 @@ def open_features(inferred: InferredSchema) -> list[str]:
     """Names of the free-text fields whose value space ISN'T bounded — where the
     determinism guarantee leaks into the normalizer you own (README, "What it is not")."""
     return [f.name for f in inferred.features if not _is_closed(f)]
+
+
+# label · what to do · delegated tool (None = temper-skills does it)
+ACTIONS: dict[str, tuple[str, str, str | None]] = {
+    "temper": (
+        "Freeze the decision into a tree",
+        "run `temper-skills ingest` — the core path",
+        None,
+    ),
+    "externalize_data": (
+        "Externalize the list as data, don't grow a tree",
+        "emit a versioned data file + an exact-match matcher; temper ONLY the residual "
+        "interacting logic (e.g. a dose-by-weight rule)",
+        None,
+    ),
+    "build_normalizer": (
+        "Build the feature normalizer first",
+        "the decision branches on free text ({fields}); pin those to canonical features "
+        "(Instructor / your own extractor) before tempering",
+        None,
+    ),
+    "delegate_prose": (
+        "Improve it as prose — there's no decision to freeze",
+        "refine wording / triggering / examples elsewhere",
+        "skill-creator",
+    ),
+}
+
+
+def recommend_action(j: JudgeScores, open_feats: list[str]) -> Action:
+    """Route a skill to its next useful action — a pure function of the same axes the
+    verdict uses. Cascade, most-disqualifying first (mirrors verdict_of)."""
+    if j.decisiveness < 4:
+        return "delegate_prose"            # generation skill — not our lane
+    if open_feats:
+        # the decision branches on un-pinned free text. How we fix it depends on whether
+        # there's genuine interacting logic, or it's a flat list keyed on that text.
+        return "externalize_data" if j.combinatorics <= 5 else "build_normalizer"
+    return "temper"                        # decisive + closed schema → tree-shaped
 
 
 def verdict_of(
@@ -162,7 +205,13 @@ def audit_skill(
         AUDIT_SYSTEM, f"SKILL:\n{skill_text}\n\nScore the three axes.", JudgeScores
     )
     closure = schema_closure(schema)
+    opens = open_features(schema)
     verdict, reasons, caveats = verdict_of(j, closure, len(schema.features))
+    action = recommend_action(j, opens)
+    _, hint, tool = ACTIONS[action]
+    hint = hint.format(fields=", ".join(opens)) if "{fields}" in hint else hint
+    if tool:
+        hint = f"{hint} → {tool}"
     return FitnessReport(
         fn_name=schema.fn_name,
         verdict=verdict,
@@ -170,9 +219,11 @@ def audit_skill(
         combinatorics=j.combinatorics,
         stakes=j.stakes,
         schema_closure=closure,
-        open_features=open_features(schema),
+        open_features=opens,
         n_features=len(schema.features),
         rationale=j.rationale,
+        recommended_action=action,
+        action_hint=hint,
         reasons=reasons,
         caveats=caveats,
     )

@@ -441,6 +441,11 @@ def _print_fitness(report, skill: str) -> None:
     body += ["", "[bold]Why this verdict[/]"]
     body += [f"  [green]✓[/] {r}" for r in report.reasons]
     body += [f"  [yellow]⚠[/] {c}" for c in report.caveats]
+    if report.action_hint:
+        body += [
+            "",
+            f"[bold]Next action: {report.recommended_action.upper()}[/] — {report.action_hint}",
+        ]
     body += [
         "",
         "[dim]TEMPER = freeze it · CAVEATS = freeze but mind the ⚠ · "

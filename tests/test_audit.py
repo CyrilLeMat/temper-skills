@@ -8,11 +8,13 @@ call, and any change to them must show up as a diff in these expectations.
 from __future__ import annotations
 
 from temper_skills.audit import (
+    ACTIONS,
     AUDIT_SYSTEM,
     FitnessReport,
     JudgeScores,
     audit_skill,
     open_features,
+    recommend_action,
     schema_closure,
     verdict_of,
 )
@@ -134,6 +136,32 @@ def test_marginal_combinatorics_survives_if_schema_closed():
     assert v in {"temper", "caveats"}
 
 
+# ---- recommend_action: the routing layer ----
+
+def test_action_generation_skill_delegates_prose():
+    a = recommend_action(JudgeScores(decisiveness=2, combinatorics=5, stakes=5), ["x"])
+    assert a == "delegate_prose"
+    assert ACTIONS[a][2] == "skill-creator"   # points at the delegated tool
+
+
+def test_action_dog_food_routes_to_externalize_data():
+    # decisive, borderline combinatorics, a free-text key → externalize the list as data
+    a = recommend_action(JudgeScores(decisiveness=8, combinatorics=5, stakes=6),
+                         ["food_item", "food_form"])
+    assert a == "externalize_data"
+
+
+def test_action_real_logic_on_free_text_builds_normalizer():
+    # genuine interacting logic (combo > 5) but branches on un-pinned text → fix extraction first
+    a = recommend_action(JudgeScores(decisiveness=8, combinatorics=8, stakes=7), ["address"])
+    assert a == "build_normalizer"
+
+
+def test_action_closed_schema_tempers():
+    a = recommend_action(JudgeScores(decisiveness=9, combinatorics=8, stakes=8), [])
+    assert a == "temper"
+
+
 # ---- audit_skill end-to-end on a scripted backend (no network) ----
 
 class _AuditBackend(Backend):
@@ -193,6 +221,19 @@ def test_audit_skill_surfaces_rationale_and_open_features(tmp_path):
     assert report.open_features == ["food_item"]
     assert report.n_features == 2
     assert "flat toxin lookup" in report.rationale["combinatorics"]
+    # routing: borderline combo + a free-text key → externalize the data
+    assert report.recommended_action == "externalize_data"
+    assert "data file" in report.action_hint
+
+
+def test_audit_skill_build_normalizer_hint_fills_field_names(tmp_path):
+    skill = tmp_path / "skill.md"
+    skill.write_text("# decide from a free-text address")
+    scores = JudgeScores(decisiveness=8, combinatorics=8, stakes=7)
+    pinned = _schema(_free("address"), fn_name="route_address")
+    report = audit_skill(str(skill), backend=_AuditBackend(scores, pinned), schema=pinned)
+    assert report.recommended_action == "build_normalizer"
+    assert "address" in report.action_hint        # {fields} placeholder was filled
 
 
 def test_audit_system_prompt_names_the_axes():
