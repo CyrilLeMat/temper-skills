@@ -41,7 +41,13 @@ INFER_SYSTEM = (
     "identity/name, its category, quantity, form/preparation, and attributes of the "
     "subject) and let the tree do the deriving. If the skill names specific trigger values "
     "(particular foods, statuses, categories), expose the raw identifier feature (e.g. "
-    "food_item) so the tree can enumerate them itself."
+    "food_item) so the tree can enumerate them itself.\n\n"
+    "Be PARSIMONIOUS — a tight, load-bearing schema beats a broad one. Include a feature "
+    "ONLY if the skill's decision logic actually depends on it. Omit speculative "
+    "attributes (breed, age, weight, etc.) unless the skill explicitly conditions on them, "
+    "and never include two features carrying the same information (e.g. a boolean "
+    "`has_additive` flag alongside an `additive_name` field — keep only the one a rule "
+    "needs). Every unused feature is surface the loop cannot converge on."
 )
 
 
