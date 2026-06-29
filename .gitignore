@@ -11,6 +11,7 @@ venv/
 *.generated.py
 *.proposed_examples.json
 schema.proposed.py
+.DS_Store
 
 # concurrent session worktrees
 .claude/worktrees/
