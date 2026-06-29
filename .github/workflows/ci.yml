@@ -28,3 +28,5 @@ jobs:
             examples/ticket_routing/input/validation_set.json --fn route_ticket --match exact
           temper-skills validate examples/license_compat/output/assess_license.py \
             examples/license_compat/input/validation_set.json --fn assess_license --match exact
+          temper-skills validate examples/ankle_sprain/output/assess_ankle.py \
+            examples/ankle_sprain/input/validation_set.json --fn assess_ankle --match exact

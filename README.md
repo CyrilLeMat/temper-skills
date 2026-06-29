@@ -200,6 +200,10 @@ not auditable, no matter how many rounds it survived.
   OSS license compatibility: fully public, low-stakes, genuinely hard combinatorics
   (license × linking × distribution). The loop surfaces edges a human misses
   (Apache-2.0 + GPLv2 incompatibility; conditional copyleft propagation). Converges to ~8 nodes.
+- [`examples/ankle_sprain/`](examples/ankle_sprain/) — **the "oh merde" demo.** Sprained-ankle
+  first aid: the source prompt gives outdated **RICE** advice; the loop corrects it to
+  **POLICE / PEACE & LOVE** (prolonged ice slows healing — an edge GPs miss) and layers in the
+  Ottawa Ankle Rules (5 interacting fracture criteria). Educational only, not clinical advice.
 - [`examples/ticket_routing/`](examples/ticket_routing/) — **the one to watch converge.**
   Support-ticket triage: a closed feature space (enums + a score + a bool) where the
   difficulty is the *interactions* (priority × tier × SLA × security). The loop's sweet

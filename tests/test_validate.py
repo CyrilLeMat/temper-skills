@@ -110,3 +110,11 @@ def test_canonical_license_tree_passes_its_validation_set():
     data = load_dataset(str(base / "input" / "validation_set.json"))
     r = run_validation(fn, data, exact_match)
     assert r.passed(1.0), [(d.input, d.expected, d.predicted) for d in r.disagreements]
+
+
+def test_canonical_ankle_tree_passes_its_validation_set():
+    base = REPO / "examples" / "ankle_sprain"
+    fn = fn_from_json(str(base / "output" / "ankle_tree.json"))
+    data = load_dataset(str(base / "input" / "validation_set.json"))
+    r = run_validation(fn, data, exact_match)
+    assert r.passed(1.0), [(d.input, d.expected, d.predicted) for d in r.disagreements]
