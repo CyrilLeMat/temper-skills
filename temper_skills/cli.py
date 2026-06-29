@@ -561,8 +561,9 @@ def _decompose_pipeline(skill, be, out_dir, profile, *, temper_each, yes_unratif
         schema_path = f"{out / f'{d.fn_name}.schema.py'}:{_classname(d.fn_name)}"
         console.rule(f"[cyan]tempering {d.fn_name}[/]")
         tree = ingest_skill(skill, schema=_load_schema(schema_path), profile=profile, backend=be,
-                            gate=_make_gate(False), fn_name=d.fn_name, propose_examples=False)
+                            gate=_make_gate(False), fn_name=d.fn_name, propose_examples=True)
         tree.export(str(out / f"{d.fn_name}.py"))
+        _write_proposed_examples(tree, str(out / f"{d.fn_name}.py"))
         items.append({"fn": d.fn_name, "module": d.fn_name, "features": tree.features,
                       "consumes": d.consumes,
                       "gray_zones": [n.gray_zone for n in tree.nodes if n.gray_zone]})
@@ -585,9 +586,10 @@ def _temper_pipeline(skill, be, out_dir, profile, *, schema_spec=None, fn=None):
     pinned = _load_schema(schema_spec) if schema_spec else None
     tree = ingest_skill(skill, schema=pinned, profile=profile, backend=be,
                         gate=_make_gate(False), confirm=lambda i: True, fn_name=fn,
-                        propose_examples=False)
+                        propose_examples=True)
     module = fn or tree.fn_name
     tree.export(str(out / f"{module}.py"))
+    _write_proposed_examples(tree, str(out / f"{module}.py"))
     md = render_tempered_skill(tree, module, original_skill_text=open(skill).read())
     mdp = out / f"{module}.tempered.md"
     mdp.write_text(md)
