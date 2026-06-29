@@ -188,7 +188,7 @@ def _critique_all(
 
 def _arbitrate(
     backend: Backend, sources: Sources, tree: ProposedTree, verdicts: list[PersonaVerdict],
-    incremental: bool = False,
+    incremental: bool = False, regressed_last: bool = False,
 ) -> ProposerArbitration:
     crit = "\n".join(
         f"  {v.persona} (score {v.score}, {v.verdict}): {v.detail}"
@@ -203,15 +203,24 @@ def _arbitrate(
         "Minimize churn.\n\n"
         if incremental else ""
     )
+    caution = (
+        "NOTE: your previous revision REGRESSED (it lowered the validation pass-rate or "
+        "broke a ratified example) and was DISCARDED — the CURRENT TREE below is the best "
+        "version so far. Revise it only if you can RAISE the pass-rate, or remove/merge a "
+        "node WITHOUT dropping any case. Do not collapse or reorder branches when that "
+        "loses coverage; if no safe improvement exists, return the tree unchanged.\n\n"
+        if regressed_last else ""
+    )
     user = (
-        f"{incr}"
+        f"{incr}{caution}"
         f"{_sources_block(sources)}\n\n"
         f"CURRENT TREE:\n{_render_tree(tree)}\n\n"
         f"PERSONA VERDICTS:\n{crit}\n\n"
         "Arbitrate. For each persona, decide kept/changed/rejected with a one-line "
         "rationale. Then output the improved tree. Add a branch only if a critique "
         "justifies it AND a domain expert would write it by hand; collapse branches the "
-        "overengineering_critic flags as unnecessary. Respect every HARD constraint. "
+        "overengineering_critic flags as unnecessary ONLY when doing so changes no outcome. "
+        "Respect every HARD constraint. "
         "Give a convergence_estimate (0-100) for how settled the tree now is."
     )
     return backend.complete(PROPOSER_SYSTEM, user, ProposerArbitration)
@@ -288,6 +297,7 @@ def distill(
         tree = _sanitize(_initial_tree(backend, sources))
         survival = {_node_key(n.condition): 1 for n in tree.nodes}
     stale_rounds = 0
+    regressed_last = False
     last_arbitration: ProposerArbitration | None = None
 
     # The proposed validation set grows as the loop runs: every persona (except the
@@ -314,7 +324,8 @@ def distill(
             verdicts = _critique_all(backend, sources, personas, tree)
             if propose_examples:
                 _harvest_proposed(verdicts, r, proposed, existing_inputs)
-            arbitration = _arbitrate(backend, sources, tree, verdicts, incremental=incremental)
+            arbitration = _arbitrate(backend, sources, tree, verdicts,
+                                     incremental=incremental, regressed_last=regressed_last)
         except Exception:
             # A transient backend failure shouldn't throw away the rounds already
             # paid for. With nothing to salvage (round 1), re-raise; otherwise keep
@@ -325,28 +336,39 @@ def distill(
         new_tree = _sanitize(arbitration.tree)
         last_arbitration = arbitration
 
-        new_keys = {_node_key(n.condition) for n in new_tree.nodes}
-        for key in new_keys:
+        for key in {_node_key(n.condition) for n in new_tree.nodes}:
             survival[key] = survival.get(key, 0) + 1
 
-        tree = new_tree
-
-        # Score the tree against the ratified examples (authoritative) AND the proposed
-        # cases (the panel's adversarial expectations). Progress = beating the best round
-        # so far on (ratified rate, proposed rate, persona score); once no round beats it
-        # for `stop_quiet` rounds the loop has plateaued — stop, whether the plateau is
-        # high (a good tree) or low (this schema/domain can't do better).
-        agreement = _agreement(tree, sources, fn_name)
+        # Score this round's ATTEMPT against the ratified examples (authoritative) and the
+        # proposed cases (the panel's adversarial expectations).
+        agreement = _agreement(new_tree, sources, fn_name)
         prop_items = list(proposed.values())
-        prop_passed = _score(tree, prop_items, sources.feature_names, fn_name)
-        result = RoundResult(r, max_rounds, verdicts, arbitration, tree, dict(survival),
+        prop_passed = _score(new_tree, prop_items, sources.feature_names, fn_name)
+        result = RoundResult(r, max_rounds, verdicts, arbitration, new_tree, dict(survival),
                              agreement, proposed_count=len(prop_items),
                              proposed_passed=prop_passed,
                              ratified_count=len(sources.examples))
-        candidates.append((tree, arbitration, result.mean_score))
-        if checkpoint:  # persist this round's tree so progress is followable + crash-safe
-            checkpoint(_finalize(tree, arbitration, survival, sources, model_tag,
+        candidates.append((new_tree, arbitration, result.mean_score))
+
+        # Hill-climb: adopt the attempt as the working tree ONLY if it is not worse than the
+        # current one. A regressing round is discarded and the NEXT round re-attempts from
+        # the best tree (with a caution to the proposer) — so one bad collapse can't poison
+        # the rest of the run. The final export still picks the best candidate across rounds.
+        new_q = (agreement if agreement is not None else 1.0,
+                 prop_passed / len(prop_items) if prop_items else 0.0,
+                 -len(new_tree.nodes))
+        if new_q >= _quality(tree, sources, prop_items, fn_name):
+            tree = new_tree
+            regressed_last = False
+        else:
+            regressed_last = True
+
+        if checkpoint:  # persist the current best (working) tree — followable + crash-safe
+            checkpoint(_finalize(tree, last_arbitration, survival, sources, model_tag,
                                  profile, provenance, fn_name))
+
+        # Convergence: once no round beats the best for `stop_quiet` rounds, the loop has
+        # plateaued — stop, whether the plateau is high (a good tree) or low (can't improve).
         round_key = (agreement if agreement is not None else 1.0,
                      prop_passed / len(prop_items) if prop_items else 0.0,
                      result.mean_score)
@@ -523,6 +545,18 @@ def _select_best(
             best_key = key
             best = (tree, arb)
     return best
+
+
+def _quality(tree: ProposedTree, sources: Sources, prop_items: list[dict], fn_name: str):
+    """Rank a tree: (ratified pass-rate, proposed pass-rate, fewer nodes). Higher is better.
+
+    Ratified ground truth dominates; then how many adversary-proposed cases it passes; then,
+    at equal correctness, the simpler tree wins — so a node merge that changes no outcome is
+    an improvement, but a collapse that drops a case is not."""
+    rat = _agreement(tree, sources, fn_name)
+    prop_rate = (_score(tree, prop_items, sources.feature_names, fn_name) / len(prop_items)
+                 if prop_items else 0.0)
+    return (rat if rat is not None else 1.0, prop_rate, -len(tree.nodes))
 
 
 def _agreement(tree: ProposedTree, sources: Sources, fn_name: str) -> float | None:

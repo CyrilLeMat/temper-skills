@@ -261,6 +261,58 @@ def test_checkpoint_called_every_round():
     assert all(isinstance(t, DecisionTree) for t in seen)
 
 
+def test_regressing_round_does_not_poison_the_next():
+    """A round that lowers quality is discarded: the NEXT round re-attempts from the best
+    tree (and the proposer is cautioned), instead of compounding the regression."""
+    import re
+    from pydantic import BaseModel
+    from temper_skills.backends.base import Backend
+    from temper_skills.schemas import (
+        ArbitrationEntry, PersonaVerdict, ProposedExampleSet,
+        ProposedNode, ProposedTree, ProposerArbitration,
+    )
+
+    good = ProposedTree(nodes=[ProposedNode(condition="x == 1", outcome="a")], default_outcome="b")
+    bad = ProposedTree(nodes=[], default_outcome="b")  # fails the ratified example
+
+    class B(Backend):
+        name = "fake"
+
+        def __init__(self):
+            super().__init__("fake-model")
+            self.arb = 0
+            self.arb_prompts = []
+
+        def complete(self, system, user, schema):
+            if schema is ProposedTree:
+                return bad  # initial draft is empty
+            if schema is PersonaVerdict:
+                p = re.search(r"Your angle \((\w+)\)", user).group(1)
+                return PersonaVerdict(persona=p, score=7, verdict="ok", detail="d")
+            if schema is ProposerArbitration:
+                self.arb_prompts.append(user)
+                self.arb += 1
+                return ProposerArbitration(
+                    entries=[ArbitrationEntry(persona="x", decision="kept", rationale="ok")],
+                    convergence_estimate=80, tree=(good if self.arb == 1 else bad))
+            if schema is ProposedExampleSet:
+                return ProposedExampleSet(examples=[])
+            raise AssertionError(schema)
+
+    class S(BaseModel):
+        x: int = 0
+
+    be = B()
+    src = Sources(schema=S, examples=[{"input": {"x": 1}, "expected": "a"}])
+    tree = distill(src, backend=be, profile="quick", fn_name="decide", adversaries=[EDGE_CASE_HUNTER])
+
+    # round 1 adopted `good`; round 2's `bad` regressed (broke the example) and was discarded,
+    # so round 3 critiques `good` again — its arbitrate prompt shows the good node + the caution.
+    assert "x == 1" in be.arb_prompts[2]
+    assert "REGRESSED" in be.arb_prompts[2]
+    assert tree.example_report.agreement_rate == 1.0   # shipped the good tree, not the regression
+
+
 def test_malformed_condition_is_dropped_not_shipped():
     """A node whose condition won't compile (e.g. a dangling `in `) must be sanitized
     away so the exported tree always imports — never a SyntaxError on disk."""
