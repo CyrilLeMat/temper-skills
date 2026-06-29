@@ -13,12 +13,20 @@ three axes would only *average* three different decisions.
 ```
 input/
   skill.md                  the flow: walk? · feed? · vet? · then write a note
-output/                     ← proposed by `decompose --emit-schemas`, ratified
+output/                     ← schemas proposed by `decompose --emit-schemas` + ratified; trees from a live run
   decide_walk.schema.py     DecideWalk  — hours-since × weather × energy × availability
   decide_meal.schema.py     DecideMeal  — coupled: just_exercised comes from decide_walk
   decide_vet.schema.py      DecideVet   — severity × duration × age (Ottawa-style)
-  # decide_*.py + dog_day.tempered.md land after a live run (one tree per decision + orchestrator)
+  decide_walk.py            the frozen tree (one per decision)
+  decide_meal.py
+  decide_vet.py
+  dog_day.tempered.md       the orchestrator: chains the 3 trees + writes the note
 ```
+
+This is the only **complete** decompose chain in the examples — the three trees are real
+(tempered live, `quick` profile, via Vertex), and the orchestrator chains them. The `quick`
+trees carry a "draft — do not ship" header; harden with `--profile standard`/`audit-grade`
+for real use.
 
 ## The decisions the flow holds
 
@@ -49,14 +57,15 @@ temper-skills ingest examples/dog_day/input/skill.md --backend auto -y \
 #    … repeat for decide_meal and decide_vet
 ```
 
-The result: **three small deterministic trees + a thin orchestrator skill** that chains them
-(feeding `decide_walk`'s outcome into `decide_meal`) and writes the note. That's the
-DMN-vs-BPMN split — the decision logic is frozen, the orchestration and the prose stay with
-the model.
+The committed result: **three small deterministic trees + a thin orchestrator skill**
+(`dog_day.tempered.md`) that chains them — feeding `decide_walk`'s outcome into `decide_meal`
+as `just_exercised` — and writes the note. That's the DMN-vs-BPMN split: the decision logic
+is frozen code, the orchestration and the prose stay with the model.
 
 ## Honest scope
 
 `input/skill.md` is the only authored artifact you *need*; the `output/` mini-schemas are
-shown ratified (what `decompose --emit-schemas` proposes). The per-decision trees, validation
-sets, and the orchestrator skill come from live runs — they're not committed here, since the
-loop's output is a reviewed artifact, not a reproducible one.
+shown ratified (what `decompose --emit-schemas` proposes). The three trees here were tempered
+live on the `quick` profile (draft-grade, no provenance — the header says so); a real run
+uses `standard`/`audit-grade` and a held-out validation set per decision. The trees are a
+reviewed artifact, not a reproducible output — re-running won't byte-match.
