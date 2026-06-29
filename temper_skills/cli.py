@@ -145,6 +145,10 @@ def ingest(
         True, "--propose-examples/--no-propose-examples",
         help="Have the loop draft discriminating test cases for its gray zones, for you "
              "to ratify and feed back via --examples (written to <out>.proposed_examples.json)."),
+    require_fit: bool = typer.Option(
+        False, "--require-fit",
+        help="Run the fitness audit first and abort (exit 3) if the verdict is 'skip' — "
+             "so a pipeline won't burn the loop on a known bad fit (e.g. a flat lookup)."),
 ):
     """Compile a skill's decision logic into a deterministic Python tree."""
     interactive = PROFILES[profile][2] and not yes
@@ -153,6 +157,15 @@ def ingest(
     except (ValueError, RuntimeError) as e:
         console.print(f"[red]Backend error:[/] {e}")
         raise typer.Exit(1)
+    if require_fit:
+        from .audit import audit_skill
+        rep = audit_skill(skill, backend=be)
+        if rep.verdict == "skip":
+            console.print(f"[red]Not a temper fit:[/] {'; '.join(rep.reasons)}  "
+                          "[dim](drop --require-fit to override)[/]")
+            raise typer.Exit(3)
+        console.print(f"[green]fitness: {rep.verdict}[/]"
+                      + (f"  ⚠ {'; '.join(rep.caveats)}" if rep.caveats else ""))
     if propose_schema:
         if schema:
             console.print("[red]--propose-schema and --schema are mutually exclusive[/] "
@@ -342,6 +355,44 @@ def validate(
     console.print(Panel("\n".join(lines), title=f"validate {artifact}", border_style=color))
     if not report.passed(min_agreement):
         raise typer.Exit(1)
+
+
+@app.command()
+def audit(
+    skill: str = typer.Argument(..., help="Path to the skill.md to assess for temper-fitness."),
+    model: str = typer.Option("claude-sonnet-4-6", help="Model: any LiteLLM id."),
+    backend: str = typer.Option("auto", help="LLM backend: auto | api | claude | opencode."),
+    json_out: bool = typer.Option(False, "--json", help="Emit the FitnessReport as JSON (for a pipeline / the Evolve Server)."),
+):
+    """Decide whether a skill's logic is worth tempering, before spending the loop.
+
+    Exits 0 for 'temper'/'caveats', 3 for 'skip' — so a pipeline can triage a whole
+    skill library and only crystallize the fits.
+    """
+    from .audit import audit_skill
+
+    try:
+        be = get_backend(backend, model)
+    except (ValueError, RuntimeError) as e:
+        console.print(f"[red]Backend error:[/] {e}")
+        raise typer.Exit(1)
+    report = audit_skill(skill, backend=be)
+
+    if json_out:
+        console.print_json(report.model_dump_json())
+    else:
+        color = {"temper": "green", "caveats": "yellow", "skip": "red"}[report.verdict]
+        body = [
+            f"[{color}]verdict: {report.verdict.upper()}[/]  ·  fn: [bold]{report.fn_name}[/]",
+            f"decisiveness {report.decisiveness}/10 · combinatorics {report.combinatorics}/10 "
+            f"· stakes {report.stakes}/10 · schema closure {report.schema_closure:.0%}",
+            "",
+        ]
+        body += [f"  • {r}" for r in report.reasons]
+        body += [f"  [yellow]⚠[/] {c}" for c in report.caveats]
+        console.print(Panel("\n".join(body), title="Temper fitness", border_style=color))
+    if report.verdict == "skip":
+        raise typer.Exit(3)
 
 
 if __name__ == "__main__":
