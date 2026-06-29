@@ -1,6 +1,7 @@
 """Temper-Skills — compile an agent's decision logic from a prompt into code."""
 
 from .audit import FitnessReport, audit_skill
+from .decompose import Decomposition, decompose_skill
 from .distill import distill
 from .export_skill import render_tempered_skill
 from .incremental import diff_trees, recrystallize
@@ -23,6 +24,8 @@ __all__ = [
     "distill",
     "audit_skill",
     "FitnessReport",
+    "decompose_skill",
+    "Decomposition",
     "ingest_skill",
     "recrystallize",
     "diff_trees",

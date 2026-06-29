@@ -454,5 +454,64 @@ def _print_fitness(report, skill: str) -> None:
     console.print(Panel("\n".join(body), title="Temper fitness", border_style=color))
 
 
+@app.command()
+def decompose(
+    skill: str = typer.Argument(..., help="Path to a big skill.md (a flow) to split into decisions."),
+    model: str = typer.Option("claude-sonnet-4-6", help="Model: any LiteLLM id."),
+    backend: str = typer.Option("auto", help="LLM backend: auto | api | claude | opencode."),
+    emit_schemas: bool = typer.Option(
+        False, "--emit-schemas",
+        help="Write a per-decision mini-schema (<fn>.schema.py) you can ratify then `ingest`."),
+    out_dir: str = typer.Option(".", help="Where --emit-schemas writes the mini-schemas."),
+    json_out: bool = typer.Option(False, "--json", help="Emit the Decomposition + per-decision audits as JSON."),
+):
+    """Split a flow-shaped skill into its decision points, audit each, and print the plan.
+
+    A big skill is a graph of {decisions + generation}; temper freezes one decision at a
+    time. This finds the decisions so each becomes its own tree and the skill becomes a
+    thin orchestrator.
+    """
+    from .decompose import audit_decision, coupling, decompose_skill
+
+    try:
+        be = get_backend(backend, model)
+    except (ValueError, RuntimeError) as e:
+        console.print(f"[red]Backend error:[/] {e}")
+        raise typer.Exit(1)
+    decomp = decompose_skill(skill, backend=be)
+    coup = coupling(decomp)
+    reports = {d.fn_name: audit_decision(d, be) for d in decomp.decisions}
+
+    if json_out:
+        payload = {"decomposition": _json.loads(decomp.model_dump_json()),
+                   "audits": {k: _json.loads(r.model_dump_json()) for k, r in reports.items()}}
+        console.print_json(_json.dumps(payload))
+    else:
+        n = len(decomp.decisions)
+        body = [f"[bold]{n} decision(s) + {len(decomp.generative_steps)} generative step(s)[/]", ""]
+        vcolor = {"temper": "green", "caveats": "yellow", "skip": "red"}
+        for d in decomp.decisions:
+            r = reports[d.fn_name]
+            c = vcolor[r.verdict]
+            chain = "" if coup[d.fn_name] == "independent" else f"  ·  chain: {coup[d.fn_name]}"
+            body.append(f"  [bold]{d.fn_name}[/]  [{c}]audit: {r.verdict.upper()}[/]"
+                        f"  ·  → {r.recommended_action}{chain}")
+            body.append(f"      [dim]{d.description}[/]")
+        for g in decomp.generative_steps:
+            body.append(f"  [dim]generative:[/] {g}  [dim](left to the model)[/]")
+        body += ["", f"[bold]Plan:[/] {n} tree(s) + an orchestrator skill that chains them"
+                 + (" and runs the generative step(s)" if decomp.generative_steps else "")]
+        console.print(Panel("\n".join(body), title="Skill decomposition", border_style="cyan"))
+
+    if emit_schemas:
+        from .decompose import InferredSchema
+        out = Path(out_dir)
+        out.mkdir(parents=True, exist_ok=True)
+        for d in decomp.decisions:
+            p = out / f"{d.fn_name}.schema.py"
+            p.write_text(render_schema_source(InferredSchema(fn_name=d.fn_name, features=d.features)))
+            console.print(f"[green]wrote[/] {p}  [dim](ratify, then: temper-skills ingest … --schema {p}:{_classname(d.fn_name)})[/]")
+
+
 if __name__ == "__main__":
     app()
