@@ -10,7 +10,7 @@ import os
 import sys
 
 HERE = os.path.dirname(__file__)
-sys.path.insert(0, os.path.join(HERE, "input"))
+sys.path.insert(0, os.path.join(HERE, "output"))
 
 import temper_skills
 from schema import ParkingQuery
@@ -23,9 +23,7 @@ def main() -> None:
         profile="standard",
         fn_name="can_i_park",
     )
-    out_dir = os.path.join(HERE, "output")
-    os.makedirs(out_dir, exist_ok=True)
-    out = os.path.join(out_dir, "can_i_park.generated.py")
+    out = os.path.join(HERE, "output", "can_i_park.generated.py")
     tree.export(out)
     print(f"\nExported {out}\n")
     print(tree.to_source())
