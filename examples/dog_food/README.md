@@ -5,18 +5,17 @@
 
 A 4-line skill ("known toxic foods → no; when in doubt, say no") compiled into a
 deterministic decision tree via the adversarial loop. This is the **bootstrap-from-nothing**
-example: the *only* thing you bring is the skill — the loop proposes the schema and drafts
-the validation cases, and you ratify both. The folder is split into three honest buckets:
+example: the *only* thing you bring is the skill (`input/skill.md`) — the loop proposes the
+schema and drafts the validation cases, and you ratify both. Everything temper touches lands
+in `output/`:
 
 ```
 input/                     ← what you bring  (just the prose)
   skill.md                 the prompt/skill to temper — the ONLY required input
 
-ratified/                  ← what you signed off  (proposed by the loop, approved by you)
+output/                    ← what temper proposes, you ratify, and it generates
   schema.py                the DogFoodQuery contract — drafted by --propose-schema, then ratified
   validation_set.json      the held-out labeled set — grown from the loop's proposals, then ratified
-
-output/                    ← what temper-skills generates
   dog_food_tree.json       the tree's provenance (regenerate the .py from this)
   dog_food_checker.py      the deterministic decision tree — zero LLM calls at inference
   skill.tempered.md        a new skill that DELEGATES the decision to the tree
@@ -25,8 +24,10 @@ output/                    ← what temper-skills generates
 `input → temper → output`. The decision logic moves from untestable prose (`input/skill.md`)
 into a reviewable, versionable function (`output/dog_food_checker.py`), and the tempered
 skill (`output/skill.tempered.md`) rewires the agent to *call* that function instead of
-re-deciding every time. The `ratified/` bucket is the contract and the correctness gate —
-neither was hand-authored up front; both started as loop proposals a human approved.
+re-deciding every time. `output/schema.py` and `output/validation_set.json` are the contract
+and the correctness gate — neither was hand-authored up front; both started as loop proposals
+a human approved (the `"status": "ratified"` tag in the set is what records the sign-off, not
+the folder it sits in).
 
 ## Produce the outputs
 
@@ -48,13 +49,13 @@ To bootstrap explicitly — draft the contract, ratify it, then distill against 
 ```bash
 # 1. propose the schema from the prose, then STOP for review
 temper-skills ingest examples/dog_food/input/skill.md --propose-schema
-#    → writes schema.proposed.py; edit/ratify it (the committed ratified/schema.py is one such result)
+#    → writes schema.proposed.py; edit/ratify it (the committed output/schema.py is one such result)
 
 # 2. distill against the ratified contract + the ratified set grown from earlier rounds
 temper-skills ingest examples/dog_food/input/skill.md --backend auto --profile standard \
-  --schema examples/dog_food/ratified/schema.py:DogFoodQuery --fn can_dog_eat \
+  --schema examples/dog_food/output/schema.py:DogFoodQuery --fn can_dog_eat \
   --out examples/dog_food/output/dog_food_checker.py \
-  --examples examples/dog_food/ratified/validation_set.json
+  --examples examples/dog_food/output/validation_set.json
 ```
 
 > The subscription run and the explicit-schema run produce **different, both-defensible**
@@ -87,12 +88,12 @@ non-determinism — see the note above).
 
 ```bash
 temper-skills validate examples/dog_food/output/dog_food_checker.py \
-  examples/dog_food/ratified/validation_set.json --fn can_dog_eat
+  examples/dog_food/output/validation_set.json --fn can_dog_eat
 # Agreement: 21/21 (100.0%)
 ```
 
 `tests/test_validate.py` pins this in CI. Add an un-ratified safe food
-(`{"food_item": "watermelon", "expected": "yes"}`) to `ratified/validation_set.json` and the
+(`{"food_item": "watermelon", "expected": "yes"}`) to `output/validation_set.json` and the
 harness surfaces it as a disagreement and exits non-zero — the "safe-list is incomplete"
 signal.
 

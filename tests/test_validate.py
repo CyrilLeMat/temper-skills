@@ -103,7 +103,7 @@ def test_load_dataset_skips_unratified_proposed_cases(tmp_path):
 def test_canonical_dogfood_tree_passes_its_validation_set():
     """Pins the shipped example tree in CI — the H1 payoff on our own repo."""
     fn = fn_from_json(str(DOGFOOD / "output" / "dog_food_tree.json"))
-    data = json.loads((DOGFOOD / "ratified" / "validation_set.json").read_text())
+    data = json.loads((DOGFOOD / "output" / "validation_set.json").read_text())
     r = run_validation(fn, data, label_match)
     assert r.passed(1.0), [(d.input, d.expected, d.predicted) for d in r.disagreements]
 
@@ -111,7 +111,7 @@ def test_canonical_dogfood_tree_passes_its_validation_set():
 def test_canonical_ticket_tree_passes_its_validation_set():
     base = REPO / "examples" / "ticket_routing"
     fn = fn_from_json(str(base / "output" / "route_ticket_tree.json"))
-    data = load_dataset(str(base / "input" / "validation_set.json"))
+    data = load_dataset(str(base / "output" / "validation_set.json"))
     r = run_validation(fn, data, exact_match)
     assert r.passed(1.0), [(d.input, d.expected, d.predicted) for d in r.disagreements]
 
@@ -119,7 +119,7 @@ def test_canonical_ticket_tree_passes_its_validation_set():
 def test_canonical_license_tree_passes_its_validation_set():
     base = REPO / "examples" / "license_compat"
     fn = fn_from_json(str(base / "output" / "license_tree.json"))
-    data = load_dataset(str(base / "input" / "validation_set.json"))
+    data = load_dataset(str(base / "output" / "validation_set.json"))
     r = run_validation(fn, data, exact_match)
     assert r.passed(1.0), [(d.input, d.expected, d.predicted) for d in r.disagreements]
 
@@ -127,6 +127,6 @@ def test_canonical_license_tree_passes_its_validation_set():
 def test_canonical_ankle_tree_passes_its_validation_set():
     base = REPO / "examples" / "ankle_sprain"
     fn = fn_from_json(str(base / "output" / "ankle_tree.json"))
-    data = load_dataset(str(base / "input" / "validation_set.json"))
+    data = load_dataset(str(base / "output" / "validation_set.json"))
     r = run_validation(fn, data, exact_match)
     assert r.passed(1.0), [(d.input, d.expected, d.predicted) for d in r.disagreements]

@@ -10,7 +10,7 @@ import os
 import sys
 
 HERE = os.path.dirname(__file__)
-sys.path.insert(0, os.path.join(HERE, "input"))
+sys.path.insert(0, os.path.join(HERE, "output"))
 
 import temper_skills
 from schema import TicketSchema

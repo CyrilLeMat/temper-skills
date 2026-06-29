@@ -10,9 +10,9 @@ and where the adversarial loop earns its keep. Closed feature space → it conve
 ```
 input/
   skill.md                a license-advice prompt (permissive vs copyleft, distribution, linking)
+output/
   schema.py               LicenseQuery — project_license, dependency_license, linking, distributing, modified
   validation_set.json     18 ratified cases across the interaction matrix (+ a None distributing)
-output/
   license_tree.json       provenance (audit-grade)
   assess_license.py       the deterministic assessor — zero LLM at inference
   skill.tempered.md       an advice skill that calls the assessor
@@ -26,9 +26,9 @@ output/
 
 # library / CLI (audit-grade — the full persona panel for a higher-stakes domain):
 temper-skills ingest examples/license_compat/input/skill.md --backend auto --profile audit-grade -y \
-  --schema examples/license_compat/input/schema.py:LicenseQuery --fn assess_license \
+  --schema examples/license_compat/output/schema.py:LicenseQuery --fn assess_license \
   --out examples/license_compat/output/assess_license.py \
-  --examples examples/license_compat/input/validation_set.json
+  --examples examples/license_compat/output/validation_set.json
 ```
 
 ## The non-obvious edges the loop surfaces
@@ -50,7 +50,7 @@ to ~8 nodes instead of oscillating.
 
 ```bash
 temper-skills validate examples/license_compat/output/assess_license.py \
-  examples/license_compat/input/validation_set.json --fn assess_license --match exact
+  examples/license_compat/output/validation_set.json --fn assess_license --match exact
 # Agreement: 18/18 (100.0%)
 ```
 

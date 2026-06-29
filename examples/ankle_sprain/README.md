@@ -14,9 +14,9 @@ practitioners miss — exactly the "oh merde" moment.
 ```
 input/
   skill.md                the OUTDATED RICE first-aid prompt
+output/
   schema.py               AnkleInjury — Ottawa criteria + sprain grade + time + age
   validation_set.json     16 ratified cases across the Ottawa matrix + protocol phases
-output/
   ankle_tree.json         provenance (audit-grade)
   assess_ankle.py         the deterministic advisor — zero LLM at inference
   skill.tempered.md       a first-aid skill that calls the advisor (now POLICE, not RICE)
@@ -48,16 +48,16 @@ output/
 
 # library / CLI (audit-grade for a higher-stakes domain):
 temper-skills ingest examples/ankle_sprain/input/skill.md --backend auto --profile audit-grade -y \
-  --schema examples/ankle_sprain/input/schema.py:AnkleInjury --fn assess_ankle \
+  --schema examples/ankle_sprain/output/schema.py:AnkleInjury --fn assess_ankle \
   --out examples/ankle_sprain/output/assess_ankle.py \
-  --examples examples/ankle_sprain/input/validation_set.json
+  --examples examples/ankle_sprain/output/validation_set.json
 ```
 
 ## Verify (§4.5)
 
 ```bash
 temper-skills validate examples/ankle_sprain/output/assess_ankle.py \
-  examples/ankle_sprain/input/validation_set.json --fn assess_ankle --match exact
+  examples/ankle_sprain/output/validation_set.json --fn assess_ankle --match exact
 # Agreement: 16/16 (100.0%)
 ```
 

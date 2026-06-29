@@ -10,9 +10,9 @@ branches), not unsatisfiable (there's no infinite item list to enumerate).
 ```
 input/
   skill.md                a triage prompt: escalate security, prioritize paying tiers, route by category
+output/
   schema.py               TicketSchema — priority, security_score, customer_tier, category, sla_breached
   validation_set.json     18 ratified cases exercising the interactions + a None security_score
-output/
   route_ticket_tree.json  provenance
   route_ticket.py         the deterministic router — zero LLM at inference
   skill.tempered.md       a triage skill that calls the router
@@ -26,9 +26,9 @@ output/
 
 # library / CLI (pin the schema so the tree matches the validation set):
 temper-skills ingest examples/ticket_routing/input/skill.md --backend auto --profile standard -y \
-  --schema examples/ticket_routing/input/schema.py:TicketSchema --fn route_ticket \
+  --schema examples/ticket_routing/output/schema.py:TicketSchema --fn route_ticket \
   --out examples/ticket_routing/output/route_ticket.py \
-  --examples examples/ticket_routing/input/validation_set.json
+  --examples examples/ticket_routing/output/validation_set.json
 ```
 
 ## What the loop finds (and why it converges)
@@ -49,7 +49,7 @@ Because the features are closed sets, `domain_expert` runs out of genuinely-new 
 
 ```bash
 temper-skills validate examples/ticket_routing/output/route_ticket.py \
-  examples/ticket_routing/input/validation_set.json --fn route_ticket --match exact
+  examples/ticket_routing/output/validation_set.json --fn route_ticket --match exact
 # Agreement: 18/18 (100.0%)
 ```
 

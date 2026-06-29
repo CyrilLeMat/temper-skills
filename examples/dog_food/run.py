@@ -5,7 +5,8 @@
 
 This is the "input any skill, extract deterministic logic" path: the loop infers the
 feature schema from the prose and drafts test cases for its own gray zones. Both are
-*proposals* — the committed ``ratified/`` artifacts are what a human signed off on.
+*proposals* — the committed ``output/schema.py`` and ``output/validation_set.json`` are what
+a human signed off on.
 
 Educational example only — not veterinary advice.
 """
@@ -41,7 +42,7 @@ def main() -> None:
         with open(sidecar, "w") as f:
             json.dump(proposed, f, indent=2, ensure_ascii=False)
         print(f"\nThe loop drafted {len(proposed)} test case(s) → {sidecar}")
-        print("Review/ratify them to grow a validation set (cf. ratified/validation_set.json).")
+        print("Review/ratify them to grow a validation set (cf. output/validation_set.json).")
 
 
 if __name__ == "__main__":
