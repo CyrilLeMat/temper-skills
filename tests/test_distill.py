@@ -250,6 +250,52 @@ def test_personas_build_validation_set_excluding_critic():
     assert len(t.proposed_examples) == len(by_input)
 
 
+def test_best_tree_chosen_by_proposed_score_not_persona_score():
+    """With no ratified examples, the shipped tree is the one satisfying the most proposed
+    (adversary-authored) cases — even when persona scores are flat across rounds."""
+    import re
+    from pydantic import BaseModel
+    from temper_skills.backends.base import Backend
+    from temper_skills.schemas import (
+        ArbitrationEntry, PersonaVerdict, ProposedExample, ProposedExampleSet,
+        ProposedNode, ProposedTree, ProposerArbitration,
+    )
+
+    t1 = ProposedTree(nodes=[], default_outcome="b")                                   # fails x->a
+    t2 = ProposedTree(nodes=[ProposedNode(condition="x == 1", outcome="a")], default_outcome="b")  # passes
+
+    class B(Backend):
+        name = "fake"
+
+        def __init__(self):
+            super().__init__("fake-model")
+            self.arb = 0
+
+        def complete(self, system, user, schema):
+            if schema is ProposedTree:
+                return t1
+            if schema is PersonaVerdict:
+                p = re.search(r"Your angle \((\w+)\)", user).group(1)
+                tests = [] if p == "overengineering_critic" else [
+                    ProposedExample(input={"x": 1}, expected="a", rationale="x==1 must be a")]
+                return PersonaVerdict(persona=p, score=5, verdict="ok", detail="d", proposed_tests=tests)
+            if schema is ProposerArbitration:
+                self.arb += 1
+                return ProposerArbitration(
+                    entries=[ArbitrationEntry(persona="x", decision="kept", rationale="ok")],
+                    convergence_estimate=80, tree=(t2 if self.arb >= 2 else t1))
+            if schema is ProposedExampleSet:
+                return ProposedExampleSet(examples=[])
+            raise AssertionError(schema)
+
+    class S(BaseModel):
+        x: int = 0
+
+    tree = distill(Sources(schema=S), backend=B(), profile="standard", fn_name="decide",
+                   adversaries=[EDGE_CASE_HUNTER])
+    assert any(n.outcome == "a" for n in tree.nodes)  # t2 won on proposed score, not persona score
+
+
 def test_ratified_example_disagreement_surfaced():
     # FakeBackend's tree routes only priority=="high"; a low-priority example that
     # expects escalate_urgent must surface as a disagreement.

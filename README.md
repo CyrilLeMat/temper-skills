@@ -148,6 +148,23 @@ def normalize(raw: str) -> dict:
 can_dog_eat(normalize("a slice of Dark Chocolate cake"))   # -> "no — toxic, never feed"
 ```
 
+### Bootstrapping the schema — draft, ratify, freeze
+
+You don't have to write `schema.py` from a blank page. `--propose-schema` reads the skill,
+drafts the feature set as editable Pydantic source, surfaces each field's **normalization
+burden**, and then *stops* — it never distills on an unratified contract:
+
+```bash
+temper-skills ingest skill.md --propose-schema   # writes schema.proposed.py, then stops
+# review/edit the fields (rename, fix a type, tighten a str into Literal[...]), then:
+temper-skills ingest skill.md --schema schema.proposed.py:RouteTicket
+```
+
+The schema is the contract the determinism guarantee rests on, so the loop only ever runs
+on one a human has pinned — same draft → ratify → freeze lifecycle as proposed examples. The
+draft flags exact-match `str` fields (whose safety lives in *your* normalizer) and enum-like
+ones (where a `Literal` closes the space and helps the loop converge).
+
 ## Closing the loop — a skill that *uses* the tree
 
 Tempering doesn't stop at the `.py`. `ingest` also emits a **tempered `skill.md`** that
@@ -203,6 +220,18 @@ outcome it believes correct — and they accumulate (deduped) across all rounds.
 along in the critiques the panel already produces, so it costs no extra model calls and is
 robust: the cases come from dozens of findings, not one post-hoc guess.
 
+**The loop scores the tree against these cases each round** — to pick the best tree and to
+decide convergence — so you get a good final result *without* waiting to ratify anything.
+That's not self-grading: the labels are written by the **adversarial personas**, not the
+proposer, so it's "satisfy your critics." Ratified examples, when you supply them, rank
+*ahead* of the proposed ones (lexicographically) and are never traded away to match a
+proposed label.
+
+```
+Round 4/20   persona scores: min 4/10, mean 5.0/10
+   ✎ validation set — tree passes 18 ratified (100%), 41/56 proposed (73%)
+```
+
 ```
 ✎ proposed test cases (awaiting ratification)
   input={'priority': 'urgent', 'security_score': 0.85}  — edge_case_hunter (round 4)
@@ -211,12 +240,12 @@ robust: the cases come from dozens of findings, not one post-hoc guess.
 → written to route_ticket.proposed_examples.json
 ```
 
-These are **proposals, never ground truth** — the loop must not grade its own homework. Each
-is tagged `"status": "proposed"` and `load_dataset` *ignores* proposed entries, so feeding the
-file straight back changes nothing. You **ratify** by reviewing the label and setting
-`"status": "ratified"` (or moving the case into your validation set); only then does it gate
-CI and anchor that cell on the next run (re-run, or evolve via `incremental`). That's how an
-empty validation set is meant to grow — the rounds draft it, you sign off on it.
+Ratification is then **optional hardening**, not a precondition. Each case is tagged
+`"status": "proposed"`; `load_dataset` *ignores* proposed entries, so they never silently
+become a CI gate. Review the labels, set `"status": "ratified"` (or fold them into your
+validation set), and on the next run they become authoritative ground truth that the loop
+must honor. That's how an empty validation set grows into a trusted one — the rounds draft
+it and score against it, you sign off when you want it to gate CI.
 
 ## Examples
 
@@ -243,7 +272,7 @@ empty validation set is meant to grow — the rounds draft it, you sign off on i
 
 ```bash
 pip install -e ".[dev]"
-pytest -q                          # 87 tests, no network
+pytest -q                          # 94 tests, no network
 git config core.hooksPath .githooks   # once per clone: block red commits locally
 ```
 

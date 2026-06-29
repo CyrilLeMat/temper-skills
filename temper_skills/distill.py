@@ -238,12 +238,13 @@ def distill(
     Pass ``seed_tree`` (with ``seed_survival``) to start from an existing tree
     instead of a blank draft — incremental mode (see incremental.recrystallize).
 
-    ``propose_examples`` (on by default) builds a proposed validation set as the loop
-    runs: every persona except the overengineering_critic contributes discriminating
-    test cases each round, accumulated and attached as ``tree.proposed_examples`` for a
-    human to ratify and feed back as anchors. The labels are proposals, never ground
-    truth — so the loop never gates on its own homework. This is how a validation set is
-    meant to grow from an empty start; set ``propose_examples=False`` to skip it.
+    ``propose_examples`` (on by default) builds a validation set as the loop runs: every
+    persona except the overengineering_critic contributes discriminating cases each round.
+    The loop SCORES the tree against these (adversary-authored) cases to pick the best
+    tree and to decide convergence — so it returns a good final result without waiting on
+    human ratification. Ratified examples, when supplied, rank ahead of the proposed ones
+    and are never traded away. The proposed set is attached as ``tree.proposed_examples``
+    for the user to ratify and harden later; set ``propose_examples=False`` to skip it.
     """
     if profile not in PROFILES:
         raise ValueError(f"unknown profile {profile!r}; choose from {list(PROFILES)}")
@@ -265,22 +266,24 @@ def distill(
     stale_rounds = 0
     last_arbitration: ProposerArbitration | None = None
 
-    # The loop wobbles: it reorders nodes back and forth and can REGRESS at the buzzer
-    # (a late round breaking a ratified example it had been passing). So we track the
-    # best tree we ever saw — ranked by (example agreement, then mean persona score) —
-    # and finalize THAT, never merely the last round. Progress is measured against this
-    # best: a round that only reshuffles or rewords a gray zone is not progress, which
-    # is what kept the loop spinning for all its rounds at a flat score.
-    best_tree = tree
-    best_arbitration: ProposerArbitration | None = None
-    best_key = (_agreement(tree, sources, fn_name) or 0.0, -1.0)
-
     # The proposed validation set grows as the loop runs: every persona (except the
     # overengineering_critic) contributes discriminating cases each round, deduped here
     # by input and against any ratified examples. Zero extra LLM calls — these ride
     # along in the critiques the personas already return.
     proposed: dict[str, dict] = {}
     existing_inputs = {_canon(e["input"]) for e in sources.examples}
+
+    # We SCORE the tree against those proposed cases, not just the ratified ones: the
+    # point of the tool is to hand back a good final tree without waiting on a human to
+    # ratify every step. The labels are written by the ADVERSARIAL personas, not the
+    # proposer, so this is "satisfy your critics", not "grade your own homework".
+    # Ranking is lexicographic — (ratified pass-rate, proposed pass-rate, persona score) —
+    # so ratified ground truth, when present, always wins and is never traded away to
+    # match a proposed label. `candidates` keeps each round's tree; the winner is chosen
+    # by re-scoring them all against the FINAL proposed set (fair: one denominator).
+    # `stop_key` is the running plateau tracker.
+    candidates: list[tuple[ProposedTree, ProposerArbitration | None, float]] = [(tree, None, -1.0)]
+    stop_key = (_agreement(tree, sources, fn_name) or 1.0, -1.0, -1.0)
 
     for r in range(1, max_rounds + 1):
         try:
@@ -304,22 +307,24 @@ def distill(
 
         tree = new_tree
 
-        # Convergence = the scores *stabilize* (the plan's actual criterion), not an
-        # absolute bar that may never be reached. A round makes progress only if it
-        # beats the best tree so far on (example agreement, then mean score). Once no
-        # round beats the best for `stop_quiet` rounds the loop has plateaued — stop,
-        # whether the plateau is high (good tree) or low (can't do better on this schema).
+        # Score the tree against the ratified examples (authoritative) AND the proposed
+        # cases (the panel's adversarial expectations). Progress = beating the best round
+        # so far on (ratified rate, proposed rate, persona score); once no round beats it
+        # for `stop_quiet` rounds the loop has plateaued — stop, whether the plateau is
+        # high (a good tree) or low (this schema/domain can't do better).
         agreement = _agreement(tree, sources, fn_name)
         prop_items = list(proposed.values())
+        prop_passed = _score(tree, prop_items, sources.feature_names, fn_name)
         result = RoundResult(r, max_rounds, verdicts, arbitration, tree, dict(survival),
                              agreement, proposed_count=len(prop_items),
-                             proposed_passed=_score(tree, prop_items, sources.feature_names, fn_name),
+                             proposed_passed=prop_passed,
                              ratified_count=len(sources.examples))
-        round_key = (agreement if agreement is not None else 0.0, result.mean_score)
-        if round_key > best_key:
-            best_key = round_key
-            best_tree = tree
-            best_arbitration = arbitration
+        candidates.append((tree, arbitration, result.mean_score))
+        round_key = (agreement if agreement is not None else 1.0,
+                     prop_passed / len(prop_items) if prop_items else 0.0,
+                     result.mean_score)
+        if round_key > stop_key:
+            stop_key = round_key
             stale_rounds = 0
         else:
             stale_rounds += 1
@@ -332,8 +337,11 @@ def distill(
         if stale_rounds >= stop_quiet:
             break
 
-    # `survival` is keyed by condition and accumulated across every round, so it gives
-    # the right rounds_survived for whichever nodes the best tree happens to contain.
+    # Pick the tree to ship by re-scoring every candidate against the FINAL proposed set
+    # (+ ratified), so a later round isn't judged on a smaller set than an earlier one.
+    # `survival` is cumulative and keyed by condition, so it gives the right
+    # rounds_survived for whichever tree wins.
+    best_tree, best_arbitration = _select_best(candidates, sources, list(proposed.values()), fn_name)
     arb_for_final = best_arbitration if best_arbitration is not None else last_arbitration
     model_tag = f"{backend.model} via {backend.name}"
     final = _finalize(best_tree, arb_for_final, survival, sources, model_tag, profile, provenance, fn_name)
@@ -454,6 +462,31 @@ def _score(tree: ProposedTree, items: list[dict], features: list[str], fn_name: 
         if label_match(pred, it["expected"]):
             passed += 1
     return passed
+
+
+def _select_best(
+    candidates: list[tuple[ProposedTree, "ProposerArbitration | None", float]],
+    sources: Sources, prop_items: list[dict], fn_name: str,
+) -> tuple[ProposedTree, "ProposerArbitration | None"]:
+    """Pick the candidate tree with the best (ratified rate, proposed rate, persona score).
+
+    Re-scores every candidate against the SAME final proposed set, so a round isn't
+    flattered or penalised by how many cases existed when it ran. Ratified ground truth
+    is the lexicographic primary — never traded away to match an adversary-proposed label."""
+    best = (candidates[0][0], candidates[0][1])
+    best_key = (-1.0, -1.0, -1.0)
+    for tree, arb, mean in candidates:
+        rat = _agreement(tree, sources, fn_name)
+        key = (
+            rat if rat is not None else 1.0,
+            _score(tree, prop_items, sources.feature_names, fn_name) / len(prop_items)
+            if prop_items else 0.0,
+            mean,
+        )
+        if key > best_key:
+            best_key = key
+            best = (tree, arb)
+    return best
 
 
 def _agreement(tree: ProposedTree, sources: Sources, fn_name: str) -> float | None:
