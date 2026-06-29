@@ -162,6 +162,13 @@ def test_action_closed_schema_tempers():
     assert a == "temper"
 
 
+def test_action_multi_decision_routes_to_decompose():
+    # auto-detection: >=2 separable decisions outranks every per-decision verdict
+    a = recommend_action(
+        JudgeScores(decisiveness=9, combinatorics=8, stakes=8, distinct_decisions=3), [])
+    assert a == "decompose"
+
+
 # ---- audit_skill end-to-end on a scripted backend (no network) ----
 
 class _AuditBackend(Backend):
@@ -236,6 +243,18 @@ def test_audit_skill_build_normalizer_hint_fills_field_names(tmp_path):
     assert "address" in report.action_hint        # {fields} placeholder was filled
 
 
+def test_audit_skill_flags_multi_decision_for_decompose(tmp_path):
+    skill = tmp_path / "skill.md"
+    skill.write_text("# classify the ticket, then escalate, then draft a reply")
+    scores = JudgeScores(decisiveness=8, combinatorics=7, stakes=7, distinct_decisions=3)
+    pinned = _schema(_enum("priority"), fn_name="support_flow")
+    report = audit_skill(str(skill), backend=_AuditBackend(scores, pinned), schema=pinned)
+    assert report.recommended_action == "decompose"
+    assert report.distinct_decisions == 3
+    assert any("distinct decisions" in c for c in report.caveats)
+
+
 def test_audit_system_prompt_names_the_axes():
     for axis in ("decisiveness", "combinatorics", "stakes"):
         assert axis in AUDIT_SYSTEM
+    assert "distinct_decisions" in AUDIT_SYSTEM

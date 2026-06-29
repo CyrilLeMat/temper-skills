@@ -413,9 +413,15 @@ def _band(score: int) -> str:
 
 
 def _print_fitness(report, skill: str) -> None:
-    color, gloss = _VERDICT[report.verdict]
+    if report.recommended_action == "decompose":
+        color = "cyan"
+        header = (f"[cyan][bold]DECOMPOSE FIRST[/] — a flow of ~{report.distinct_decisions} "
+                  f"decisions; the {report.verdict.upper()} verdict below averages them[/]")
+    else:
+        color, gloss = _VERDICT[report.verdict]
+        header = f"[{color}][bold]{report.verdict.upper()}[/] — {gloss}[/]"
     body = [
-        f"[{color}][bold]{report.verdict.upper()}[/] — {gloss}[/]",
+        header,
         f"fn: [bold]{report.fn_name}[/]   ·   {skill}",
         "",
         "[dim]Scores 0–10 (judged by the model) · what each axis asks:[/]",

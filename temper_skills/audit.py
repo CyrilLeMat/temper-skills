@@ -17,7 +17,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-Action = Literal["temper", "externalize_data", "build_normalizer", "delegate_prose"]
+Action = Literal["temper", "externalize_data", "build_normalizer", "delegate_prose", "decompose"]
 
 from .backends import Backend, auto_backend
 from .ingest import InferredFeature, InferredSchema, ingest_skill
@@ -41,6 +41,12 @@ class JudgeScores(BaseModel):
         description="Is the decision repeated, auditable, and stable enough that freezing "
         "pays off, or one-off / changing weekly? Low means freezing won't pay for itself.",
     )
+    distinct_decisions: int = Field(
+        default=1, ge=0,
+        description="How many SEPARABLE decisions this skill contains: 1 if it's a single "
+        "coherent decision, >=2 if it's a flow of several (classify, then escalate, then "
+        "draft …). The three axes above describe the skill as a WHOLE.",
+    )
     rationale: dict[str, str] = Field(
         default_factory=dict,
         description="One short line per axis, keyed 'decisiveness', 'combinatorics', 'stakes'.",
@@ -53,6 +59,7 @@ class FitnessReport(BaseModel):
     decisiveness: int
     combinatorics: int
     stakes: int
+    distinct_decisions: int = 1  # >=2 → the verdict averages several decisions; decompose first
     schema_closure: float  # 0-1, computed from the schema shape — not judged
     open_features: list[str] = []  # free-text fields whose value space ISN'T bounded
     n_features: int = 0
@@ -75,7 +82,10 @@ AUDIT_SYSTEM = (
     "forever-growing list of items)? A flat list scores low: the tree thrashes and never "
     "converges, because each round surfaces one more item.\n"
     "  stakes — is the decision repeated, auditable, and stable enough that freezing it "
-    "pays off, or is it one-off / likely to change weekly? Low stakes score low."
+    "pays off, or is it one-off / likely to change weekly? Low stakes score low.\n\n"
+    "Also report distinct_decisions: how many SEPARABLE decisions the skill contains — 1 for "
+    "a single coherent decision, >=2 for a flow of several (e.g. classify, then escalate, "
+    "then draft a reply). Score the three axes for the skill as a WHOLE."
 )
 
 
@@ -135,12 +145,20 @@ ACTIONS: dict[str, tuple[str, str, str | None]] = {
         "refine wording / triggering / examples elsewhere",
         "skill-creator",
     ),
+    "decompose": (
+        "Split into per-decision trees first",
+        "this skill is a flow of several decisions — run `temper-skills decompose`, temper "
+        "each, and keep a thin orchestrator (the scores above average them)",
+        None,
+    ),
 }
 
 
 def recommend_action(j: JudgeScores, open_feats: list[str]) -> Action:
     """Route a skill to its next useful action — a pure function of the same axes the
     verdict uses. Cascade, most-disqualifying first (mirrors verdict_of)."""
+    if j.distinct_decisions >= 2:
+        return "decompose"                 # a flow of several decisions — split before tempering
     if j.decisiveness < 4:
         return "delegate_prose"            # generation skill — not our lane
     if open_feats:
@@ -208,6 +226,9 @@ def audit_skill(
     opens = open_features(schema)
     verdict, reasons, caveats = verdict_of(j, closure, len(schema.features))
     action = recommend_action(j, opens)
+    if j.distinct_decisions >= 2:
+        caveats.insert(0, f"~{j.distinct_decisions} distinct decisions — the scores above "
+                       "AVERAGE them; decompose before trusting this verdict")
     _, hint, tool = ACTIONS[action]
     hint = hint.format(fields=", ".join(opens)) if "{fields}" in hint else hint
     if tool:
@@ -218,6 +239,7 @@ def audit_skill(
         decisiveness=j.decisiveness,
         combinatorics=j.combinatorics,
         stakes=j.stakes,
+        distinct_decisions=j.distinct_decisions,
         schema_closure=closure,
         open_features=opens,
         n_features=len(schema.features),
