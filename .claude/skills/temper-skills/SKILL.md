@@ -140,11 +140,18 @@ The loop stops when **no round improves on the best for `stop after N quiet roun
    node. Do **not** stop to ask the user how to resolve it — see "Gray zones" below.
 2. **Critique** — spawn the 5 persona subagents in parallel with the current tree; collect
    their scored JSON verdicts.
-3. **Arbitrate** (proposer) — for each persona decide `kept` / `changed` / `rejected` with a
-   one-line rationale (this is the *arbitrage log*). Then revise the tree: add a branch only
-   if a critique justifies it AND an expert would write it by hand; collapse branches the
-   `overengineering_critic` flags. Never contradict a HARD constraint. Track
-   `rounds_survived` per node (matched by condition).
+3. **Arbitrate** — spawn **one independent `arbiter` subagent**, separate from you-the-proposer.
+   It receives the current tree, the panel's verdicts, the constraints, and the schema — but
+   **not** your defense of the draft — and rules `kept` / `changed` / `rejected` per persona
+   with a one-line rationale (the *arbitrage log*), then returns the revised tree. It owes the
+   draft no deference: keep a branch only because the logic and source justify it, not because
+   it is already there; add a branch only if a critique justifies it AND an expert would write
+   it by hand; collapse branches the `overengineering_critic` flags; honor the `schema_critic`
+   (see re-gate below); never contradict a HARD constraint. You then apply its tree and track
+   `rounds_survived` per node (matched by condition). **Do not arbitrate your own draft** — the
+   proposer defending its own tree is the bias this split removes. (For a `quick`/unattended run
+   you may fold the arbiter back into the proposer to save a spawn; standard/audit-grade always
+   use a separate arbiter.)
 4. **Show the round panel** — round N, per-persona `score/10` (sorted worst-first), the
    arbitrage log, current tree preview, and `min/mean` score.
 5. **Gate** — ask the user: Continue · Stop and review · Abort. (Skip the gate only if they

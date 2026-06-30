@@ -134,6 +134,19 @@ EXAMPLE_PROPOSER_SYSTEM = (
     "boundary cells; never duplicate an existing ratified example."
 )
 
+ARBITER_SYSTEM = (
+    "You are an INDEPENDENT arbiter — NOT the author of this tree. A separate proposer "
+    "drafted the branches and an adversarial panel critiqued them; you rule on each "
+    "finding (kept / changed / rejected) on its merits, owing the proposer no deference: "
+    "keep a branch because the logic and the source justify it, not because it is already "
+    "there. Add a branch only if a critique justifies it AND a domain expert would write "
+    "it by hand; collapse a branch the overengineering_critic flags ONLY when doing so "
+    "changes no outcome. Never contradict a HARD constraint. Same code rules as the "
+    "proposer: conditions are valid, NONE-safe Python boolean expressions over the feature "
+    "names (guard before comparing — `x is not None and x < 1`; coerce strings with "
+    "`(s or '').strip().lower()`)."
+)
+
 
 def _initial_tree(backend: Backend, sources: Sources) -> ProposedTree:
     user = (
@@ -232,7 +245,9 @@ def _arbitrate(
         "Respect every HARD constraint. "
         "Give a convergence_estimate (0-100) for how settled the tree now is."
     )
-    return backend.complete(PROPOSER_SYSTEM, user, ProposerArbitration)
+    # The arbiter runs under its OWN system prompt, not PROPOSER_SYSTEM: the agent that
+    # rules kept/changed/rejected must not be the one defending its own draft (§4.2).
+    return backend.complete(ARBITER_SYSTEM, user, ProposerArbitration)
 
 
 def _node_key(condition: str) -> str:
