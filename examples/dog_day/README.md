@@ -17,16 +17,18 @@ output/                     ← schemas proposed by `decompose --emit-schemas` +
   decide_walk.schema.py     DecideWalk  — hours-since × weather × energy × availability
   decide_meal.schema.py     DecideMeal  — coupled: just_exercised comes from decide_walk
   decide_vet.schema.py      DecideVet   — severity × duration × age (Ottawa-style)
-  decide_walk.py            the frozen tree (one per decision)
+  decide_walk.py            the frozen tree (one per decision), with inline provenance
   decide_meal.py
   decide_vet.py
+  *.proposed_examples.json  per-decision validation cases the loop built (gitignored; review to ratify)
   dog_day.tempered.md       the orchestrator: chains the 3 trees + writes the note
 ```
 
 This is the only **complete** decompose chain in the examples — the three trees are real
-(tempered live, `quick` profile, via Vertex), and the orchestrator chains them. The `quick`
-trees carry a "draft — do not ship" header; harden with `--profile standard`/`audit-grade`
-for real use.
+(tempered live on the `standard` profile via the subagent-mode loop, `claude-code-subagents`),
+and the orchestrator chains them. They carry inline provenance (gray zones + critic notes) and
+a per-decision validation set; five cells are still *contested* (the panel's label disagrees
+with the tree) and flagged for ratification. Harden further with `--profile audit-grade`.
 
 ## The decisions the flow holds
 
@@ -66,6 +68,8 @@ is frozen code, the orchestration and the prose stay with the model.
 
 `input/skill.md` is the only authored artifact you *need*; the `output/` mini-schemas are
 shown ratified (what `decompose --emit-schemas` proposes). The three trees here were tempered
-live on the `quick` profile (draft-grade, no provenance — the header says so); a real run
-uses `standard`/`audit-grade` and a held-out validation set per decision. The trees are a
-reviewed artifact, not a reproducible output — re-running won't byte-match.
+live on the `standard` profile via the subagent-mode loop (proposer + persona subagents, no
+API key) — gated, with inline provenance and a panel-built validation set per decision. That
+set is *proposed*, not ground truth: the five contested cells need a human to rule on them
+before they gate. The trees are a reviewed artifact, not a reproducible output — re-running
+won't byte-match.
