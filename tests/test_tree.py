@@ -13,7 +13,8 @@ def _compile(src: str):
 
 def _tree(**kw):
     nodes = [
-        DecisionNode('priority == "high"', "escalate", rounds_survived=14, sources=["constraints#1"]),
+        DecisionNode('priority == "high"', "escalate", rounds_survived=14, sources=["constraints#1"],
+                     critic_note="kept: the only branch the source mandates unconditionally"),
         DecisionNode('security_score > 0.8', "secure", rounds_survived=8, sources=["examples#3"],
                      gray_zone="0.7–0.8 ambiguous"),
     ]
@@ -32,8 +33,11 @@ def test_header_and_provenance_present():
     src = _tree(model="claude-sonnet-4-6", profile="standard").to_source()
     assert "zero LLM calls at inference" in src
     assert "generated_at:" in src and "model: claude-sonnet-4-6" in src
-    assert "# n1 — survived 14 rounds — sources: constraints#1" in src
+    # only the genuine "why" is echoed into the source — the critic note and the gray zone
+    assert "# critic: kept: the only branch the source mandates unconditionally" in src
     assert "# gray_zone: 0.7–0.8 ambiguous" in src
+    # loop bookkeeping is NOT leaked into the generated code (it stays in tree.json)
+    assert "survived" not in src and "sources:" not in src
 
 
 def test_features_bound_as_locals():

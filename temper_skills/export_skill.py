@@ -29,11 +29,42 @@ def _role_line(original: str | None) -> str:
     return "You are an assistant."
 
 
+def skill_name(raw: str) -> str:
+    """Sanitize to a spec-valid Agent Skills ``name`` (lowercase a-z0-9 + single hyphens,
+    no leading/trailing/consecutive hyphens, ≤64 chars). ``dog_day`` → ``dog-day``."""
+    s = re.sub(r"[^a-z0-9]+", "-", raw.strip().lower())
+    s = re.sub(r"-{2,}", "-", s).strip("-")[:64].strip("-")
+    return s or "skill"
+
+
+def _yaml_quoted(s: str) -> str:
+    """A YAML double-quoted scalar — safe for any description (colons, dashes, quotes)."""
+    return '"' + " ".join(s.split()).replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _frontmatter(name: str, description: str) -> list[str]:
+    return ["---", f"name: {name}", f"description: {_yaml_quoted(description)[:1024]}", "---", ""]
+
+
+def _default_description(tree: DecisionTree, fn: str) -> str:
+    outcomes = list(dict.fromkeys([n.outcome for n in tree.nodes] + [tree.default_outcome]))
+    feats = ", ".join(tree.features) or "structured features"
+    return (
+        f"Frozen, deterministic decision (no LLM): maps {feats} to one of "
+        f"{', '.join(outcomes)}. Use when this decision must be made consistently and "
+        f"auditably — extract the features, call {fn}(), and relay its verdict without overriding it."
+    )
+
+
 def render_tempered_skill(
     tree: DecisionTree,
     module: str,
     fn: str | None = None,
     original_skill_text: str | None = None,
+    *,
+    name: str | None = None,
+    description: str | None = None,
+    script_path: str | None = None,
 ) -> str:
     fn = fn or tree.fn_name
     role = _role_line(original_skill_text)
@@ -41,6 +72,8 @@ def render_tempered_skill(
     gray = [(i, n) for i, n in enumerate(tree.nodes, 1) if n.gray_zone]
 
     out: list[str] = []
+    out += _frontmatter(skill_name(name or module or fn),
+                        description or _default_description(tree, fn))
     out.append(f"# {fn} — skill (tempered by temper-skills)")
     out.append("")
     out.append(role)
@@ -58,7 +91,8 @@ def render_tempered_skill(
     out.append("1. Extract these structured features from the request:")
     for f in feats:
         out.append(f"   - `{f}`")
-    out.append("2. Call the decision tree and treat its result as authoritative:")
+    out.append("2. Call the decision tree and treat its result as authoritative"
+               + (f" (bundled at `{script_path}`):" if script_path else ":"))
     out.append("")
     out.append("   ```python")
     out.append(f"   from {module} import {fn}")
@@ -85,10 +119,12 @@ def render_tempered_skill(
 
 
 def render_orchestrator_skill(
-    skill_name: str,
+    name: str,
     items: list[dict],
     generative_steps: list[str] | None = None,
     original_skill_text: str | None = None,
+    *,
+    description: str | None = None,
 ) -> str:
     """A multi-tree tempered skill: the flow's orchestrator.
 
@@ -98,8 +134,15 @@ def render_orchestrator_skill(
     ``fn``, ``module``, ``features``, ``consumes`` (fn_names it chains from), ``gray_zones``.
     """
     role = _role_line(original_skill_text)
-    out = [
-        f"# {skill_name} — orchestrator (tempered by temper-skills)",
+    fns = ", ".join(it["fn"] for it in items) or "its decisions"
+    desc = description or (
+        f"Tempered orchestrator: chains frozen, deterministic decision trees ({fns}) and "
+        f"keeps only the generative step(s). Use to run this flow with each decision made "
+        f"by code (no LLM) and only the prose left to the model."
+    )
+    out = _frontmatter(skill_name(name), desc)
+    out += [
+        f"# {name} — orchestrator (tempered by temper-skills)",
         "",
         role,
         "",
@@ -192,17 +235,39 @@ def main(argv: list[str] | None = None) -> int:
     argv = argv if argv is not None else sys.argv[1:]
     if len(argv) < 2:
         print("usage: python -m temper_skills.export_skill <tree.json> <module> "
-              "[out.md] [original_skill.md]", file=sys.stderr)
+              "[out.md | skill-dir/] [original_skill.md]\n"
+              "  out.md      → single tempered skill file (with frontmatter)\n"
+              "  skill-dir/  → spec-compliant Agent Skill: <dir>/SKILL.md + scripts/<module>.py",
+              file=sys.stderr)
         return 2
     tree_path, module = argv[0], argv[1]
     out = argv[2] if len(argv) > 2 else "skill.tempered.md"
     original = open(argv[3]).read() if len(argv) > 3 else None
     import json
+    from pathlib import Path
     tree = tree_from_dict(json.loads(open(tree_path).read()))
-    md = render_tempered_skill(tree, module, original_skill_text=original)
-    with open(out, "w") as f:
-        f.write(md)
-    print(f"wrote {out}")
+
+    out_p = Path(out)
+    # Legacy single-file mode: an explicit *.md target that isn't itself a SKILL.md.
+    if out_p.suffix == ".md" and out_p.name != "SKILL.md":
+        out_p.parent.mkdir(parents=True, exist_ok=True)
+        out_p.write_text(render_tempered_skill(tree, module, original_skill_text=original))
+        print(f"wrote {out_p}")
+        return 0
+
+    # Directory mode: emit a spec-compliant Agent Skill folder. The skill `name` must match
+    # its parent directory, so we sanitize the requested dir name and write into that folder.
+    requested = out_p.parent if out_p.name == "SKILL.md" else out_p
+    name = skill_name(requested.name)
+    skill_dir = requested.parent / name
+    (skill_dir / "scripts").mkdir(parents=True, exist_ok=True)
+    script_rel = f"scripts/{module}.py"
+    tree.export(str(skill_dir / script_rel))
+    md = render_tempered_skill(tree, module, original_skill_text=original,
+                               name=name, script_path=script_rel)
+    (skill_dir / "SKILL.md").write_text(md)
+    note = "" if requested.name == name else f" (renamed from '{requested.name}' to a valid skill name)"
+    print(f"wrote {skill_dir}/SKILL.md + {script_rel}  · name: {name}{note}")
     return 0
 
 

@@ -69,3 +69,41 @@ def test_main_writes_file(tmp_path):
     assert main([str(tj), "dog_food_checker", str(out)]) == 0
     text = out.read_text()
     assert "from dog_food_checker import can_dog_eat" in text
+
+
+def _parse_frontmatter(md: str) -> dict:
+    assert md.startswith("---\n"), "must open with a YAML frontmatter block"
+    _, fm, _ = md.split("---\n", 2)
+    out = {}
+    for line in fm.strip().splitlines():
+        k, _, v = line.partition(":")
+        out[k.strip()] = v.strip()
+    return out
+
+
+def test_frontmatter_present_and_valid():
+    md = render_tempered_skill(_tree(), "dog_food_checker")
+    fm = _parse_frontmatter(md)
+    # required fields present, name spec-valid (lowercase, hyphens, no underscores)
+    assert fm["name"] == "dog-food-checker"
+    assert fm["description"].startswith('"') and len(fm["description"]) <= 1024
+    assert "_" not in fm["name"] and fm["name"] == fm["name"].lower()
+
+
+def test_dir_mode_emits_spec_compliant_skill(tmp_path):
+    import json
+    tj = tmp_path / "tree.json"
+    tj.write_text(json.dumps({
+        "fn_name": "decide_walk", "features": ["weather"],
+        "default_outcome": "normal_walk",
+        "nodes": [{"condition": '(weather or "").lower() == "storm"', "outcome": "toilet_break_only"}],
+    }))
+    # underscore in the requested dir name must be sanitized to a hyphenated skill name
+    assert main([str(tj), "decide_walk", str(tmp_path / "dog_day")]) == 0
+    skill_dir = tmp_path / "dog-day"
+    assert (skill_dir / "SKILL.md").exists()
+    assert (skill_dir / "scripts" / "decide_walk.py").exists()
+    text = (skill_dir / "SKILL.md").read_text()
+    fm = _parse_frontmatter(text)
+    assert fm["name"] == "dog-day" == skill_dir.name  # name matches parent dir (spec rule)
+    assert "scripts/decide_walk.py" in text

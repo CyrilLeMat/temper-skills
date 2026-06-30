@@ -68,14 +68,13 @@ class DecisionTree:
             lines.append(f"    return {self._outcome(self.default_outcome)}")
             return "\n".join(lines) + "\n"
 
-        for i, node in enumerate(self.nodes, start=1):
-            if self.include_provenance:
-                prov = f"    # n{i} — survived {node.rounds_survived} rounds"
-                if node.sources:
-                    prov += f" — sources: {', '.join(node.sources)}"
-                if node.critic_note:
-                    prov += f" — critic: {node.critic_note}"
-                lines.append(prov)
+        # Provenance in the source is only the genuine "why" — a node's critic note and
+        # gray zone. Loop bookkeeping (rounds_survived, sources) stays in tree.json, not
+        # echoed as per-node comments: it's audit metadata, not something a code reviewer
+        # reads, and leaking round counts contradicts the complexity contract.
+        for node in self.nodes:
+            if self.include_provenance and node.critic_note:
+                lines.append(f"    # critic: {node.critic_note}")
             lines.append(f"    if {node.condition}:")
             lines.append(f"        return {self._outcome(node.outcome)}")
             if self.include_provenance and node.gray_zone:
