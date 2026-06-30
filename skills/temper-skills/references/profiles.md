@@ -4,16 +4,21 @@ The `--profile` flag controls how hard the adversarial loop runs: how many round
 may take, how strict convergence is, which persona panel attacks the tree, and whether
 provenance comments are written. Recommend one to the user from the table below.
 
-> Source of truth: `temper_skills/distill.py` (`PROFILES` + `PROFILE_PERSONAS`).
-> Regenerate this table when those change — do not hand-edit the numbers to drift.
+> Source of truth: `temper_skills/distill.py` (`PROFILES` + `PROFILE_PERSONAS`). The table
+> below is generated — do not hand-edit it; change the code and run
+> `python -m temper_skills.skill_docs`.
 
-| profile | max rounds | convergence (quiet rounds to stop) | per-round gate | provenance comments | adversary panel |
+<!-- BEGIN GENERATED:profiles -->
+_Generated from `temper_skills/distill.py` — edit there, then run `python -m temper_skills.skill_docs`._
+
+| profile | max rounds | stop after N quiet rounds | per-round gate | provenance comments | adversary panel |
 |---|---|---|---|---|---|
-| `quick` | ~8 | 2 | off (non-interactive) | off | edge-case hunter |
-| `standard` | ~20 | 3 | on | on | edge-case hunter + domain expert |
-| `audit-grade` | ~50 | 5 | on | on | literalist + edge-case hunter + bad-faith actor + domain expert |
+| `quick` | 8 | 2 | off | off | `edge_case_hunter`, `overengineering_critic` |
+| `standard` | 20 | 3 | on | on | `edge_case_hunter`, `domain_expert`, `overengineering_critic` |
+| `audit-grade` | 50 | 5 | on | on | `literalist`, `edge_case_hunter`, `bad_faith_actor`, `domain_expert`, `overengineering_critic` |
+<!-- END GENERATED:profiles -->
 
-The **overengineering critic is always on**, appended to every panel — it prunes branches
+The **`overengineering_critic` is always on**, appended to every panel — it prunes branches
 a thin skill doesn't justify, so the tree reads like one a domain expert would hand-write.
 
 ## How to choose

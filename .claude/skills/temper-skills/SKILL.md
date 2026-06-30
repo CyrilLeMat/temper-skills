@@ -78,13 +78,17 @@ Four attackers plus one always-on counterweight. Spawn **one subagent per person
 round**, in parallel (one message, multiple Task calls). Keep each subagent prompt **lean
 and self-contained** — do not make them read this skill or the repo.
 
-| persona | angle |
-|---|---|
-| `literalist` | exploits literal ambiguities in the schema/conditions (casing, synonyms, None) |
-| `edge_case_hunter` | seeks rare combinations of feature values the tree mishandles |
-| `bad_faith_actor` | tries to strategically circumvent the rules |
-| `domain_expert` | tests with rare-but-plausible domain cases; mobilizes public domain knowledge |
-| `overengineering_critic` | **always on** — challenges every node: is this branch real domain complexity or loop richness? would an expert hand-write it? |
+<!-- BEGIN GENERATED:personas -->
+_Generated from `temper_skills/sources.py` — edit there, then run `python -m temper_skills.skill_docs`._
+
+| persona | always-on | angle (the `style` the model is given) |
+|---|---|---|
+| `literalist` | — | exploits literal ambiguities in the schema |
+| `edge_case_hunter` | — | seeks rare combinations of feature values |
+| `bad_faith_actor` | — | tries to strategically circumvent the rule |
+| `domain_expert` | — | tests with rare but plausible domain cases |
+| `overengineering_critic` | ✅ every round | challenges every node: is this branch actually necessary, or is it loop richness rather than domain complexity? |
+<!-- END GENERATED:personas -->
 
 Each persona subagent returns ONLY this JSON:
 ```json
@@ -105,6 +109,27 @@ was: a persona that finds no weakness scores the tree *high* (≈9–10) and ret
 `verdict: "ok"`, `proposed_case: null`. Tell every persona subagent this explicitly so
 the scale is uniform across the panel.
 
+## Profiles & convergence
+
+The profile sets the round budget, the panel, and how convergence is measured. These values
+are owned by `temper_skills/distill.py` — do not hand-edit the table:
+
+<!-- BEGIN GENERATED:profiles -->
+_Generated from `temper_skills/distill.py` — edit there, then run `python -m temper_skills.skill_docs`._
+
+| profile | max rounds | stop after N quiet rounds | per-round gate | provenance comments | adversary panel |
+|---|---|---|---|---|---|
+| `quick` | 8 | 2 | off | off | `edge_case_hunter`, `overengineering_critic` |
+| `standard` | 20 | 3 | on | on | `edge_case_hunter`, `domain_expert`, `overengineering_critic` |
+| `audit-grade` | 50 | 5 | on | on | `literalist`, `edge_case_hunter`, `bad_faith_actor`, `domain_expert`, `overengineering_critic` |
+<!-- END GENERATED:profiles -->
+
+<!-- BEGIN GENERATED:convergence -->
+_Generated from `temper_skills/distill.py` — edit there, then run `python -m temper_skills.skill_docs`._
+
+The loop stops when **no round improves on the best for `stop after N quiet rounds` consecutive rounds** (a plateau — whether high, a good tree, or low, can't improve), or the round cap is hit, or the user stops. The per-profile `N` and cap are in the profile table above. Convergence is a *plateau*, not an absolute score threshold.
+<!-- END GENERATED:convergence -->
+
 ## The loop
 
 1. **Draft** the initial tree yourself (proposer) from the skill + schema + constraints.
@@ -124,8 +149,8 @@ the scale is uniform across the panel.
    arbitrage log, current tree preview, and `min/mean` score.
 5. **Gate** — ask the user: Continue · Stop and review · Abort. (Skip the gate only if they
    asked for an unattended/quick run.)
-6. **Converge** — stop when **every persona scores ≥ 8 AND no new gray zone appeared** for
-   the round, or the user stops, or you hit the round cap (`quick` ~8, `standard` ~20).
+6. **Converge** — apply the convergence rule from *Profiles & convergence* above (plateau on
+   no improvement for the profile's quiet-round count, the round cap, or the user stops).
 
 ### Build the validation set as you go (always — even with no input examples)
 
