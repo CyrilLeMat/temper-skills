@@ -22,12 +22,18 @@ def test_returns_tree_with_metadata():
 
 
 def test_persona_panel_scales_with_profile():
-    for profile, total in [("quick", 2), ("standard", 3), ("audit-grade", 5)]:
+    # quick stays lean (1 attacker + critic); the gating profiles add the schema_critic.
+    for profile, total in [("quick", 2), ("standard", 4), ("audit-grade", 6)]:
         be = FakeBackend(score=9)
         distill(_sources(), backend=be, profile=profile, gate=lambda r: "stop")
         seen = set(be.personas_seen)  # round-1 panel before the gate stops it
         assert "overengineering_critic" in seen
         assert len(seen) == total, (profile, seen)
+    # schema_critic runs on the gating profiles only, not quick
+    for profile, present in [("quick", False), ("standard", True), ("audit-grade", True)]:
+        be = FakeBackend(score=9)
+        distill(_sources(), backend=be, profile=profile, gate=lambda r: "stop")
+        assert ("schema_critic" in set(be.personas_seen)) is present, profile
 
 
 def test_overengineering_critic_always_added():
@@ -36,6 +42,25 @@ def test_overengineering_critic_always_added():
     seen = set(be.personas_seen)
     assert "literalist" in seen
     assert "overengineering_critic" in seen
+
+
+def test_schema_critic_findings_surface_as_schema_gaps():
+    from temper_skills.schemas import PersonaVerdict
+    be = FakeBackend(score=9)
+    orig = be.complete
+
+    def patched(system, user, schema):
+        v = orig(system, user, schema)
+        if schema is PersonaVerdict and v.persona == "schema_critic":
+            return v.model_copy(update={
+                "verdict": "schema_too_thin",
+                "proposed_features": ["dose_mg: float — toxicity is dose-dependent"],
+            })
+        return v
+
+    be.complete = patched
+    tree = distill(_sources(), backend=be, profile="standard", gate=lambda r: "stop")
+    assert tree.schema_gaps == ["dose_mg: float — toxicity is dose-dependent"]
 
 
 def test_stable_scores_plateau_and_stop():

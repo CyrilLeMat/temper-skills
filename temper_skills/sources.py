@@ -16,7 +16,7 @@ class Persona:
     style: str
 
 
-# The four attackers plus the always-on structural counterweight (§5.5).
+# The four attackers plus two structural counterweights (§5.5).
 LITERALIST = Persona("literalist", "exploits literal ambiguities in the schema")
 EDGE_CASE_HUNTER = Persona("edge_case_hunter", "seeks rare combinations of feature values")
 BAD_FAITH_ACTOR = Persona("bad_faith_actor", "tries to strategically circumvent the rule")
@@ -25,6 +25,15 @@ OVERENGINEERING_CRITIC = Persona(
     "overengineering_critic",
     "challenges every node: is this branch actually necessary, or is it loop richness "
     "rather than domain complexity?",
+)
+# The expressiveness counterweight to the overengineering_critic: where the critic shrinks
+# WITHIN the schema, this one argues the schema itself is too thin — naming a feature the
+# source implies but the schema can't express (advisory; can re-open the schema gate). On
+# the gating profiles (standard, audit-grade) only, where a re-gate is possible.
+SCHEMA_CRITIC = Persona(
+    "schema_critic",
+    "argues the schema is too thin — names a feature the source implies that the schema "
+    "cannot express, instead of adding test cases",
 )
 
 DEFAULT_PERSONAS: list[Persona] = [

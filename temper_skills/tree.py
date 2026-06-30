@@ -46,6 +46,10 @@ class DecisionTree:
     # {input, expected, rationale, tree_prediction, status: "proposed"}. PROPOSALS
     # for human ratification — they do not gate CI until ratified. Metadata only.
     proposed_examples: "list | None" = None
+    # Features the schema_critic flagged as missing — the source implies them but the schema
+    # can't express them, so the tree had to punt/over-approximate. Advisory: a prompt to
+    # re-open the schema gate, not part of the tree. Metadata only, not emitted into source.
+    schema_gaps: "list | None" = None
 
     def to_source(self) -> str:
         """Render the tree as a zero-dependency Python module."""

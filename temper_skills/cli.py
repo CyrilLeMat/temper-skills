@@ -276,6 +276,7 @@ def ingest(
     cost_line = f"~${cost:.4f} (metered)" if cost is not None else "subscription — no metered cost"
     console.print(Panel(tree.to_source(), title=f"Exported {out}", border_style="green"))
     _print_example_check(tree)
+    _print_schema_gaps(tree)
     _write_proposed_examples(tree, out)
 
     # Close the loop: a tempered skill.md that delegates the decision to the tree.
@@ -301,6 +302,18 @@ def ingest(
         manifest["backend"] = be.describe()
         manifest["cost_usd"] = cost
         _emit_json(manifest)
+
+
+def _print_schema_gaps(tree) -> None:
+    """Surface the schema_critic's advisory findings: features the source needs but the
+    schema can't express. The tree had to punt on these — consider re-opening the schema."""
+    gaps = getattr(tree, "schema_gaps", None)
+    if not gaps:
+        return
+    lines = ["[yellow]The schema_critic judged the schema too thin to fully express the "
+             "source. The tree punts on these — consider adding them and re-running:[/]"]
+    lines += [f"  • {g}" for g in gaps]
+    console.print(Panel("\n".join(lines), title="✎ schema gaps (advisory)", border_style="yellow"))
 
 
 def _print_example_check(tree) -> None:
