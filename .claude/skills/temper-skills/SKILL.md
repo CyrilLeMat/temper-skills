@@ -1,6 +1,11 @@
 ---
 name: temper-skills
-description: Compile an agent's decision logic (a prompt or skill.md) into a deterministic, versionable Python decision tree via an adversarial multi-persona loop — run entirely on your Claude Code subscription using subagents, no API key. Use when the user wants to "temper", "distill", "freeze", or "harden" the routing/decision logic of a skill, prompt, or playbook into testable code, or asks to turn a skill.md into a decision tree.
+description: Compile an agent's decision logic (a prompt or skill.md) into a deterministic, versionable Python decision tree via an adversarial multi-persona loop that runs natively in Claude Code — proposer plus persona subagents through the Task tool, entirely on your Claude Code subscription, no install and no API key. Use inside Claude Code when the user wants to "temper", "distill", "freeze", or "harden" the routing/decision logic of a skill, prompt, or playbook into testable code, or to turn a skill.md into a decision tree. Not for continuous scoring, text generation, or agents without a subagent primitive (there, use the temper-skills CLI/library instead).
+license: Apache-2.0
+allowed-tools: Task, Bash, Read, Write
+metadata:
+  author: hellosunrise
+  version: "0.1.0"
 ---
 
 # Temper-Skills (subagent mode)
