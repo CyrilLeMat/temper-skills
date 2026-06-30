@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from temper_skills.export_tree import enrich_proposed, main, tree_from_dict
+from temper_skills.export_tree import enrich_proposed, main, render_tests, tree_from_dict
 
 TREE = {
     "fn_name": "can_dog_eat",
@@ -85,3 +85,38 @@ def test_main_no_sidecar_without_proposed(tmp_path):
     out = tmp_path / "checker.py"
     main([str(src), str(out)])
     assert not (tmp_path / "checker.proposed_examples.json").exists()
+
+
+def test_enrich_respects_explicit_status():
+    t = tree_from_dict(TREE)
+    raw = [{"input": {"food_item": "carrot"}, "expected": "unknown", "status": "resolved"}]
+    assert enrich_proposed(t, raw)[0]["status"] == "resolved"  # passed-in status preserved
+
+
+def test_main_emits_runnable_behavior_lock_test(tmp_path):
+    tree_with = {**TREE, "proposed_examples": [
+        {"input": {"food_item": "chocolate"}, "expected": "toxic", "rationale": "agrees"},
+    ]}
+    src = tmp_path / "tree.json"; src.write_text(json.dumps(tree_with))
+    out = tmp_path / "checker.py"
+    assert main([str(src), str(out)]) == 0
+    test_file = tmp_path / "test_checker.py"
+    assert test_file.exists()
+    text = test_file.read_text()
+    assert "from checker import can_dog_eat" in text and "def test_can_dog_eat_behavior" in text
+
+
+def test_render_tests_locks_agreement_and_xfails_open_disputes():
+    t = tree_from_dict(TREE)
+    enriched = enrich_proposed(t, [
+        {"input": {"food_item": "chocolate"}, "expected": "toxic"},        # agrees → LOCKED
+        {"input": {"food_item": "carrot"}, "expected": "toxic"},           # proposed, differs → OPEN
+        {"input": {"food_item": "carrot"}, "expected": "unknown", "status": "resolved"},  # resolved → LOCKED
+    ])
+    src = render_tests("checker", "can_dog_eat", enriched)
+    assert "LOCKED = [" in src and "def test_can_dog_eat_behavior" in src
+    # the only genuine dispute (proposed + label != tree) is xfailed, not silently locked
+    assert "OPEN = [" in src and "xfail" in src
+    assert "def test_can_dog_eat_open_disputes" in src
+    # compiles to valid python
+    compile(src, "<gen>", "exec")
