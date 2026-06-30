@@ -74,6 +74,53 @@ def _clip(text: str, limit: int = 200) -> str:
     return text if len(text) <= limit else text[:limit].rstrip() + "…"
 
 
+def _route_console_to_stderr() -> None:
+    """JSON mode: send the human panels to stderr so stdout carries only the manifest."""
+    global console
+    console = Console(stderr=True)
+
+
+def _emit_json(obj) -> None:
+    """Write the machine-readable manifest to real stdout (not the Rich console)."""
+    print(_json.dumps(obj, indent=2, ensure_ascii=False))
+
+
+def _tree_manifest(tree, tree_path: str, skill_path: str) -> dict:
+    """The agent-facing result of a temper run — paths + what an agent must relay."""
+    proposed = getattr(tree, "proposed_examples", None) or []
+    examples_path = str(Path(tree_path).with_suffix("")) + ".proposed_examples.json"
+    report = getattr(tree, "example_report", None)
+    return {
+        "fn_name": tree.fn_name,
+        "tree_path": tree_path,
+        "tempered_skill_path": skill_path,
+        "proposed_examples_path": examples_path if proposed else None,
+        "proposed_examples_count": len(proposed),
+        "features": list(tree.features),
+        "node_count": len(tree.nodes),
+        "profile": tree.profile,
+        "model": tree.model,
+        "generated_at": tree.generated_at,
+        "gray_zones": [
+            {"node": i, "condition": n.condition, "note": n.gray_zone}
+            for i, n in enumerate(tree.nodes, start=1)
+            if n.gray_zone
+        ],
+        "ratified_examples": (
+            {
+                "agreements": report.agreements,
+                "total": report.total,
+                "disagreements": [
+                    {"input": d.input, "expected": d.expected, "predicted": d.predicted}
+                    for d in report.disagreements
+                ],
+            }
+            if report is not None
+            else None
+        ),
+    }
+
+
 def _make_gate(interactive: bool):
     def gate(r: RoundResult) -> str:
         bits = []
@@ -152,9 +199,17 @@ def ingest(
         False, "--require-fit",
         help="Run the fitness audit first and abort (exit 3) if the verdict is 'skip' — "
              "so a pipeline won't burn the loop on a known bad fit (e.g. a flat lookup)."),
+    json_out: bool = typer.Option(
+        False, "--json",
+        help="Emit a machine-readable result manifest to stdout (paths, gray zones, proposed "
+             "examples); human panels go to stderr. Implies non-interactive (auto-accepts the "
+             "inferred schema, runs to convergence) — for agents/pipelines driving the CLI."),
 ):
     """Compile a skill's decision logic into a deterministic Python tree."""
     interactive = PROFILES[profile][2] and not yes
+    if json_out:
+        _route_console_to_stderr()
+        interactive = False
     try:
         be = get_backend(backend, model)
     except (ValueError, RuntimeError) as e:
@@ -178,6 +233,17 @@ def ingest(
         out_path = Path("schema.proposed.py")
         out_path.write_text(render_schema_source(inferred))
         _print_proposed_schema(inferred, out_path, skill)
+        if json_out:
+            _emit_json({
+                "proposed_schema_path": str(out_path),
+                "fn_name": inferred.fn_name,
+                "class": _classname(inferred.fn_name),
+                "features": [
+                    {"name": f.name, "type": f.type, "description": f.description}
+                    for f in inferred.features
+                ],
+                "constraints": list(inferred.constraints),
+            })
         raise typer.Exit(0)
 
     pinned = _load_schema(schema) if schema else None
@@ -198,7 +264,7 @@ def ingest(
         tree = ingest_skill(
             skill, schema=pinned, profile=profile, backend=be,
             gate=_make_gate(interactive),
-            confirm=(lambda i: _confirm_schema(i, auto=True)) if yes else _confirm_schema,
+            confirm=(lambda i: _confirm_schema(i, auto=True)) if (yes or json_out) else _confirm_schema,
             examples=ratified, fn_name=fn,
             propose_examples=propose_examples, checkpoint=_checkpoint,
         )
@@ -229,6 +295,12 @@ def ingest(
     Path(md_path).write_text(md)
     console.print(f"[green]✓ tempered skill ({skill_style}) → {md_path}[/]  (delegates the decision to {module}.{tree.fn_name})")
     console.print(f"[dim]backend {be.describe()} · cost: {cost_line}[/]")
+
+    if json_out:
+        manifest = _tree_manifest(tree, out, md_path)
+        manifest["backend"] = be.describe()
+        manifest["cost_usd"] = cost
+        _emit_json(manifest)
 
 
 def _print_example_check(tree) -> None:
@@ -637,10 +709,17 @@ def guide(
     backend: str = typer.Option("auto", help="LLM backend: auto | api | claude | opencode."),
     profile: str = typer.Option("quick", help=f"Temper profile (quick keeps the demo short): {list(PROFILES)}."),
     out_dir: str = typer.Option(".", help="Where trees and the (orchestrator) skill are written."),
+    json_out: bool = typer.Option(
+        False, "--json",
+        help="Emit a machine-readable manifest to stdout (audit verdict, action taken, status, "
+             "artifact paths); human panels go to stderr. For agents/pipelines driving the CLI."),
 ):
     """Guided demo: audit a skill, follow the recommended action with a few [1]s, and end with
     a full generated skill. The one-command tour of the whole pipeline."""
     from .audit import audit_skill
+
+    if json_out:
+        _route_console_to_stderr()
 
     try:
         be = get_backend(backend, model)
@@ -651,10 +730,23 @@ def guide(
     console.rule("[bold]1 — audit[/]")
     report = audit_skill(skill, backend=be)
     _print_fitness(report, skill)
-    if console.is_terminal:
+    audit_dump = _json.loads(report.model_dump_json())
+    if console.is_terminal and not json_out:
         if Prompt.ask("[bold]1[/] follow the recommendation · [bold]2[/] quit",
                       choices=["1", "2"], default="1") != "1":
             raise typer.Exit(0)
+
+    def _guide_manifest(action: str, final, status: str) -> dict:
+        return {
+            "command": "guide",
+            "skill": skill,
+            "audit": audit_dump,
+            "action_taken": action,
+            "status": status,
+            "out_dir": out_dir,
+            "final_skill_path": str(final) if final else None,
+            "artifacts": sorted(str(p) for p in Path(out_dir).glob("*") if p.is_file()),
+        }
 
     action = report.recommended_action
     final = None
@@ -668,12 +760,19 @@ def guide(
     else:
         console.print(f"\n[yellow]Recommended action: {action}[/] — {report.action_hint}")
         console.print("[dim]This action isn't auto-run by the guide (see the hint above).[/]")
+        if json_out:
+            _emit_json(_guide_manifest(action, None, "action_not_auto_run"))
         raise typer.Exit(0)
 
     if final is None:
-        raise typer.Exit(0)   # decompose stopped for ratification — re-run guide after ratifying
+        # decompose stopped for ratification — re-run guide after ratifying
+        if json_out:
+            _emit_json(_guide_manifest(action, None, "stopped_for_ratification"))
+        raise typer.Exit(0)
     console.rule("[bold green]✓ full skill[/]")
     console.print(Panel(final.read_text(), title=str(final), border_style="green"))
+    if json_out:
+        _emit_json(_guide_manifest(action, final, "compiled"))
 
 
 if __name__ == "__main__":
