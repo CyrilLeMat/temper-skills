@@ -172,24 +172,43 @@ The loop stops when **no round improves on the best for `stop after N quiet roun
 6. **Converge** — apply the convergence rule from *Profiles & convergence* above (plateau on
    no improvement for the profile's quiet-round count, the round cap, or the user stops).
 
-### Build the validation set as you go (always — even with no input examples)
+### Build the validation set as you go — written to disk every round
 
-Every round, harvest the `proposed_tests` from each persona EXCEPT the
-`overengineering_critic`, and accumulate them across all rounds into one set — **deduped by
-input, dropping any input that matches a ratified example.** This is the validation set; it
-is built from the panel's own findings, so it always exists even when the user supplied no
-examples. Keep a running accumulator (input → case) so the same case found in two rounds
-counts once. Record which persona/round each came from.
+Pick one `run_id` for the whole temper (e.g. a UTC timestamp) and reuse it every round. Each
+round, after you apply the arbiter's tree, harvest the `proposed_tests` from every persona
+EXCEPT the `overengineering_critic` and **write them to disk immediately** by piping them to
+the deterministic per-round writer — do not wait for export:
+
+```bash
+echo '<this round's proposed_tests as a JSON list>' | \
+  python -m temper_skills.update_validation <fn>.tree.json output/<fn>.py \
+    --round <N> --run-id <run_id>
+```
+
+This is not optional and not deferred: the committed `output/<fn>.validation.jsonl` and the
+behavior-lock test beside it must grow **every round**, so the user can watch the evidence
+accrue. The writer is deterministic (no LLM) and does the bookkeeping for you:
+
+- **dedups by input** (the first round to find a case owns its label/status; a later duplicate
+  only appends its `source`), so the same case found twice counts once;
+- **stamps `first_seen_round` + `run_id`** on each new case — the audit trail that answers "was
+  this generated *this* session?";
+- **refreshes every row's `tree_prediction` / `agrees` against the current tree** — so when a
+  round changes the tree, prior cases re-evaluate automatically. Run it even on a *quiet* round
+  (pipe `[]`) so a tree change still refreshes the dataset.
+
+Each `proposed_test` is a `{input, expected, rationale, source: "<persona>#r<N>"}` object.
+Because you keep one `<fn>.tree.json` per decision on disk and re-export it each round (see the
+loop), the writer always scores against the round's live tree.
 
 These are **proposals, not ground truth.** You are extending the validation set, not grading
-your own work: never treat a label the panel authored as a ratified anchor, and never let it
-gate anything. Emit the accumulated set in `tree.json` under `proposed_examples` (each case:
-`input` / `expected` / `rationale`, optionally `source` — the deterministic exporter computes
-what the tree returns and tags them `"status": "proposed"`). At export you surface them for
-the user to ratify: they review each label, fix any that are wrong, and set
-`"status": "ratified"` (or fold the case into their validation set) — only then does it gate
-CI and anchor that cell on a re-run. Do **not** ask the user to ratify mid-run; it's a
-review-the-output step, like gray zones.
+your own work: never treat a panel-authored label as a ratified anchor, and never let it gate
+anything. A disagreement (`"agrees": false`) is **data to review, never a failing test** — the
+behavior-lock test only asserts what the tree returns, and the ratified test (emitted only once
+a human blesses a label) is the only test allowed to fail. At review the user ratifies: they fix
+any wrong label and set `"status": "ratified"` — only then does it gate CI and anchor that cell
+on a re-run. Do **not** ask the user to ratify mid-run; it's a review-the-output step, like gray
+zones.
 
 ### Gray zones are recorded, not interrogated
 
@@ -237,11 +256,14 @@ Show the user both artifacts and what changed: the original skill re-decided eve
 the tempered skill extracts features, calls `route.<fn>`, and relays the verdict — decision
 frozen, model still does NL extraction + phrasing (§2.5).
 
-If `tree.json` carries `proposed_examples`, `export_tree` also writes
-`route.proposed_examples.json` (each case stamped with the tree's own prediction and
-`"status": "proposed"`). Show these to the user as **cases awaiting ratification**, flagging
-any whose proposed label differs from what the tree returns — those are the highest-value
-disagreements to rule on.
+`export_tree` reconciles the committed `route.validation.jsonl` the per-round writer already
+built: it folds in any `proposed_examples` still in `tree.json`, refreshes every row's
+prediction against the final tree (**without clobbering the `first_seen_round`/`run_id`
+provenance**), and regenerates `test_route.py` (behavior lock — always green) plus
+`test_route_ratified.py` (only if a case is ratified — the sole test allowed to fail). Show the
+user the validation dataset as **cases awaiting ratification**, flagging every `"agrees": false`
+row — those are the highest-value disagreements to rule on. Debates live in the dataset as data,
+never as `xfail` tests.
 
 `export_skill` is the deterministic template (default). If the user wants a **woven**
 variant that reads in the original skill's own voice, you may instead rewrite the original
@@ -270,8 +292,11 @@ The tree JSON shape:
 ```
 
 `proposed_examples` is optional and **proposals only** — `input` / `expected` / `rationale`
-per case; the exporter adds the tree's prediction and `"status": "proposed"`. Omit the key
-if the existing ratified examples already pin every contested cell.
+per case; the exporter adds the tree's prediction and `"status": "proposed"`. In the normal
+loop you won't populate it: the per-round writer already accumulated the cases into
+`route.validation.jsonl`, and export reconciles that file. Use `proposed_examples` only for a
+one-shot export with no prior per-round dataset. Omit it if ratified examples already pin every
+contested cell.
 
 The exported `route.py` carries a `generated_at` + `model` header (mandatory — a tree
 without a timestamp is not auditable), one inline provenance comment per node, and gray

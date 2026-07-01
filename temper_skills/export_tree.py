@@ -71,7 +71,7 @@ def enrich_validation(tree: DecisionTree, raw: list[dict]) -> list[dict]:
         }
         # Pass through loop provenance if the case carries it (round/run id land here in the
         # per-round writer; harmless when absent).
-        for k in ("source", "round", "run_id"):
+        for k in ("source", "round", "first_seen_round", "run_id"):
             if case.get(k) is not None:
                 record[k] = case[k]
         out.append(record)
@@ -80,6 +80,97 @@ def enrich_validation(tree: DecisionTree, raw: list[dict]) -> list[dict]:
 
 # Back-compat alias — older callers/imports referenced enrich_proposed.
 enrich_proposed = enrich_validation
+
+
+def _canon(inp: dict) -> str:
+    """Stable dedup key for a case input (feature order-independent)."""
+    return json.dumps(inp, sort_keys=True, ensure_ascii=False)
+
+
+def load_validation(path: str | Path) -> list[dict]:
+    """Read an existing ``<stem>.validation.jsonl`` (the accumulating dataset), or [] if absent."""
+    p = Path(path)
+    if not p.exists():
+        return []
+    return [json.loads(ln) for ln in p.read_text().splitlines() if ln.strip()]
+
+
+def merge_cases(existing: list[dict], new: list[dict], *,
+                first_seen_round: int | None = None, run_id: str | None = None) -> list[dict]:
+    """Merge freshly-proposed cases into the accumulated set, deduped by input.
+
+    The first round to find a case owns its label/status and provenance; a later duplicate only
+    appends its ``source`` (so we can see every persona/round that re-found it). Prediction and
+    agreement are NOT set here — ``enrich_validation`` recomputes them against the current tree,
+    so a tree change refreshes every row. Existing rows keep their order; new rows append."""
+    by_key: dict[str, dict] = {}
+    order: list[str] = []
+    for row in existing:
+        k = _canon(row["input"])
+        if k not in by_key:
+            by_key[k] = dict(row)
+            order.append(k)
+    for case in new:
+        k = _canon(case["input"])
+        if k in by_key:
+            src = case.get("source")
+            if src:
+                row = by_key[k]
+                srcs = [s for s in (row.get("source", "").split(";")) if s]
+                if src not in srcs:
+                    srcs.append(src)
+                    row["source"] = ";".join(srcs)
+            continue
+        row = {
+            "input": case["input"],
+            "expected": case.get("expected", ""),
+            "rationale": case.get("rationale", ""),
+            "status": case.get("status", "proposed"),
+        }
+        if case.get("source"):
+            row["source"] = case["source"]
+        if first_seen_round is not None:
+            row["first_seen_round"] = first_seen_round
+        if run_id is not None:
+            row["run_id"] = run_id
+        by_key[k] = row
+        order.append(k)
+    return [by_key[k] for k in order]
+
+
+def _dataset_score(enriched: list[dict]) -> dict:
+    comparable = [c for c in enriched if c["agrees"] is not None]
+    agree = sum(1 for c in comparable if c["agrees"])
+    return {
+        "total": len(enriched),
+        "comparable": len(comparable),
+        "agree": agree,
+        "disputes": len(comparable) - agree,
+        "ratified": sum(1 for c in enriched if c.get("status") == "ratified"),
+    }
+
+
+def write_dataset_and_tests(tree: DecisionTree, out_py: str, enriched: list[dict]) -> dict:
+    """Write ``<stem>.validation.jsonl`` + the behavior-lock test + (only if any case is
+    ratified) the ratified-truth test. Shared by ``export_tree`` (final) and
+    ``update_validation`` (per round) so both produce byte-identical artifacts. Returns a
+    score summary. A stale ``test_<stem>_ratified.py`` is removed when nothing is ratified."""
+    out_path = Path(out_py)
+    stem = str(out_path.with_suffix(""))
+    Path(stem + ".validation.jsonl").write_text(
+        "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in enriched))
+
+    Path(out_path.with_name("test_" + out_path.name)).write_text(
+        render_behavior_lock(out_path.stem, tree.fn_name, enriched))
+
+    rat_path = out_path.with_name("test_" + out_path.stem + "_ratified.py")
+    rat_src = render_ratified(out_path.stem, tree.fn_name, enriched)
+    if rat_src is not None:
+        rat_path.write_text(rat_src)
+    elif rat_path.exists():
+        rat_path.unlink()  # nothing ratified any more — don't leave a stale test
+
+    return _dataset_score(enriched)
 
 
 def _note(c: dict) -> str:
@@ -189,34 +280,24 @@ def main(argv: list[str] | None = None) -> int:
     tree = tree_from_dict(data)
     tree.export(out)
     print(f"exported {out} ({len(tree.nodes)} nodes)")
-    if data.get("proposed_examples"):
-        enriched = enrich_validation(tree, data["proposed_examples"])
-        stem = str(Path(out).with_suffix(""))
 
-        # The committed validation dataset (the debate surface). JSONL so the per-round loop
-        # can append to it; disagreements are recorded as data, never as failing tests.
-        side = stem + ".validation.jsonl"
-        Path(side).write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in enriched))
-        comparable = [c for c in enriched if c["agrees"] is not None]
-        agree = sum(1 for c in comparable if c["agrees"])
-        disputes = [c for c in comparable if not c["agrees"]]
-        score = f"{agree}/{len(comparable)}" if comparable else "n/a"
-        print(f"wrote {len(enriched)} validation case(s) → {side}")
+    # Case source: fold tree.json's proposed_examples into any dataset the per-round loop already
+    # accumulated on disk, so a final export refreshes predictions without clobbering provenance.
+    stem = str(Path(out).with_suffix(""))
+    existing = load_validation(stem + ".validation.jsonl")
+    from_tree = data.get("proposed_examples") or []
+    if existing or from_tree:
+        merged = merge_cases(existing, from_tree)
+        enriched = enrich_validation(tree, merged)
+        s = write_dataset_and_tests(tree, out, enriched)
+        score = f"{s['agree']}/{s['comparable']}" if s["comparable"] else "n/a"
+        print(f"wrote {s['total']} validation case(s) → {stem}.validation.jsonl")
         print(f"  tree agrees with {score} labelled case(s); "
-              f"{len(disputes)} open disagreement(s) (data, not failures — review to ratify)")
-
-        # Behavior lock — always green (drift lock only).
-        test_path = str(Path(out).with_name("test_" + Path(out).name))
-        Path(test_path).write_text(render_behavior_lock(Path(out).stem, tree.fn_name, enriched))
-        print(f"wrote behavior-lock tests (always green) → {test_path}")
-
-        # Ratified-truth tests — only if a human has blessed at least one label.
-        rat_src = render_ratified(Path(out).stem, tree.fn_name, enriched)
-        if rat_src is not None:
-            rat_path = str(Path(out).with_name("test_" + Path(out).stem + "_ratified.py"))
-            Path(rat_path).write_text(rat_src)
-            n_rat = rat_src.count("\n    (")  # rows in the RATIFIED table
-            print(f"wrote ratified-truth tests ({n_rat} case(s), can fail on regression) → {rat_path}")
+              f"{s['disputes']} open disagreement(s) (data, not failures — review to ratify)")
+        print(f"wrote behavior-lock tests (always green) → "
+              f"{Path(out).with_name('test_' + Path(out).name)}")
+        if s["ratified"]:
+            print(f"wrote ratified-truth tests ({s['ratified']} case(s), can fail on regression)")
     return 0
 
 
