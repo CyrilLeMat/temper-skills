@@ -14,21 +14,24 @@ three axes would only *average* three different decisions.
 input/
   skill.md                  the flow: walk? · feed? · vet? · then write a note
 output/                     ← schemas proposed by `decompose --emit-schemas` + ratified; trees from a live run
-  decide_walk.schema.py     DecideWalk  — hours-since × weather × energy × availability
-  decide_meal.schema.py     DecideMeal  — coupled: just_exercised comes from decide_walk
+  decide_walk.schema.py     DecideWalk  — hours-since × weather × temperature_c × energy × availability
+  decide_meal.schema.py     DecideMeal  — coupled: just_exercised + minutes_since_exercise + had_full_meal_today from decide_walk/day
   decide_vet.schema.py      DecideVet   — severity × duration × age (Ottawa-style)
   decide_walk.py            the frozen tree (one per decision), with inline provenance
   decide_meal.py
   decide_vet.py
-  *.proposed_examples.json  per-decision validation cases the loop built (gitignored; review to ratify)
+  *.validation.jsonl        per-decision validation dataset the loop built (committed; review to ratify)
+  test_decide_*.py          behavior-lock tests (always green); disputes stay in the dataset, never xfail
   dog_day.tempered.md       the orchestrator: chains the 3 trees + writes the note
 ```
 
 This is the only **complete** decompose chain in the examples — the three trees are real
 (tempered live on the `standard` profile via the subagent-mode loop, `claude-code-subagents`),
 and the orchestrator chains them. They carry inline provenance (gray zones + critic notes) and
-a per-decision validation set; five cells are still *contested* (the panel's label disagrees
-with the tree) and flagged for ratification. Harden further with `--profile audit-grade`.
+a per-decision validation set; after the latest standard re-temper (which added `temperature_c`
+to `decide_walk` and `minutes_since_exercise` + `had_full_meal_today` to `decide_meal` via the
+schema gate), **two cells are still *contested*** (the panel's label disagrees with the tree)
+and flagged for ratification. Harden further with `--profile audit-grade`.
 
 ## The decisions the flow holds
 

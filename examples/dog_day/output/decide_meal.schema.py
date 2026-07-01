@@ -17,3 +17,5 @@ class DecideMeal(BaseModel):
     time_of_day: Literal["morning", "midday", "evening"]
     last_meal_size: Literal["none", "light", "full"]
     just_exercised: bool = False               # ← from decide_walk's outcome
+    minutes_since_exercise: float | None = None  # ← from decide_walk timing; lets the 30-min rule be measured
+    had_full_meal_today: bool | None = None    # whole-day predicate for the evening skip; last_meal_size is only a fallback when None

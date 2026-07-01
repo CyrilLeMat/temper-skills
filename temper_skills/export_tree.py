@@ -6,6 +6,17 @@ this is the deterministic half of the pipeline.
 
     python -m temper_skills.export_tree tree.json route.py
     cat tree.json | python -m temper_skills.export_tree - route.py
+
+Alongside the module it writes, from ``tree.proposed_examples``:
+  * ``<stem>.validation.jsonl`` — the committed validation dataset (the debate surface).
+    Every case, with the tree's own prediction and an ``agrees`` flag. Disagreements are
+    DATA, not test failures.
+  * ``test_<stem>.py`` — behavior-lock tests that assert the tree's CURRENT output. Green
+    by construction; they only go red on a real code regression (drift lock).
+  * ``test_<stem>_ratified.py`` — assertions of the human-ratified labels ONLY. Emitted
+    only when at least one case is ``status: "ratified"``. This one CAN go red — and
+    should, if the tree ever contradicts blessed truth. That is the only sanctioned
+    test failure; contested/proposed labels never become a failing (or xfail) test.
 """
 
 from __future__ import annotations
@@ -25,12 +36,18 @@ def _compile(tree: DecisionTree):
     return ns[tree.fn_name]
 
 
-def enrich_proposed(tree: DecisionTree, raw: list[dict]) -> list[dict]:
-    """Stamp orchestrator-drafted cases with the tree's own prediction + a 'proposed' tag.
+def _is_error(pred) -> bool:
+    return isinstance(pred, str) and pred.startswith("ERROR")
 
-    The subagent loop authors ``input``/``expected``/``rationale``; the *prediction* and the
-    un-ratified status are computed here deterministically, so a machine-authored label can
-    never masquerade as ground truth (the same trust boundary as the library path)."""
+
+def enrich_validation(tree: DecisionTree, raw: list[dict]) -> list[dict]:
+    """Stamp each panel-drafted case with the tree's own prediction, agreement, and status.
+
+    The subagent loop authors ``input``/``expected``/``rationale``/``source``; the *prediction*,
+    the ``agrees`` flag, and the un-ratified default status are computed here deterministically,
+    so a machine-authored label can never masquerade as ground truth. The result is the
+    validation dataset — data, not assertions. A disagreement (``agrees is False``) is a number
+    to review, never a failing test."""
     fn = _compile(tree)
     out: list[dict] = []
     for case in raw:
@@ -38,53 +55,58 @@ def enrich_proposed(tree: DecisionTree, raw: list[dict]) -> list[dict]:
             prediction = fn(case["input"])
         except Exception as e:
             prediction = f"ERROR: {type(e).__name__}: {e}"
+        expected = case.get("expected", "")
+        agrees = None if (expected == "" or _is_error(prediction)) else (expected == prediction)
         record = {
             "input": case["input"],
-            "expected": case.get("expected", ""),
+            "expected": expected,
             "rationale": case.get("rationale", ""),
             "tree_prediction": prediction,
+            # None = no proposed label to compare (or tree errored); else does the tree's
+            # current answer match the proposed/ratified label?
+            "agrees": agrees,
             # "proposed" = panel-authored, ungated; "resolved" = proposer settled a contested
             # cell (no domain oracle); "ratified" = a human domain owner blessed the label.
             "status": case.get("status", "proposed"),
         }
-        if case.get("source"):
-            record["source"] = case["source"]
+        # Pass through loop provenance if the case carries it (round/run id land here in the
+        # per-round writer; harmless when absent).
+        for k in ("source", "round", "run_id"):
+            if case.get(k) is not None:
+                record[k] = case[k]
         out.append(record)
     return out
 
 
-def render_tests(module: str, fn_name: str, enriched: list[dict]) -> str:
-    """A committed, runnable pytest that locks the tree's behavior and surfaces open disputes.
+# Back-compat alias — older callers/imports referenced enrich_proposed.
+enrich_proposed = enrich_validation
 
-    Every case is a regression assertion against the tree's CURRENT output (drift lock). A
-    `ratified` case additionally asserts the human-blessed label — if the tree ever disagrees
-    with ratified truth, that test fails. A still-`proposed` case whose label differs from the
-    tree is an OPEN dispute: emitted as an xfail so it's visible in the run without breaking CI.
-    """
-    locked, disputes = [], []
-    for c in enriched:
-        pred = c["tree_prediction"]
-        if isinstance(pred, str) and pred.startswith("ERROR"):
-            continue
-        note = c.get("source", "") + (" — " + c["rationale"] if c.get("rationale") else "")
-        open_dispute = c["status"] == "proposed" and c.get("expected") not in ("", pred)
-        (disputes if open_dispute else locked).append(
-            {"input": c["input"], "expected": pred, "human": c.get("expected"),
-             "status": c["status"], "note": note.strip(" —")}
-        )
 
+def _note(c: dict) -> str:
+    return (c.get("source", "") + (" — " + c["rationale"] if c.get("rationale") else "")).strip(" —")
+
+
+def render_behavior_lock(module: str, fn_name: str, enriched: list[dict]) -> str:
+    """Committed pytest that locks the tree's CURRENT output for every case.
+
+    Green by construction: it asserts what the tree returns, so it can only go red on a real
+    code regression (a drift lock). Debates never live here — a contested case is still locked
+    to the tree's own answer; the disagreement with the proposed label is recorded in the
+    validation dataset, not as a test."""
+    rows = [c for c in enriched if not _is_error(c["tree_prediction"])]
     L = [
         "# Auto-generated by temper-skills — DO NOT EDIT. Regenerate with export_tree.",
-        f"# Behavior lock for {fn_name}: each case asserts the frozen tree's current output.",
-        "# Cases are panel-built proposals unless marked 'ratified'; see notes for provenance.",
+        f"# Behavior lock for {fn_name}: each case asserts the tree's CURRENT output.",
+        "# Always green by construction — a failure here means the tree drifted (a real regression).",
+        "# Debates are NOT here; they live in the .validation.jsonl dataset.",
         "import pytest",
         f"from {module} import {fn_name}",
         "",
-        "# (input, expected_output, status, note)",
+        "# (input, tree_output, status, note)",
         "LOCKED = [",
     ]
-    for c in locked:
-        L.append(f"    ({c['input']!r}, {c['expected']!r}, {c['status']!r}, {c['note']!r}),")
+    for c in rows:
+        L.append(f"    ({c['input']!r}, {c['tree_prediction']!r}, {c['status']!r}, {_note(c)!r}),")
     L += [
         "]",
         "",
@@ -94,24 +116,41 @@ def render_tests(module: str, fn_name: str, enriched: list[dict]) -> str:
         f"    assert {fn_name}(case) == expected",
         "",
     ]
-    if disputes:
-        L += [
-            "# Open disputes: a reviewer proposed a label the tree does not return and no one has",
-            "# ratified it. xfail keeps them visible without failing CI; resolve by ratifying the",
-            "# tree's answer or changing the tree.",
-            "OPEN = [",
-        ]
-        for c in disputes:
-            L.append(f"    ({c['input']!r}, {c['human']!r}, {c['note']!r}),  # tree returns {c['expected']!r}")
-        L += [
-            "]",
-            "",
-            '@pytest.mark.parametrize("case,proposed,note", OPEN, ids=[c[2][:60] for c in OPEN])',
-            "@pytest.mark.xfail(reason='proposed label not ratified; tree disagrees', strict=False)",
-            f"def test_{fn_name}_open_disputes(case, proposed, note):",
-            f"    assert {fn_name}(case) == proposed",
-            "",
-        ]
+    return "\n".join(L)
+
+
+def render_ratified(module: str, fn_name: str, enriched: list[dict]) -> str | None:
+    """Committed pytest asserting the tree honors every RATIFIED validation label.
+
+    Unlike the behavior lock, this CAN go red — and should, if the tree ever contradicts a
+    human-blessed answer. That is the only sanctioned test failure in the pipeline. Returns
+    None when nothing is ratified yet (no file is written), so a run never carries an empty or
+    xfail placeholder — open disputes stay as data in the dataset until a human rules."""
+    rows = [c for c in enriched
+            if c.get("status") == "ratified" and c.get("expected") not in ("", None)
+            and not _is_error(c["tree_prediction"])]
+    if not rows:
+        return None
+    L = [
+        "# Auto-generated by temper-skills — DO NOT EDIT. Regenerate with export_tree.",
+        f"# Ratified-truth tests for {fn_name}: assert the tree matches HUMAN-blessed labels.",
+        "# This file CAN fail — a red test here means the tree contradicts ratified ground truth.",
+        "import pytest",
+        f"from {module} import {fn_name}",
+        "",
+        "# (input, ratified_label, note)",
+        "RATIFIED = [",
+    ]
+    for c in rows:
+        L.append(f"    ({c['input']!r}, {c['expected']!r}, {_note(c)!r}),")
+    L += [
+        "]",
+        "",
+        '@pytest.mark.parametrize("case,expected,note", RATIFIED, ids=[c[2][:60] for c in RATIFIED])',
+        f"def test_{fn_name}_ratified(case, expected, note):",
+        f"    assert {fn_name}(case) == expected",
+        "",
+    ]
     return "\n".join(L)
 
 
@@ -151,15 +190,33 @@ def main(argv: list[str] | None = None) -> int:
     tree.export(out)
     print(f"exported {out} ({len(tree.nodes)} nodes)")
     if data.get("proposed_examples"):
-        enriched = enrich_proposed(tree, data["proposed_examples"])
+        enriched = enrich_validation(tree, data["proposed_examples"])
         stem = str(Path(out).with_suffix(""))
-        side = stem + ".proposed_examples.json"
-        Path(side).write_text(json.dumps(enriched, indent=2, ensure_ascii=False))
-        print(f"wrote {len(enriched)} proposed test case(s) → {side} "
-              f"(proposed, not ratified — review before they gate)")
+
+        # The committed validation dataset (the debate surface). JSONL so the per-round loop
+        # can append to it; disagreements are recorded as data, never as failing tests.
+        side = stem + ".validation.jsonl"
+        Path(side).write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in enriched))
+        comparable = [c for c in enriched if c["agrees"] is not None]
+        agree = sum(1 for c in comparable if c["agrees"])
+        disputes = [c for c in comparable if not c["agrees"]]
+        score = f"{agree}/{len(comparable)}" if comparable else "n/a"
+        print(f"wrote {len(enriched)} validation case(s) → {side}")
+        print(f"  tree agrees with {score} labelled case(s); "
+              f"{len(disputes)} open disagreement(s) (data, not failures — review to ratify)")
+
+        # Behavior lock — always green (drift lock only).
         test_path = str(Path(out).with_name("test_" + Path(out).name))
-        Path(test_path).write_text(render_tests(Path(out).stem, tree.fn_name, enriched))
-        print(f"wrote runnable behavior-lock tests → {test_path}")
+        Path(test_path).write_text(render_behavior_lock(Path(out).stem, tree.fn_name, enriched))
+        print(f"wrote behavior-lock tests (always green) → {test_path}")
+
+        # Ratified-truth tests — only if a human has blessed at least one label.
+        rat_src = render_ratified(Path(out).stem, tree.fn_name, enriched)
+        if rat_src is not None:
+            rat_path = str(Path(out).with_name("test_" + Path(out).stem + "_ratified.py"))
+            Path(rat_path).write_text(rat_src)
+            n_rat = rat_src.count("\n    (")  # rows in the RATIFIED table
+            print(f"wrote ratified-truth tests ({n_rat} case(s), can fail on regression) → {rat_path}")
     return 0
 
 

@@ -13,7 +13,8 @@ from pydantic import BaseModel
 
 class DecideWalk(BaseModel):
     hours_since_last_walk: float
-    weather: Literal["clear", "rain", "storm", "heat"]
+    weather: Literal["clear", "rain", "storm", "heat", "snow", "cold"]
+    temperature_c: float | None = None         # measured; the ">30°C heat" rule branches on this, not the label
     dog_energy: Literal["low", "normal", "high"]
     owner_available: bool = True
     is_late: bool = False                      # past the dog's usual last-walk hour
