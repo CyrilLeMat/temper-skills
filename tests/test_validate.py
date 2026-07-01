@@ -100,41 +100,47 @@ def test_load_dataset_skips_unratified_proposed_cases(tmp_path):
     assert [e["input"] for e in data] == [{"x": 1}, {"x": 2}]
 
 
+def _canonical_skill(example: str, skill: str, fn: str):
+    """(compiled tree fn, ratified cases) from a committed example Agent Skill dir.
+
+    Trees now live in <skill>/scripts/<fn>.py and the ratified ground truth in
+    <skill>/assets/<fn>.validation.jsonl (status: ratified)."""
+    base = REPO / "examples" / example / "output" / skill
+    tree_fn = fn_from_pyfile(str(base / "scripts" / f"{fn}.py"))
+    rows = [json.loads(ln) for ln in (base / "assets" / f"{fn}.validation.jsonl")
+            .read_text().splitlines() if ln.strip()]
+    data = [{"input": r["input"], "expected": r["expected"]}
+            for r in rows if r.get("status") == "ratified"]
+    assert data, f"no ratified cases in {example}"
+    return tree_fn, data
+
+
 def test_canonical_dogfood_tree_passes_its_validation_set():
-    """Pins the shipped example tree in CI — the H1 payoff on our own repo."""
-    fn = fn_from_json(str(DOGFOOD / "output" / "dog_food_tree.json"))
-    data = json.loads((DOGFOOD / "output" / "validation_set.json").read_text())
+    """Pins the shipped example skill in CI — the H1 payoff on our own repo."""
+    fn, data = _canonical_skill("dog_food", "dog-food", "can_dog_eat")
     r = run_validation(fn, data, label_match)
     assert r.passed(1.0), [(d.input, d.expected, d.predicted) for d in r.disagreements]
 
 
 def test_canonical_ticket_tree_passes_its_validation_set():
-    base = REPO / "examples" / "ticket_routing"
-    fn = fn_from_json(str(base / "output" / "route_ticket_tree.json"))
-    data = load_dataset(str(base / "output" / "validation_set.json"))
-    r = run_validation(fn, data, exact_match)
+    fn, data = _canonical_skill("ticket_routing", "ticket-routing", "route_ticket")
+    r = run_validation(fn, data, label_match)
     assert r.passed(1.0), [(d.input, d.expected, d.predicted) for d in r.disagreements]
 
 
 def test_canonical_license_tree_passes_its_validation_set():
-    base = REPO / "examples" / "license_compat"
-    fn = fn_from_json(str(base / "output" / "license_tree.json"))
-    data = load_dataset(str(base / "output" / "validation_set.json"))
-    r = run_validation(fn, data, exact_match)
+    fn, data = _canonical_skill("license_compat", "license-compat", "assess_license")
+    r = run_validation(fn, data, label_match)
     assert r.passed(1.0), [(d.input, d.expected, d.predicted) for d in r.disagreements]
 
 
 def test_canonical_ankle_tree_passes_its_validation_set():
-    base = REPO / "examples" / "ankle_sprain"
-    fn = fn_from_json(str(base / "output" / "ankle_tree.json"))
-    data = load_dataset(str(base / "output" / "validation_set.json"))
-    r = run_validation(fn, data, exact_match)
+    fn, data = _canonical_skill("ankle_sprain", "ankle-sprain", "assess_ankle")
+    r = run_validation(fn, data, label_match)
     assert r.passed(1.0), [(d.input, d.expected, d.predicted) for d in r.disagreements]
 
 
 def test_canonical_parking_tree_passes_its_validation_set():
-    base = REPO / "examples" / "parking"
-    fn = fn_from_json(str(base / "output" / "can_i_park_tree.json"))
-    data = load_dataset(str(base / "output" / "validation_set.json"))
-    r = run_validation(fn, data, exact_match)
+    fn, data = _canonical_skill("parking", "parking", "can_i_park")
+    r = run_validation(fn, data, label_match)
     assert r.passed(1.0), [(d.input, d.expected, d.predicted) for d in r.disagreements]

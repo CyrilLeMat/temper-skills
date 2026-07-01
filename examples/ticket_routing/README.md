@@ -10,12 +10,14 @@ branches), not unsatisfiable (there's no infinite item list to enumerate).
 ```
 input/
   skill.md                a triage prompt: escalate security, prioritize paying tiers, route by category
-output/
-  schema.py               TicketSchema — priority, security_score, customer_tier, category, sla_breached
-  validation_set.json     18 ratified cases exercising the interactions + a None security_score
-  route_ticket_tree.json  provenance
-  route_ticket.py         the deterministic router — zero LLM at inference
-  skill.tempered.md       a triage skill that calls the router
+output/ticket-routing/    ← the tempered skill, as a spec-compliant Agent Skill (agentskills.io)
+  SKILL.md                a triage skill that calls the router
+  scripts/
+    route_ticket.py       the deterministic router — zero LLM at inference
+    test_route_ticket.py  behavior-lock + test_route_ticket_ratified.py (18 ratified cases)
+  assets/
+    route_ticket.schema.py       TicketSchema — priority, security_score, customer_tier, category, sla_breached
+    route_ticket.validation.jsonl  the ratified labeled set (interactions + a None security_score)
 ```
 
 ## Run it

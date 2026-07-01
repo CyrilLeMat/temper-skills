@@ -74,6 +74,7 @@ def render_tempered_skill(
     name: str | None = None,
     description: str | None = None,
     script_path: str | None = None,
+    import_prefix: str = "",
 ) -> str:
     fn = fn or tree.fn_name
     role = _role_line(original_skill_text)
@@ -104,7 +105,7 @@ def render_tempered_skill(
                + (f" (bundled at `{script_path}`):" if script_path else ":"))
     out.append("")
     out.append("   ```python")
-    out.append(f"   from {module} import {fn}")
+    out.append(f"   from {import_prefix}{module} import {fn}")
     out.append("   verdict = " + fn + "({" + ", ".join(f'"{f}": {f}' for f in feats) + "})")
     out.append("   ```")
     out.append("3. Relay `verdict` to the user. **Do not override it.** If a feature can't be "
@@ -209,8 +210,11 @@ def arrange_skill_dir(
       assets/<module>.validation.jsonl  the validation dataset (spec: data files → assets/)
 
     ``decisions`` is one dict per tree: ``{tree: DecisionTree, module: str,
-    schema_src: str|None, consumes: list[str]}``. The SKILL.md imports the trees as
-    ``from scripts.<module> import <fn>`` (agent runs from the skill root)."""
+    schema_src: str|None, consumes: list[str], ratified: list[{input, expected}]}``.
+    ``ratified`` cases (human ground truth) are merged as ``status: "ratified"`` — they own
+    their cell and drive ``test_<module>_ratified.py`` (the one test allowed to fail). The
+    SKILL.md imports the trees as ``from scripts.<module> import <fn>`` (agent runs from the
+    skill root)."""
     root = Path(skill_dir)
     name = skill_name(name)
     scripts, assets = root / "scripts", root / "assets"
@@ -222,9 +226,14 @@ def arrange_skill_dir(
         tree, module = d["tree"], d["module"]
         tree.export(str(scripts / f"{module}.py"))
 
+        # Ratified ground truth wins its cell over panel proposals, so it goes first in the merge.
+        ratified = [{"input": c["input"], "expected": c["expected"], "status": "ratified",
+                     "rationale": c.get("rationale", ""), "source": c.get("source", "ratified")}
+                    for c in d.get("ratified", [])]
         proposed = getattr(tree, "proposed_examples", None) or []
         val_path = assets / f"{module}.validation.jsonl"
-        enriched = enrich_validation(tree, merge_cases(load_validation(str(val_path)), proposed))
+        enriched = enrich_validation(
+            tree, merge_cases(load_validation(str(val_path)), ratified + proposed))
         if enriched:
             val_path.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in enriched))
             (scripts / f"test_{module}.py").write_text(
@@ -241,9 +250,17 @@ def arrange_skill_dir(
             "gray_zones": [n.gray_zone for n in tree.nodes if n.gray_zone],
         })
 
-    md = render_orchestrator_skill(name, items, generative_steps=generative_steps,
-                                   original_skill_text=original_skill_text,
-                                   description=description, import_prefix="scripts.")
+    # Single decision reads naturally as a tempered skill; several read as an orchestrator.
+    if len(items) == 1:
+        it = items[0]
+        md = render_tempered_skill(
+            decisions[0]["tree"], it["module"], original_skill_text=original_skill_text,
+            name=name, description=description, script_path=f"scripts/{it['module']}.py",
+            import_prefix="scripts.")
+    else:
+        md = render_orchestrator_skill(name, items, generative_steps=generative_steps,
+                                       original_skill_text=original_skill_text,
+                                       description=description, import_prefix="scripts.")
     (root / "SKILL.md").write_text(md)
     return root
 

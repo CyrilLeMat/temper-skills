@@ -14,12 +14,14 @@ practitioners miss — exactly the "oh merde" moment.
 ```
 input/
   skill.md                the OUTDATED RICE first-aid prompt
-output/
-  schema.py               AnkleInjury — Ottawa criteria + sprain grade + time + age
-  validation_set.json     16 ratified cases across the Ottawa matrix + protocol phases
-  ankle_tree.json         provenance (audit-grade)
-  assess_ankle.py         the deterministic advisor — zero LLM at inference
-  skill.tempered.md       a first-aid skill that calls the advisor (now POLICE, not RICE)
+output/ankle-sprain/      ← the tempered skill, as a spec-compliant Agent Skill (agentskills.io)
+  SKILL.md                a first-aid skill that calls the advisor (now POLICE, not RICE)
+  scripts/
+    assess_ankle.py       the deterministic advisor — zero LLM at inference
+    test_assess_ankle.py  behavior-lock + test_assess_ankle_ratified.py (16 ratified cases)
+  assets/
+    assess_ankle.schema.py       AnkleInjury — Ottawa criteria + sprain grade + time + age
+    assess_ankle.validation.jsonl  the ratified labeled set (Ottawa matrix + protocol phases)
 ```
 
 ## Why it converges (and is a strong fit)

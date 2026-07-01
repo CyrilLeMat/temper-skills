@@ -13,12 +13,14 @@ boundary hours, not cataloguing curbs.
 ```
 input/
   skill.md                the posted rules: no-stopping, street cleaning, meters, permits, precedence
-output/
-  schema.py               ParkingQuery — zone_type, day, hour, is_public_holiday, has_resident_permit
-  validation_set.json     20 ratified cases exercising the interactions + the holiday/permit edges
-  can_i_park_tree.json    the tree + provenance (the canonical, CI-pinned artifact)
-  can_i_park.py           the deterministic advisor — zero LLM at inference
-  skill.tempered.md       a parking skill that calls the advisor
+output/parking/           ← the tempered skill, as a spec-compliant Agent Skill (agentskills.io)
+  SKILL.md                a parking skill that calls the advisor
+  scripts/
+    can_i_park.py         the deterministic advisor — zero LLM at inference
+    test_can_i_park.py    behavior-lock + test_can_i_park_ratified.py (20 ratified cases)
+  assets/
+    can_i_park.schema.py  ParkingQuery — zone_type, day, hour, is_public_holiday, has_resident_permit
+    can_i_park.validation.jsonl  the ratified labeled set (interactions + holiday/permit edges)
 ```
 
 `input/` is just the skill (the prose). Everything else — the schema the loop is pinned to,

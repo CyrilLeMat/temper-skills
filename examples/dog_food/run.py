@@ -5,8 +5,8 @@
 
 This is the "input any skill, extract deterministic logic" path: the loop infers the
 feature schema from the prose and drafts test cases for its own gray zones. Both are
-*proposals* — the committed ``output/schema.py`` and ``output/validation_set.json`` are what
-a human signed off on.
+*proposals* — the committed skill dir ``output/dog-food/`` (schema in ``assets/``, the
+ratified set in ``assets/*.validation.jsonl``) is what a human signed off on.
 
 Educational example only — not veterinary advice.
 """
@@ -28,8 +28,8 @@ def main() -> None:
         profile="standard",
         fn_name="can_dog_eat",
     )
-    # Gitignored path so this demo doesn't clobber the committed canonical artifact
-    # (output/dog_food_checker.py, from a /temper subagent run).
+    # Gitignored path so this demo doesn't clobber the committed canonical skill dir
+    # (output/dog-food/, from a /temper subagent run).
     out = os.path.join(HERE, "output", "dog_food_checker.generated.py")
     tree.export(out)
     print(f"\nExported {out}\n")
@@ -42,7 +42,7 @@ def main() -> None:
         write_dataset_and_tests(tree, out, enriched)  # <stem>.validation.jsonl + behavior-lock test
         stem = os.path.splitext(out)[0]
         print(f"\nThe loop drafted {len(proposed)} validation case(s) → {stem}.validation.jsonl")
-        print("Review/ratify them to grow a validation set (cf. output/validation_set.json).")
+        print("Review/ratify them to grow a validation set (cf. output/dog-food/assets/).")
 
 
 if __name__ == "__main__":

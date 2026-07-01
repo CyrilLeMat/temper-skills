@@ -10,12 +10,14 @@ and where the adversarial loop earns its keep. Closed feature space → it conve
 ```
 input/
   skill.md                a license-advice prompt (permissive vs copyleft, distribution, linking)
-output/
-  schema.py               LicenseQuery — project_license, dependency_license, linking, distributing, modified
-  validation_set.json     18 ratified cases across the interaction matrix (+ a None distributing)
-  license_tree.json       provenance (audit-grade)
-  assess_license.py       the deterministic assessor — zero LLM at inference
-  skill.tempered.md       an advice skill that calls the assessor
+output/license-compat/   ← the tempered skill, as a spec-compliant Agent Skill (agentskills.io)
+  SKILL.md                an advice skill that calls the assessor
+  scripts/
+    assess_license.py     the deterministic assessor — zero LLM at inference
+    test_assess_license.py  behavior-lock + test_assess_license_ratified.py (18 ratified cases)
+  assets/
+    assess_license.schema.py       LicenseQuery — project_license, dependency_license, linking, distributing, modified
+    assess_license.validation.jsonl  the ratified labeled set (interaction matrix + a None distributing)
 ```
 
 ## Run it

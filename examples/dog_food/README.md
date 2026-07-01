@@ -13,18 +13,20 @@ in `output/`:
 input/                     ← what you bring  (just the prose)
   skill.md                 the prompt/skill to temper — the ONLY required input
 
-output/                    ← what temper proposes, you ratify, and it generates
-  schema.py                the DogFoodQuery contract — drafted by --propose-schema, then ratified
-  validation_set.json      the held-out labeled set — grown from the loop's proposals, then ratified
-  dog_food_tree.json       the tree's provenance (regenerate the .py from this)
-  dog_food_checker.py      the deterministic decision tree — zero LLM calls at inference
-  skill.tempered.md        a new skill that DELEGATES the decision to the tree
+output/dog-food/           ← the tempered skill, as a spec-compliant Agent Skill (agentskills.io)
+  SKILL.md                 delegates the decision to the tree (imports from scripts/)
+  scripts/
+    can_dog_eat.py         the deterministic decision tree — zero LLM calls at inference
+    test_can_dog_eat.py    behavior-lock (always green) + test_..._ratified.py (asserts blessed truth)
+  assets/                  spec: "Data files … schemas" live here
+    can_dog_eat.schema.py  the DogFoodQuery contract
+    can_dog_eat.validation.jsonl  the ratified labeled set (status: ratified)
 ```
 
 `input → temper → output`. The decision logic moves from untestable prose (`input/skill.md`)
-into a reviewable, versionable function (`output/dog_food_checker.py`), and the tempered
-skill (`output/skill.tempered.md`) rewires the agent to *call* that function instead of
-re-deciding every time. `output/schema.py` and `output/validation_set.json` are the contract
+into a reviewable, versionable function (`output/dog-food/scripts/can_dog_eat.py`), and the
+tempered `SKILL.md` rewires the agent to *call* that function instead of re-deciding every
+time. The schema and the ratified validation set (in `assets/`) are the contract
 and the correctness gate — neither was hand-authored up front; both started as loop proposals
 a human approved (the `"status": "ratified"` tag in the set is what records the sign-off, not
 the folder it sits in).
