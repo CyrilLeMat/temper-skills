@@ -74,15 +74,21 @@ So the human touchpoints are exactly two: (1) accept/edit the schema, once, up f
 
 ## The personas
 
-Four attackers plus two structural counterweights: the `overengineering_critic` (every round)
-and the `schema_critic` (standard & audit-grade). Spawn **one subagent per persona each round**,
-in parallel (one message, multiple Task calls). Keep each subagent prompt **lean and
-self-contained** — do not make them read this skill or the repo.
+Four attackers plus three structural counterweights: the `overengineering_critic` (every round)
+and the two expressiveness critics — `schema_critic` and `outcome_critic` (both standard &
+audit-grade). Spawn **one subagent per persona each round**, in parallel (one message, multiple
+Task calls). Keep each subagent prompt **lean and self-contained** — do not make them read this
+skill or the repo.
 
-The two counterweights pull opposite ways and are both essential: the `overengineering_critic`
-shrinks the tree *within* the schema; the `schema_critic` argues the *schema itself* is too thin
-to be correct (e.g. on `decide_meal` it flags the missing `minutes_since_exercise` that forces
-the tree to punt). Neither adds validation cases.
+The counterweights pull in three directions and are all essential; none adds validation cases:
+- the `overengineering_critic` shrinks the tree *within* the current schema and outcome set;
+- the `schema_critic` argues the *input side* is too thin — a feature the source implies but the
+  schema can't express (e.g. on `decide_meal`, the missing `minutes_since_exercise` that forces
+  the tree to punt);
+- the `outcome_critic` argues the *output side* is too coarse — an answer the source implies but
+  the outcome vocabulary can't express, so two distinct correct answers collapse into one label
+  (e.g. on `decide_meal`, no way to say "wait, then a treat" — only `wait_then_full_meal` or
+  `treat_only`). It's the exact dual of the `schema_critic`: challenge outputs, not just inputs.
 
 <!-- BEGIN GENERATED:personas -->
 _Generated from `temper_skills/sources.py` — edit there, then run `python -m temper_skills.skill_docs`._
@@ -95,26 +101,33 @@ _Generated from `temper_skills/sources.py` — edit there, then run `python -m t
 | `domain_expert` | — | tests with rare but plausible domain cases |
 | `overengineering_critic` | ✅ every round | challenges every node: is this branch actually necessary, or is it loop richness rather than domain complexity? |
 | `schema_critic` | ✅ standard & audit-grade | argues the schema is too thin — names a feature the source implies that the schema cannot express, instead of adding test cases |
+| `outcome_critic` | ✅ standard & audit-grade | argues the outcome set is too coarse — names an outcome the source implies that the vocabulary cannot express (so two distinct answers collapse into one), instead of adding test cases |
 <!-- END GENERATED:personas -->
 
 Each persona subagent returns ONLY this JSON:
 ```json
-{"persona": "<name>", "score": 0-10, "verdict": "ok|missing_case|collapsible|contradiction|schema_too_thin",
+{"persona": "<name>", "score": 0-10,
+ "verdict": "ok|missing_case|collapsible|contradiction|schema_too_thin|outcome_too_coarse",
  "detail": "<one sentence>", "proposed_case": "<concrete feature assignment it mishandles, or null>",
  "proposed_tests": [{"input": {<feature: value>}, "expected": "<best-guess outcome>", "rationale": "<one line>"}],
- "proposed_features": ["<name: type — why the source needs it>"]}
+ "proposed_features": ["<name: type — why the source needs it>"],
+ "proposed_outcomes": ["<outcome — why (which two cases collapse today)>"]}
 ```
 
 `proposed_tests` is how the validation set gets built (see below). **Every attacker persona
 must add a case here whenever it finds a flaw** — a full feature assignment plus the outcome
 it believes correct. Tell each subagent these are proposals a human will ratify, not ground
-truth. The two counterweights always return `proposed_tests: []`:
+truth. The three counterweights always return `proposed_tests: []`:
 
-- The `overengineering_critic` removes complexity; it adds no cases and no features.
+- The `overengineering_critic` removes complexity; it adds no cases, features, or outcomes.
 - The `schema_critic` uses `verdict: "schema_too_thin"` and fills **`proposed_features`** — each
-  a `name: type — why` for a feature the source implies but the schema can't express. Every
-  other persona leaves `proposed_features` empty. These are **advisory and may re-open the
-  schema gate** (see below), not branches you add to the tree.
+  a `name: type — why` for a feature the source implies but the schema can't express. These are
+  **advisory and may re-open the schema gate** (see below), not branches you add to the tree.
+- The `outcome_critic` uses `verdict: "outcome_too_coarse"` and fills **`proposed_outcomes`** —
+  each an `outcome — why` for an answer the source implies but the outcome set can't express.
+  Also **advisory**: record it as a gray zone by default, and widen the outcome set only when a
+  gap is load-bearing (the dual of the schema re-gate). Every other persona leaves both
+  `proposed_features` and `proposed_outcomes` empty.
 
 **`score` is always the TREE's robustness from your angle — 0 = the tree fails badly
 through your lens, 10 = solid, nothing to add.** It is NOT how successful your attack
@@ -133,8 +146,8 @@ _Generated from `temper_skills/distill.py` — edit there, then run `python -m t
 | profile | max rounds | stop after N quiet rounds | per-round gate | provenance comments | adversary panel |
 |---|---|---|---|---|---|
 | `quick` | 8 | 2 | off | off | `edge_case_hunter`, `overengineering_critic` |
-| `standard` | 20 | 3 | on | on | `edge_case_hunter`, `domain_expert`, `schema_critic`, `overengineering_critic` |
-| `audit-grade` | 50 | 5 | on | on | `literalist`, `edge_case_hunter`, `bad_faith_actor`, `domain_expert`, `schema_critic`, `overengineering_critic` |
+| `standard` | 20 | 3 | on | on | `edge_case_hunter`, `domain_expert`, `schema_critic`, `outcome_critic`, `overengineering_critic` |
+| `audit-grade` | 50 | 5 | on | on | `literalist`, `edge_case_hunter`, `bad_faith_actor`, `domain_expert`, `schema_critic`, `outcome_critic`, `overengineering_critic` |
 <!-- END GENERATED:profiles -->
 
 <!-- BEGIN GENERATED:convergence -->
@@ -151,7 +164,7 @@ The loop stops when **no round improves on the best for `stop after N quiet roun
    **resolve it yourself with the safest defensible default** consistent with the HARD
    constraints and the source's stated bias, and **record it as a `gray_zone`** on the
    node. Do **not** stop to ask the user how to resolve it — see "Gray zones" below.
-2. **Critique** — spawn the profile's panel (the attackers + the two counterweights) in
+2. **Critique** — spawn the profile's panel (the attackers + the structural counterweights) in
    parallel with the current tree; collect their scored JSON verdicts.
 3. **Arbitrate** — spawn **one independent `arbiter` subagent**, separate from you-the-proposer.
    It receives the current tree, the panel's verdicts, the constraints, and the schema — but
@@ -226,18 +239,21 @@ these by **recording them and signing off at review** (§2.5, §4.4) — they ap
   accept/edit, and (2) the per-round Continue / Stop / Abort gate. If you're about to ask
   the user anything else, stop — make the defensible call, record it, and surface it.
 
-### Schema gaps: advisory, with one principled re-gate
+### Expressiveness gaps (schema & outcome): advisory, with one principled re-gate
 
-The `schema_critic` reports features the source needs but the schema can't express (it can't
-add a branch — the feature doesn't exist). Handle its findings like this:
+The `schema_critic` reports features the source needs but the schema can't express, and the
+`outcome_critic` reports answers the source needs but the outcome set can't express. Neither can
+fix the tree directly (the feature/outcome doesn't exist yet). Handle both the same way:
 
 - **Advisory by default.** Record each gap as a `gray_zone` on the node that had to punt or
-  over-approximate (e.g. `decide_meal`'s "no minutes-since-exercise → route to wait"). The
-  tree ships with the limitation documented, not hidden.
+  over-approximate — a *schema* gap (e.g. `decide_meal`'s "no minutes-since-exercise → route to
+  wait") or an *outcome* gap (e.g. "can't say 'wait, then a treat', so an already-fed dog that
+  just exercised routes to `treat_only`"). The tree ships with the limitation documented, not
+  hidden.
 - **Re-gate only when load-bearing.** If a gap is so central that the tree can't be correct
-  without it, you may **re-open the schema accept/edit gate once** (gate #1) to add the
-  feature, then reseed the loop. This is the *single* sanctioned exception to "exactly two
-  gates" — and it's still gate #1, surfaced from evidence, not a new kind of question. Don't
+  without it, you may **re-open the schema accept/edit gate once** (gate #1) to add the feature
+  *or widen the outcome set*, then reseed the loop. This is the *single* sanctioned exception to
+  "exactly two gates" — still gate #1, surfaced from evidence, not a new kind of question. Don't
   reopen for a marginal nice-to-have; record those as gray zones and move on.
 
 ## Export (deterministic — no LLM)

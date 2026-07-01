@@ -277,6 +277,7 @@ def ingest(
     console.print(Panel(tree.to_source(), title=f"Exported {out}", border_style="green"))
     _print_example_check(tree)
     _print_schema_gaps(tree)
+    _print_outcome_gaps(tree)
     _write_proposed_examples(tree, out)
 
     # Close the loop: a tempered skill.md that delegates the decision to the tree.
@@ -314,6 +315,19 @@ def _print_schema_gaps(tree) -> None:
              "source. The tree punts on these — consider adding them and re-running:[/]"]
     lines += [f"  • {g}" for g in gaps]
     console.print(Panel("\n".join(lines), title="✎ schema gaps (advisory)", border_style="yellow"))
+
+
+def _print_outcome_gaps(tree) -> None:
+    """Surface the outcome_critic's advisory findings: answers the source needs but the outcome
+    vocabulary can't express, so two distinct answers collapse into one. Consider widening it."""
+    gaps = getattr(tree, "outcome_gaps", None)
+    if not gaps:
+        return
+    lines = ["[yellow]The outcome_critic judged the outcome set too coarse to express every "
+             "answer the source calls for. Two distinct answers collapse into one — consider "
+             "widening the outcome vocabulary and re-running:[/]"]
+    lines += [f"  • {g}" for g in gaps]
+    console.print(Panel("\n".join(lines), title="✎ outcome gaps (advisory)", border_style="yellow"))
 
 
 def _print_example_check(tree) -> None:

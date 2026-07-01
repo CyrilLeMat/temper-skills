@@ -35,6 +35,18 @@ SCHEMA_CRITIC = Persona(
     "argues the schema is too thin — names a feature the source implies that the schema "
     "cannot express, instead of adding test cases",
 )
+# The output-side dual of the schema_critic: it challenges the OUTCOME vocabulary, not the
+# inputs. Where the schema_critic says "you can't express this distinction on the input side",
+# this one says "you can't express the right ANSWER" — two genuinely different correct outcomes
+# are forced to collapse into one label (e.g. decide_meal can't say "wait, then a treat", only
+# "wait_then_full_meal" or "treat_only"). Advisory; may prompt widening the outcome set. Same
+# gating profiles (standard, audit-grade); adds no test cases.
+OUTCOME_CRITIC = Persona(
+    "outcome_critic",
+    "argues the outcome set is too coarse — names an outcome the source implies that the "
+    "vocabulary cannot express (so two distinct answers collapse into one), instead of "
+    "adding test cases",
+)
 
 DEFAULT_PERSONAS: list[Persona] = [
     LITERALIST,

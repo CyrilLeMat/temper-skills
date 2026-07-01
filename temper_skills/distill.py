@@ -19,6 +19,7 @@ from .sources import (
     DOMAIN_EXPERT,
     EDGE_CASE_HUNTER,
     LITERALIST,
+    OUTCOME_CRITIC,
     OVERENGINEERING_CRITIC,
     SCHEMA_CRITIC,
     Persona,
@@ -40,12 +41,14 @@ PROFILES = {
 # More personas of one model share blind spots (H5) and add cost + convergence
 # surface, so the cheap profiles run a lean, diverse panel and the full panel is
 # reserved for audit-grade. Override with distill(adversaries=[...]).
-# The schema_critic joins the gating profiles (standard, audit-grade), where a re-gate is
-# possible; quick stays lean. The overengineering_critic is appended to every panel below.
+# The schema_critic and its output-side dual the outcome_critic join the gating profiles
+# (standard, audit-grade), where widening the schema/outcome set is possible; quick stays lean.
+# The overengineering_critic is appended to every panel below.
 PROFILE_PERSONAS: dict[str, list[Persona]] = {
     "quick": [EDGE_CASE_HUNTER],
-    "standard": [EDGE_CASE_HUNTER, DOMAIN_EXPERT, SCHEMA_CRITIC],
-    "audit-grade": [LITERALIST, EDGE_CASE_HUNTER, BAD_FAITH_ACTOR, DOMAIN_EXPERT, SCHEMA_CRITIC],
+    "standard": [EDGE_CASE_HUNTER, DOMAIN_EXPERT, SCHEMA_CRITIC, OUTCOME_CRITIC],
+    "audit-grade": [LITERALIST, EDGE_CASE_HUNTER, BAD_FAITH_ACTOR, DOMAIN_EXPERT,
+                    SCHEMA_CRITIC, OUTCOME_CRITIC],
 }
 
 
@@ -169,6 +172,16 @@ def _critique(backend: Backend, sources: Sources, persona: Persona, tree: Propos
             "forced to punt or over-approximate). If so, set verdict='schema_too_thin' and "
             "list each gap in `proposed_features` as 'name: type — why the source needs it'. "
             "If the schema can express everything the source decides on, score high and say so."
+        )
+    elif persona.name == OUTCOME_CRITIC.name:
+        tests_clause = (
+            "Leave `proposed_tests` EMPTY. Your job is the OUTCOME set's expressiveness: judge "
+            "whether the source implies a distinct answer the current outcomes cannot express, "
+            "so two genuinely different correct answers are forced to collapse into one label "
+            "(or a case is routed to an outcome that is only approximately right). If so, set "
+            "verdict='outcome_too_coarse' and list each missing outcome in `proposed_outcomes` "
+            "as 'outcome — why (which two cases collapse today)'. If the outcome set can express "
+            "every answer the source calls for, score high and say so."
         )
     elif persona.name == OVERENGINEERING_CRITIC.name:
         tests_clause = (
@@ -341,8 +354,10 @@ def distill(
     # along in the critiques the personas already return.
     proposed: dict[str, dict] = {}
     existing_inputs = {_canon(e["input"]) for e in sources.examples}
-    # Advisory schema-thinness findings from the schema_critic, deduped across rounds.
+    # Advisory expressiveness findings, deduped across rounds: input-side (schema_critic) and
+    # output-side (outcome_critic).
     schema_gaps: dict[str, None] = {}
+    outcome_gaps: dict[str, None] = {}
 
     # We SCORE the tree against those proposed cases, not just the ratified ones: the
     # point of the tool is to hand back a good final tree without waiting on a human to
@@ -368,6 +383,8 @@ def distill(
             for v in verdicts:
                 for feat in v.proposed_features:
                     schema_gaps.setdefault(feat, None)
+                for oc in v.proposed_outcomes:
+                    outcome_gaps.setdefault(oc, None)
             if propose_examples:
                 _harvest_proposed(verdicts, r, proposed, existing_inputs)
             arbitration = _arbitrate(backend, sources, tree, verdicts,
@@ -441,6 +458,8 @@ def distill(
     final = _finalize(best_tree, arb_for_final, survival, sources, model_tag, profile, provenance, fn_name)
     if schema_gaps:
         final.schema_gaps = list(schema_gaps)  # advisory: prompt to re-open the schema gate
+    if outcome_gaps:
+        final.outcome_gaps = list(outcome_gaps)  # advisory: prompt to widen the outcome set
     _assert_compiles(final)  # never hand back a tree that doesn't import
     # The ratified examples are the loop's own correctness signal: check the
     # converged tree against them and surface any disagreement (§4.1 / §4.5).
@@ -477,7 +496,7 @@ def _harvest_proposed(
     The cases ride along in the verdicts the personas already return, so this is free.
     The two counterweights are skipped — they restructure, they don't add cases."""
     for v in verdicts:
-        if v.persona in (OVERENGINEERING_CRITIC.name, SCHEMA_CRITIC.name):
+        if v.persona in (OVERENGINEERING_CRITIC.name, SCHEMA_CRITIC.name, OUTCOME_CRITIC.name):
             continue
         for ex in v.proposed_tests:
             if not ex.input:

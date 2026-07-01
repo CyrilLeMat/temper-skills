@@ -14,8 +14,8 @@ _Generated from `temper_skills/distill.py` — edit there, then run `python -m t
 | profile | max rounds | stop after N quiet rounds | per-round gate | provenance comments | adversary panel |
 |---|---|---|---|---|---|
 | `quick` | 8 | 2 | off | off | `edge_case_hunter`, `overengineering_critic` |
-| `standard` | 20 | 3 | on | on | `edge_case_hunter`, `domain_expert`, `schema_critic`, `overengineering_critic` |
-| `audit-grade` | 50 | 5 | on | on | `literalist`, `edge_case_hunter`, `bad_faith_actor`, `domain_expert`, `schema_critic`, `overengineering_critic` |
+| `standard` | 20 | 3 | on | on | `edge_case_hunter`, `domain_expert`, `schema_critic`, `outcome_critic`, `overengineering_critic` |
+| `audit-grade` | 50 | 5 | on | on | `literalist`, `edge_case_hunter`, `bad_faith_actor`, `domain_expert`, `schema_critic`, `outcome_critic`, `overengineering_critic` |
 <!-- END GENERATED:profiles -->
 
 The **`overengineering_critic` is always on**, appended to every panel — it prunes branches

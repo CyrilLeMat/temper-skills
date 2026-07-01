@@ -22,18 +22,21 @@ def test_returns_tree_with_metadata():
 
 
 def test_persona_panel_scales_with_profile():
-    # quick stays lean (1 attacker + critic); the gating profiles add the schema_critic.
-    for profile, total in [("quick", 2), ("standard", 4), ("audit-grade", 6)]:
+    # quick stays lean (1 attacker + critic); the gating profiles add both expressiveness
+    # counterweights (schema_critic + outcome_critic).
+    for profile, total in [("quick", 2), ("standard", 5), ("audit-grade", 7)]:
         be = FakeBackend(score=9)
         distill(_sources(), backend=be, profile=profile, gate=lambda r: "stop")
         seen = set(be.personas_seen)  # round-1 panel before the gate stops it
         assert "overengineering_critic" in seen
         assert len(seen) == total, (profile, seen)
-    # schema_critic runs on the gating profiles only, not quick
+    # the expressiveness critics run on the gating profiles only, not quick
     for profile, present in [("quick", False), ("standard", True), ("audit-grade", True)]:
         be = FakeBackend(score=9)
         distill(_sources(), backend=be, profile=profile, gate=lambda r: "stop")
-        assert ("schema_critic" in set(be.personas_seen)) is present, profile
+        seen = set(be.personas_seen)
+        assert ("schema_critic" in seen) is present, profile
+        assert ("outcome_critic" in seen) is present, profile
 
 
 def test_overengineering_critic_always_added():
@@ -61,6 +64,50 @@ def test_schema_critic_findings_surface_as_schema_gaps():
     be.complete = patched
     tree = distill(_sources(), backend=be, profile="standard", gate=lambda r: "stop")
     assert tree.schema_gaps == ["dose_mg: float — toxicity is dose-dependent"]
+
+
+def test_outcome_critic_findings_surface_as_outcome_gaps():
+    from temper_skills.schemas import PersonaVerdict
+    be = FakeBackend(score=9)
+    orig = be.complete
+
+    def patched(system, user, schema):
+        v = orig(system, user, schema)
+        if schema is PersonaVerdict and v.persona == "outcome_critic":
+            return v.model_copy(update={
+                "verdict": "outcome_too_coarse",
+                "proposed_outcomes": ["wait_then_treat — evening+exercised+already-full collapses "
+                                      "into treat_only or wait_then_full_meal"],
+            })
+        return v
+
+    be.complete = patched
+    tree = distill(_sources(), backend=be, profile="standard", gate=lambda r: "stop")
+    assert tree.outcome_gaps == ["wait_then_treat — evening+exercised+already-full collapses "
+                                 "into treat_only or wait_then_full_meal"]
+
+
+def test_outcome_critic_adds_no_validation_cases():
+    """Like the other counterweights, the outcome_critic restructures — it never adds cases."""
+    from temper_skills.schemas import PersonaVerdict, ProposedExample
+    be = FakeBackend(score=9)
+    orig = be.complete
+
+    def patched(system, user, schema):
+        v = orig(system, user, schema)
+        if schema is PersonaVerdict and v.persona == "outcome_critic":
+            # even if it (wrongly) tried to add a case, the harvester must drop it
+            return v.model_copy(update={
+                "verdict": "outcome_too_coarse",
+                "proposed_outcomes": ["wait_then_treat — two answers collapse"],
+                "proposed_tests": [ProposedExample(input={"x": 1}, expected="y", rationale="r")],
+            })
+        return v
+
+    be.complete = patched
+    tree = distill(_sources(), backend=be, profile="standard", gate=lambda r: "stop")
+    inputs = [p["input"] for p in (tree.proposed_examples or [])]
+    assert {"x": 1} not in inputs  # outcome_critic's stray case was not harvested
 
 
 def test_stable_scores_plateau_and_stop():

@@ -50,6 +50,10 @@ class DecisionTree:
     # can't express them, so the tree had to punt/over-approximate. Advisory: a prompt to
     # re-open the schema gate, not part of the tree. Metadata only, not emitted into source.
     schema_gaps: "list | None" = None
+    # Outcomes the outcome_critic flagged as missing — the source implies them but the outcome
+    # vocabulary can't express them, so two distinct answers collapse into one label. Advisory:
+    # a prompt to widen the outcome set. Metadata only, not emitted into source.
+    outcome_gaps: "list | None" = None
 
     def to_source(self) -> str:
         """Render the tree as a zero-dependency Python module."""

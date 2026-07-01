@@ -62,7 +62,10 @@ class ProposedExampleSet(BaseModel):
 class PersonaVerdict(BaseModel):
     persona: str
     score: int = Field(ge=0, le=10, description="0 = the tree fails this persona's lens; 10 = solid.")
-    verdict: Literal["ok", "missing_case", "collapsible", "contradiction", "schema_too_thin"]
+    verdict: Literal[
+        "ok", "missing_case", "collapsible", "contradiction",
+        "schema_too_thin", "outcome_too_coarse",
+    ]
     detail: str = Field(description="One sentence: what is wrong, or why it is fine.")
     proposed_case: str | None = Field(
         default=None,
@@ -73,14 +76,20 @@ class PersonaVerdict(BaseModel):
         default_factory=list,
         description="Concrete test cases to ADD to the validation set: a full input + the "
         "best-guess expected outcome + a rationale. Populate whenever you find a flaw. "
-        "MUST be empty for the overengineering_critic and schema_critic (they restructure, "
-        "not add cases).",
+        "MUST be empty for the overengineering_critic, schema_critic, and outcome_critic "
+        "(they restructure, not add cases).",
     )
     proposed_features: list[str] = Field(
         default_factory=list,
         description="schema_critic ONLY: features the source implies but the schema can't "
         "express, each as 'name: type — why'. Advisory; may re-open the schema gate. Every "
         "other persona leaves this empty.",
+    )
+    proposed_outcomes: list[str] = Field(
+        default_factory=list,
+        description="outcome_critic ONLY: outcomes the source implies but the outcome set "
+        "can't express, each as 'outcome — why (which two cases collapse today)'. Advisory; "
+        "may prompt widening the outcome vocabulary. Every other persona leaves this empty.",
     )
 
 

@@ -19,7 +19,7 @@ import re
 from pathlib import Path
 
 from .distill import PROFILE_PERSONAS, PROFILES
-from .sources import DEFAULT_PERSONAS, OVERENGINEERING_CRITIC, SCHEMA_CRITIC
+from .sources import DEFAULT_PERSONAS, OUTCOME_CRITIC, OVERENGINEERING_CRITIC, SCHEMA_CRITIC
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -42,6 +42,8 @@ def _render_personas() -> str:
     rows.append(f"| `{c.name}` | ✅ every round | {c.style} |")
     sc = SCHEMA_CRITIC
     rows.append(f"| `{sc.name}` | ✅ standard & audit-grade | {sc.style} |")
+    oc = OUTCOME_CRITIC
+    rows.append(f"| `{oc.name}` | ✅ standard & audit-grade | {oc.style} |")
     return _EDIT_HINT.format(src="sources.py") + "\n\n" + "\n".join(rows)
 
 
