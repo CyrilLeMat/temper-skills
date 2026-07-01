@@ -324,15 +324,16 @@ def main(argv: list[str] | None = None) -> int:
         print("usage: python -m temper_skills.export_skill <tree.json> <module> "
               "[out.md | skill-dir/] [original_skill.md]\n"
               "  out.md      → single tempered skill file (with frontmatter)\n"
-              "  skill-dir/  → spec-compliant Agent Skill: <dir>/SKILL.md + scripts/<module>.py",
+              "  skill-dir/  → spec-compliant Agent Skill: <dir>/SKILL.md + scripts/<module>.py "
+              "+ assets/ (schema + validation dataset when the tree carries proposals)",
               file=sys.stderr)
         return 2
     tree_path, module = argv[0], argv[1]
     out = argv[2] if len(argv) > 2 else "skill.tempered.md"
     original = open(argv[3]).read() if len(argv) > 3 else None
-    import json
-    from pathlib import Path
-    tree = tree_from_dict(json.loads(open(tree_path).read()))
+    data = json.loads(open(tree_path).read())
+    tree = tree_from_dict(data)
+    tree.proposed_examples = data.get("proposed_examples")  # carry proposals into the dataset/tests
 
     out_p = Path(out)
     # Legacy single-file mode: an explicit *.md target that isn't itself a SKILL.md.
@@ -342,19 +343,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"wrote {out_p}")
         return 0
 
-    # Directory mode: emit a spec-compliant Agent Skill folder. The skill `name` must match
-    # its parent directory, so we sanitize the requested dir name and write into that folder.
+    # Directory mode: emit a full spec-compliant Agent Skill folder (SKILL.md + scripts/ +
+    # assets/) via arrange_skill_dir. The skill `name` must match its parent directory, so we
+    # sanitize the requested dir name and write into that folder.
     requested = out_p.parent if out_p.name == "SKILL.md" else out_p
     name = skill_name(requested.name)
     skill_dir = requested.parent / name
-    (skill_dir / "scripts").mkdir(parents=True, exist_ok=True)
-    script_rel = f"scripts/{module}.py"
-    tree.export(str(skill_dir / script_rel))
-    md = render_tempered_skill(tree, module, original_skill_text=original,
-                               name=name, script_path=script_rel)
-    (skill_dir / "SKILL.md").write_text(md)
+    arrange_skill_dir(str(skill_dir), name, [{"tree": tree, "module": module}],
+                      original_skill_text=original)
     note = "" if requested.name == name else f" (renamed from '{requested.name}' to a valid skill name)"
-    print(f"wrote {skill_dir}/SKILL.md + {script_rel}  · name: {name}{note}")
+    print(f"wrote {skill_dir}/ (SKILL.md + scripts/{module}.py)  · name: {name}{note}")
     return 0
 
 
