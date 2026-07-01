@@ -21,8 +21,9 @@ from pathlib import Path
 _ROOT = Path(__file__).resolve().parents[1]
 _DEST = _ROOT / ".claude/skills/temper-skills/scripts"
 # Pure-stdlib only. export_skill is intentionally excluded (it pulls in pydantic for the
-# LLM-facing WovenSkill); in subagent mode the orchestrator writes the tempered .md itself.
-MODULES = ["tree", "export_tree", "update_validation"]
+# LLM-facing WovenSkill); skill_render carries the pydantic-free rendering + spec skill-dir
+# arrangement, so subagent mode can emit a full Agent Skill dir with no install.
+MODULES = ["tree", "export_tree", "update_validation", "skill_render"]
 
 _BANNER = (
     "# VENDORED from temper_skills/{name}.py — DO NOT EDIT.\n"

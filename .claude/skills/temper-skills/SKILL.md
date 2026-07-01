@@ -283,27 +283,39 @@ co-evolving model these are **not** a special "re-gate" — they are the normal 
 - **The user sees it at the final review.** The co-evolved schema, the outcome set, what grew,
   and what reverted are all surfaced for sign-off at the end — never as a mid-run question.
 
-## Export (deterministic — no LLM)
+## Export (deterministic — no LLM): emit a spec-compliant Agent Skill dir
 
-When the loop ends, write the tree to JSON and run the vendored, stdlib-only exporter (no
-install — it lives in this skill's own `scripts/`):
+When the loop ends, emit the tempered result as a **spec-compliant Agent Skill folder**
+(agentskills.io: `SKILL.md` + `scripts/` + `assets/`) with the vendored, stdlib-only
+`skill_render.py` — no install. Write one `<fn>.tree.json` per decision, then a `spec.json`:
 
-```bash
-python scripts/export_tree.py tree.json route.py
+```json
+{"name": "route", "description": "...", "original_skill": "<path to original skill.md>",
+ "generative_steps": ["<any step you left generative>"],
+ "decisions": [{"tree": "route.tree.json", "module": "route",
+                "schema": "route.schema.py", "consumes": []}]}
 ```
 
-That emits the decision tree, reconciles `route.validation.jsonl`, and (re)writes the
-behavior-lock + ratified tests. Then **close the loop** by writing the **tempered `skill.md`**
-that delegates the decision to the tree — the whole point: the original prompt should now *use*
-the frozen logic, not re-derive it. In subagent mode you write it **yourself** (the woven
-variant, below), preserving the original's role/voice — no package needed. (If the
-`temper-skills` package happens to be installed, `python -m temper_skills.export_skill tree.json
-route route.tempered.md <original_skill.md>` is a deterministic-template shortcut; it's optional
-and the only step that needs the install, so prefer writing it yourself.)
+```bash
+python scripts/skill_render.py spec.json output/route/
+```
 
-Show the user both artifacts and what changed: the original skill re-decided every call;
-the tempered skill extracts features, calls `route.<fn>`, and relays the verdict — decision
-frozen, model still does NL extraction + phrasing (§2.5).
+That writes the whole skill: `output/route/SKILL.md` (delegates each decision to its tree —
+extract features → call `from scripts.<module> import <fn>` → relay the verdict, never
+re-derive), `scripts/<module>.py` (the frozen tree, self-contained) + its behavior-lock and
+ratified tests, and `assets/` (the schema + the `.validation.jsonl` dataset). One decision →
+a tempered skill; several → an orchestrator that chains them. It reconciles any existing
+`.validation.jsonl` and folds in the tree's `proposed_examples`, so the per-round dataset
+provenance (`first_seen_round`/`run_id`) is preserved.
+
+(If you only want the raw tree + dataset, `python scripts/export_tree.py tree.json route.py`
+still does just that. The `temper-skills` package, when installed, offers the same via
+`python -m temper_skills.export_skill`, plus an LLM-*woven* variant that rewrites the original
+prose in its own voice.)
+
+Show the user what changed: the original skill re-decided every call; the tempered skill
+extracts features, calls the tree, and relays the verdict — decision frozen, model still does
+NL extraction + phrasing (§2.5).
 
 `export_tree` reconciles the committed `route.validation.jsonl` the per-round writer already
 built: it folds in any `proposed_examples` still in `tree.json`, refreshes every row's

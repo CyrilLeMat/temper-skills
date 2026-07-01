@@ -6,6 +6,7 @@ import json
 
 from temper_skills.export_skill import arrange_skill_dir
 from temper_skills.export_tree import tree_from_dict
+from temper_skills.skill_render import main as skill_render_main
 
 
 def _tree(fn, feat, cond, out):
@@ -63,6 +64,28 @@ def test_skill_md_frontmatter_and_scripts_imports(tmp_path):
     assert md.startswith("---")
     assert "name: dog-day" in md          # name matches the directory
     assert "from scripts.decide_a import decide_a" in md   # scripts/ layout imports
+
+
+def test_cli_main_arranges_from_spec(tmp_path):
+    """The subagent-mode entrypoint: spec.json (+ per-decision tree.json) -> full skill dir."""
+    (tmp_path / "walk.json").write_text(json.dumps({
+        "fn_name": "decide_walk", "features": ["weather"], "default_outcome": "normal_walk",
+        "nodes": [{"condition": "(weather or '').strip().lower()=='storm'", "outcome": "skip"}],
+        "proposed_examples": [{"input": {"weather": "storm"}, "expected": "skip"}],
+    }))
+    (tmp_path / "walk.schema.py").write_text("class W: ...\n")
+    (tmp_path / "spec.json").write_text(json.dumps({
+        "name": "route", "description": "d",
+        "decisions": [{"tree": "walk.json", "module": "decide_walk", "schema": "walk.schema.py"}],
+    }))
+    rc = skill_render_main([str(tmp_path / "spec.json"), str(tmp_path / "route")])
+    assert rc == 0
+    d = tmp_path / "route"
+    assert (d / "SKILL.md").exists()
+    assert (d / "scripts" / "decide_walk.py").exists()
+    assert (d / "assets" / "decide_walk.schema.py").exists()
+    assert (d / "assets" / "decide_walk.validation.jsonl").exists()
+    assert "name: route" in (d / "SKILL.md").read_text()
 
 
 def test_behavior_lock_is_green(tmp_path):
