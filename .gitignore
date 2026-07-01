@@ -9,6 +9,7 @@ venv/
 .env
 .pytest_cache/
 *.generated.py
+*.generated.validation.jsonl
 *.proposed_examples.json
 schema.proposed.py
 .DS_Store

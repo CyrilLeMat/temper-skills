@@ -46,18 +46,18 @@ def test_manifest_extracts_gray_zones():
     ]
 
 
-def test_manifest_proposed_examples_path_tracks_tree_path():
+def test_manifest_validation_dataset_path_tracks_tree_path():
     m = _tree_manifest(_tree(), "out/x.py", "out/x.tempered.md")
-    assert m["proposed_examples_count"] == 1
-    assert m["proposed_examples_path"] == "out/x.proposed_examples.json"
+    assert m["validation_case_count"] == 1
+    assert m["validation_dataset_path"] == "out/x.validation.jsonl"
 
 
-def test_manifest_omits_examples_path_when_none():
+def test_manifest_omits_dataset_path_when_none():
     t = _tree()
     t.proposed_examples = None
     m = _tree_manifest(t, "out/x.py", "out/x.tempered.md")
-    assert m["proposed_examples_path"] is None
-    assert m["proposed_examples_count"] == 0
+    assert m["validation_dataset_path"] is None
+    assert m["validation_case_count"] == 0
 
 
 def test_manifest_summarizes_ratified_examples():

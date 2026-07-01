@@ -12,7 +12,13 @@ from pathlib import Path
 from .backends import get_backend
 from .distill import PROFILES, RoundResult
 from .export_skill import render_tempered_skill, weave_tempered_skill
-from .export_tree import tree_from_dict
+from .export_tree import (
+    enrich_validation,
+    load_validation,
+    merge_cases,
+    tree_from_dict,
+    write_dataset_and_tests,
+)
 from .incremental import recrystallize, render_diff
 from .export_schema import _classname, normalization_notes, render_schema_source
 from .ingest import InferredSchema, ingest_skill
@@ -88,14 +94,14 @@ def _emit_json(obj) -> None:
 def _tree_manifest(tree, tree_path: str, skill_path: str) -> dict:
     """The agent-facing result of a temper run — paths + what an agent must relay."""
     proposed = getattr(tree, "proposed_examples", None) or []
-    examples_path = str(Path(tree_path).with_suffix("")) + ".proposed_examples.json"
+    validation_path = str(Path(tree_path).with_suffix("")) + ".validation.jsonl"
     report = getattr(tree, "example_report", None)
     return {
         "fn_name": tree.fn_name,
         "tree_path": tree_path,
         "tempered_skill_path": skill_path,
-        "proposed_examples_path": examples_path if proposed else None,
-        "proposed_examples_count": len(proposed),
+        "validation_dataset_path": validation_path if proposed else None,
+        "validation_case_count": len(proposed),
         "features": list(tree.features),
         "node_count": len(tree.nodes),
         "profile": tree.profile,
@@ -194,7 +200,7 @@ def ingest(
     propose_examples: bool = typer.Option(
         True, "--propose-examples/--no-propose-examples",
         help="Have the loop draft discriminating test cases for its gray zones, for you "
-             "to ratify and feed back via --examples (written to <out>.proposed_examples.json)."),
+             "to ratify and feed back via --examples (written to <out>.validation.jsonl)."),
     require_fit: bool = typer.Option(
         False, "--require-fit",
         help="Run the fitness audit first and abort (exit 3) if the verdict is 'skip' — "
@@ -279,7 +285,7 @@ def ingest(
     _print_added_features(tree)
     _print_schema_gaps(tree)
     _print_outcome_gaps(tree)
-    _write_proposed_examples(tree, out)
+    _write_validation_dataset(tree, out)
 
     # Close the loop: a tempered skill.md that delegates the decision to the tree.
     module = Path(out).with_suffix("").name
@@ -385,25 +391,33 @@ def _print_proposed_schema(inferred: InferredSchema, path: Path, skill: str) -> 
                         border_style="magenta"))
 
 
-def _write_proposed_examples(tree, out: str) -> None:
-    """Write the loop's drafted test cases to a sidecar file for human ratification."""
+def _write_validation_dataset(tree, out: str) -> None:
+    """Emit the committed validation dataset + behavior-lock tests (same artifacts as
+    export_tree): <stem>.validation.jsonl (the debate surface), test_<stem>.py (always green),
+    and test_<stem>_ratified.py (only if a case is ratified). Disagreements are data, not tests."""
     proposed = getattr(tree, "proposed_examples", None)
     if not proposed:
         return
-    path = str(Path(out).with_suffix("")) + ".proposed_examples.json"
-    Path(path).write_text(_json.dumps(proposed, indent=2, ensure_ascii=False))
-    lines = [f"The loop drafted [bold]{len(proposed)}[/] test case(s) for its gray zones — "
-             "[bold]proposed labels, not ground truth.[/] Review, fix any label, then set "
-             '[bold]"status": "ratified"[/] (or move them into your validation set) and '
-             "re-run with --examples to anchor these cells:"]
-    for e in proposed:
-        flag = "" if e["expected"] == e.get("tree_prediction") else "  [yellow](differs from tree)[/]"
+    stem = str(Path(out).with_suffix(""))
+    merged = merge_cases(load_validation(stem + ".validation.jsonl"), proposed)
+    enriched = enrich_validation(tree, merged)
+    write_dataset_and_tests(tree, out, enriched)
+
+    disputes = [e for e in enriched if e["agrees"] is False]
+    lines = [f"The loop drafted [bold]{len(enriched)}[/] validation case(s) — [bold]proposed "
+             "labels, not ground truth.[/] Review, fix any label, set [bold]\"status\": "
+             '"ratified"[/], and re-run to anchor these cells. Disagreements are data (not '
+             "failing tests):"]
+    for e in enriched:
+        flag = "  [yellow](differs from tree)[/]" if e["agrees"] is False else ""
         src = f" [dim]— {e['source']}[/]" if e.get("source") else ""
         lines.append(f"  input={e['input']}{src}")
-        lines.append(f"    proposed [green]{e['expected']}[/]  ·  tree says [cyan]{e.get('tree_prediction')}[/]{flag}")
+        lines.append(f"    proposed [green]{e['expected']}[/]  ·  tree says [cyan]{e['tree_prediction']}[/]{flag}")
         lines.append(f"    [dim]{e['rationale']}[/]")
-    lines.append(f"\n[dim]written to {path}[/]")
-    console.print(Panel("\n".join(lines), title="✎ proposed test cases (awaiting ratification)",
+    lines.append(f"\n[dim]dataset → {stem}.validation.jsonl · behavior-lock → "
+                 f"{Path(out).with_name('test_' + Path(out).name)} "
+                 f"({len(disputes)} open disagreement(s))[/]")
+    console.print(Panel("\n".join(lines), title="✎ validation dataset (awaiting ratification)",
                         border_style="magenta"))
 
 
@@ -679,7 +693,7 @@ def _decompose_pipeline(skill, be, out_dir, profile, *, temper_each, yes_unratif
         tree = ingest_skill(skill, schema=_load_schema(schema_path), profile=profile, backend=be,
                             gate=_make_gate(False), fn_name=d.fn_name, propose_examples=True)
         tree.export(str(out / f"{d.fn_name}.py"))
-        _write_proposed_examples(tree, str(out / f"{d.fn_name}.py"))
+        _write_validation_dataset(tree, str(out / f"{d.fn_name}.py"))
         items.append({"fn": d.fn_name, "module": d.fn_name, "features": tree.features,
                       "consumes": d.consumes,
                       "gray_zones": [n.gray_zone for n in tree.nodes if n.gray_zone]})
@@ -705,7 +719,7 @@ def _temper_pipeline(skill, be, out_dir, profile, *, schema_spec=None, fn=None):
                         propose_examples=True)
     module = fn or tree.fn_name
     tree.export(str(out / f"{module}.py"))
-    _write_proposed_examples(tree, str(out / f"{module}.py"))
+    _write_validation_dataset(tree, str(out / f"{module}.py"))
     md = render_tempered_skill(tree, module, original_skill_text=open(skill).read())
     mdp = out / f"{module}.tempered.md"
     mdp.write_text(md)

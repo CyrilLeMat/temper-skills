@@ -60,9 +60,9 @@ and anything to watch. This step is **not** frozen — phrase it naturally.
   when unsure, say "call the vet." Outcomes rank `vet_urgent > vet_soon > vet_call > monitor_home`.
 
 ## Cases awaiting your ratification
-Each tree ships a `*.proposed_examples.json` the loop built from the panel's findings
-(proposals, **not** ground truth — they don't gate anything until you ratify). The dataset is
-`<decision>.validation.jsonl`; the committed behavior-lock tests stay green (they assert the
+Each tree ships a `<decision>.validation.jsonl` the loop built from the panel's findings
+(proposals, **not** ground truth — they don't gate anything until you ratify). The committed
+behavior-lock tests stay green (they assert the
 tree's own output), and disagreements live in the dataset as data (`"agrees": false`), never as
 failing or `xfail` tests. After this re-temper, **two cells are contested** — the panel's label
 disagrees with what the tree returns. Both are the same precedence call, the highest-value one to

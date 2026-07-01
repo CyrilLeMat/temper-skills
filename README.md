@@ -254,14 +254,16 @@ proposer, so it's "satisfy your critics." Ratified examples, when you supply the
 *ahead* of the proposed ones and are never traded away to match a proposed label.
 
 ```
-✎ proposed test cases (awaiting ratification)
+✎ validation dataset (awaiting ratification)
   input={'priority': 'urgent', 'security_score': 0.85}  — edge_case_hunter (round 4)
     proposed escalate_urgent  ·  tree says escalate_security   (differs from tree)
-→ written to route_ticket.proposed_examples.json
+→ dataset → route_ticket.validation.jsonl · behavior-lock → test_route_ticket.py (1 open disagreement)
 ```
 
 Each case is tagged `"status": "proposed"`; `load_dataset` *ignores* proposed entries, so they
-never silently become a CI gate. Review the labels, set `"status": "ratified"`, and on the next
+never silently become a CI gate. The committed behavior-lock test asserts only what the tree
+returns (always green); a disagreement is a `"agrees": false` row in the dataset, never a failing
+or xfail test. Review the labels, set `"status": "ratified"`, and on the next
 run they become authoritative ground truth the loop must honor. That's how an empty validation
 set grows into a trusted one.
 

@@ -139,7 +139,7 @@ The `ingest --json` manifest is the source of truth — read these fields, don't
 
 ```json
 { "tree_path": "...", "tempered_skill_path": "...",
-  "proposed_examples_path": "..." , "proposed_examples_count": 0,
+  "validation_dataset_path": "..." , "validation_case_count": 0,
   "gray_zones": [{"node": 1, "condition": "...", "note": "..."}],
   "features": ["..."], "node_count": 0, "profile": "...", "cost_usd": 0.0 }
 ```
@@ -150,9 +150,10 @@ Surface all three artifacts to the user:
   `generated_at` + model header and per-node provenance comments;
 - `tempered_skill_path` — the **tempered `skill.md`**: the original skill rewritten to *call*
   the frozen tree instead of re-deciding. Half the deliverable; don't drop it;
-- `proposed_examples_path` — cases the loop drafted for its gray zones, **awaiting
-  ratification** (`proposed_examples_count`). The ones whose label differs from the tree are
-  the highest-value disagreements for the user to rule on.
+- `validation_dataset_path` — the committed `.validation.jsonl` the loop built for its gray zones,
+  **awaiting ratification** (`validation_case_count`). Rows with `"agrees": false` are the
+  highest-value disagreements for the user to rule on. The behavior-lock tests beside it
+  (`test_<stem>.py`) stay green; only ratified labels can turn a test red.
 
 Tell the user the paths, the profile, the `cost_usd`, and the `gray_zones`. Restate rule 4:
 deterministic and auditable, not "correct."

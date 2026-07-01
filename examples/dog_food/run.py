@@ -13,7 +13,6 @@ Educational example only — not veterinary advice.
 
 from __future__ import annotations
 
-import json
 import os
 
 import temper_skills
@@ -38,10 +37,11 @@ def main() -> None:
 
     proposed = getattr(tree, "proposed_examples", None)
     if proposed:
-        sidecar = os.path.join(HERE, "output", "dog_food.proposed_examples.json")
-        with open(sidecar, "w") as f:
-            json.dump(proposed, f, indent=2, ensure_ascii=False)
-        print(f"\nThe loop drafted {len(proposed)} test case(s) → {sidecar}")
+        from temper_skills.export_tree import enrich_validation, write_dataset_and_tests
+        enriched = enrich_validation(tree, proposed)
+        write_dataset_and_tests(tree, out, enriched)  # <stem>.validation.jsonl + behavior-lock test
+        stem = os.path.splitext(out)[0]
+        print(f"\nThe loop drafted {len(proposed)} validation case(s) → {stem}.validation.jsonl")
         print("Review/ratify them to grow a validation set (cf. output/validation_set.json).")
 
 
