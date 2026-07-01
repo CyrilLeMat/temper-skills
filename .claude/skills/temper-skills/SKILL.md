@@ -217,9 +217,13 @@ the deterministic per-round writer — do not wait for export:
 
 ```bash
 echo '<this round's proposed_tests as a JSON list>' | \
-  python -m temper_skills.update_validation <fn>.tree.json output/<fn>.py \
+  python scripts/update_validation.py <fn>.tree.json output/<fn>.py \
     --round <N> --run-id <run_id>
 ```
+
+(`scripts/` here is this skill's own vendored, stdlib-only copy — no install needed. The path
+is relative to the skill directory; use the absolute path to `.../temper-skills/scripts/` if
+your working directory is elsewhere.)
 
 This is not optional and not deferred: the committed `output/<fn>.validation.jsonl` and the
 behavior-lock test beside it must grow **every round**, so the user can watch the evidence
@@ -281,15 +285,21 @@ co-evolving model these are **not** a special "re-gate" — they are the normal 
 
 ## Export (deterministic — no LLM)
 
-When the loop ends, write the tree to JSON and run the deterministic exporters — **both
-of them**. The first emits the decision tree; the second closes the loop by emitting a
-**tempered `skill.md`** that delegates the decision to that tree (the whole point: the
-original prompt should now *use* the frozen logic, not re-derive it):
+When the loop ends, write the tree to JSON and run the vendored, stdlib-only exporter (no
+install — it lives in this skill's own `scripts/`):
 
 ```bash
-python -m temper_skills.export_tree  tree.json route.py
-python -m temper_skills.export_skill tree.json route route.tempered.md <original_skill.md>
+python scripts/export_tree.py tree.json route.py
 ```
+
+That emits the decision tree, reconciles `route.validation.jsonl`, and (re)writes the
+behavior-lock + ratified tests. Then **close the loop** by writing the **tempered `skill.md`**
+that delegates the decision to the tree — the whole point: the original prompt should now *use*
+the frozen logic, not re-derive it. In subagent mode you write it **yourself** (the woven
+variant, below), preserving the original's role/voice — no package needed. (If the
+`temper-skills` package happens to be installed, `python -m temper_skills.export_skill tree.json
+route route.tempered.md <original_skill.md>` is a deterministic-template shortcut; it's optional
+and the only step that needs the install, so prefer writing it yourself.)
 
 Show the user both artifacts and what changed: the original skill re-decided every call;
 the tempered skill extracts features, calls `route.<fn>`, and relays the verdict — decision
