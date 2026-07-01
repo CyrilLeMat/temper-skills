@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import copy
 import json
+import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Callable
@@ -50,6 +52,35 @@ PROFILE_PERSONAS: dict[str, list[Persona]] = {
     "audit-grade": [LITERALIST, EDGE_CASE_HUNTER, BAD_FAITH_ACTOR, DOMAIN_EXPERT,
                     SCHEMA_CRITIC, OUTCOME_CRITIC],
 }
+
+
+# Co-evolving schema: a feature the schema_critic adds must EARN a surviving branch within
+# this many rounds, else it is reverted (fitness = the proposer actually branches on it). This
+# bounds schema growth by tree size so the loop still converges (§ the "earn-a-branch" guard).
+_EARN_ROUNDS = 2
+
+_JSON_TYPE = {"float": "number", "int": "integer", "bool": "boolean", "str": "string"}
+
+
+def _parse_feature_spec(spec: str) -> tuple[str, dict]:
+    """Parse a schema_critic 'name: type — why' into (name, json-schema-fragment).
+
+    Best-effort: unknown/compound types (Literal[...], a|b) fall back to string. Returns
+    ("", {}) if the spec has no parseable name."""
+    head = spec.split("—", 1)[0].split(" - ", 1)[0].strip()
+    name, _, type_part = head.partition(":")
+    name = name.strip()
+    if not name or not name.isidentifier():
+        return "", {}
+    t = type_part.strip().lower()
+    frag = {"type": _JSON_TYPE.get(t, "string")}
+    return name, frag
+
+
+def _feature_used_in_tree(name: str, tree: ProposedTree) -> bool:
+    """Does any node condition branch on this feature (word-boundary match)?"""
+    pat = re.compile(rf"\b{re.escape(name)}\b")
+    return any(pat.search(n.condition or "") for n in tree.nodes)
 
 
 @dataclass
@@ -307,6 +338,7 @@ def distill(
     seed_tree: ProposedTree | None = None,
     seed_survival: dict[str, int] | None = None,
     propose_examples: bool = True,
+    evolve_schema: bool = True,
     checkpoint: "Callable[[DecisionTree], None] | None" = None,
 ) -> DecisionTree:
     """Run the adversarial loop and return a deterministic DecisionTree.
@@ -329,6 +361,12 @@ def distill(
     if profile not in PROFILES:
         raise ValueError(f"unknown profile {profile!r}; choose from {list(PROFILES)}")
     max_rounds, stop_quiet, _interactive, provenance = PROFILES[profile]
+
+    # Co-evolving schema: mutate a private copy so the caller's Sources is never touched.
+    if evolve_schema:
+        sources = copy.copy(sources)
+        sources.json_schema = copy.deepcopy(sources.json_schema)
+        sources.json_schema.setdefault("properties", {})
 
     personas = list(adversaries) if adversaries is not None else list(PROFILE_PERSONAS[profile])
     # The overengineering_critic is always on (§5.5).
@@ -354,10 +392,15 @@ def distill(
     # along in the critiques the personas already return.
     proposed: dict[str, dict] = {}
     existing_inputs = {_canon(e["input"]) for e in sources.examples}
-    # Advisory expressiveness findings, deduped across rounds: input-side (schema_critic) and
-    # output-side (outcome_critic).
+    # Advisory expressiveness findings, deduped across rounds. Outcomes are free-form in the
+    # library (no ceiling), so the outcome_critic stays advisory here. Schema features co-evolve:
+    #   watching[name] = (round_added, spec)  — added, on probation until it earns a branch
+    #   earned[name]   = spec                 — branched on; now a permanent schema member
+    #   schema_gaps    = specs proposed but reverted (earned no branch in _EARN_ROUNDS)
     schema_gaps: dict[str, None] = {}
     outcome_gaps: dict[str, None] = {}
+    watching: dict[str, tuple[int, str]] = {}
+    earned: dict[str, str] = {}
 
     # We SCORE the tree against those proposed cases, not just the ratified ones: the
     # point of the tool is to hand back a good final tree without waiting on a human to
@@ -381,10 +424,20 @@ def distill(
         try:
             verdicts = _critique_all(backend, sources, personas, tree, closed)
             for v in verdicts:
-                for feat in v.proposed_features:
-                    schema_gaps.setdefault(feat, None)
                 for oc in v.proposed_outcomes:
                     outcome_gaps.setdefault(oc, None)
+                for feat in v.proposed_features:
+                    if evolve_schema:
+                        # Grow the schema: add the feature so THIS round's arbiter (and the
+                        # next proposer) can branch on it. It's on probation until it earns a
+                        # branch (below); if it never does, it's reverted, not shipped.
+                        name, frag = _parse_feature_spec(feat)
+                        if name and name not in sources.json_schema["properties"] \
+                                and name not in earned:
+                            sources.json_schema["properties"][name] = frag
+                            watching.setdefault(name, (r, feat))
+                    else:
+                        schema_gaps.setdefault(feat, None)  # advisory-only (legacy behavior)
             if propose_examples:
                 _harvest_proposed(verdicts, r, proposed, existing_inputs)
             arbitration = _arbitrate(backend, sources, tree, verdicts,
@@ -398,6 +451,20 @@ def distill(
             break
         new_tree = _sanitize(arbitration.tree)
         last_arbitration = arbitration
+
+        # Earn-a-branch-or-revert: a probationary feature that the tree now branches on is
+        # earned (permanent); one that hasn't earned a branch within _EARN_ROUNDS is reverted
+        # out of the schema and recorded as an advisory gap. Keeps schema size ≤ tree size.
+        if evolve_schema and watching:
+            for name in list(watching):
+                added_round, spec = watching[name]
+                if _feature_used_in_tree(name, new_tree):
+                    earned[name] = spec
+                    del watching[name]
+                elif r - added_round >= _EARN_ROUNDS:
+                    sources.json_schema["properties"].pop(name, None)
+                    schema_gaps.setdefault(spec, None)
+                    del watching[name]
 
         for key in {_node_key(n.condition) for n in new_tree.nodes}:
             survival[key] = survival.get(key, 0) + 1
@@ -455,7 +522,23 @@ def distill(
     # rounds_survived for whichever tree wins.
     best_tree, best_arbitration = _select_best(candidates, sources, list(proposed.values()), fn_name)
     arb_for_final = best_arbitration if best_arbitration is not None else last_arbitration
+
+    # Final earn-a-branch reconciliation against the WINNING tree: a co-evolution-added feature
+    # ships only if the shipped tree actually branches on it; the rest revert to advisory gaps.
+    # (Original, user-supplied schema features are never reverted — they're the naive seed.)
+    added_features: list[str] = []
+    if evolve_schema:
+        for name in list(earned) + list(watching):
+            spec = earned.get(name) or watching[name][1]
+            if _feature_used_in_tree(name, best_tree):
+                added_features.append(spec)
+            else:
+                sources.json_schema["properties"].pop(name, None)
+                schema_gaps.setdefault(spec, None)
+
     final = _finalize(best_tree, arb_for_final, survival, sources, model_tag, profile, provenance, fn_name)
+    if added_features:
+        final.added_features = added_features  # the loop grew the schema by these (review them)
     if schema_gaps:
         final.schema_gaps = list(schema_gaps)  # advisory: prompt to re-open the schema gate
     if outcome_gaps:

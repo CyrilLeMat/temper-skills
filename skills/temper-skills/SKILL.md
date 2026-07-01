@@ -33,9 +33,11 @@ yourself.
 
 1. **Always call the library through its CLI. Never reimplement the decision logic in natural
    language** as a substitute for running it.
-2. **Never skip schema ratification.** The inferred schema caps what the tree can express; a
-   silent extraction error poisons everything. Use the file-based gate below (`--propose-schema`),
-   even when no terminal is attached.
+2. **Never skip schema ratification.** The schema you approve is the *naive seed* the loop then
+   co-evolves (the `schema_critic` grows it, the earn-a-branch guard prunes it), so a silent
+   extraction error in the seed still poisons everything. Use the file-based gate below
+   (`--propose-schema`), even when no terminal is attached. Review the co-evolved schema and any
+   `schema gaps` / `schema grew` notes the CLI prints at the end.
 3. **Never install silently.** If the gate (Step 0) reports the lib or a backend is missing,
    ask the user before running `pip install` or changing their environment.
 4. **Never claim the tree is "correct"** — only that it is deterministic and auditable.

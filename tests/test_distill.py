@@ -110,6 +110,81 @@ def test_outcome_critic_adds_no_validation_cases():
     assert {"x": 1} not in inputs  # outcome_critic's stray case was not harvested
 
 
+# --- co-evolving schema (earn-a-branch-or-revert) ------------------------------------------
+
+class _EvolveBackend(FakeBackend):
+    """schema_critic proposes `dose_mg`; once it's in the schema, the arbiter branches on it."""
+
+    def __init__(self, feature="dose_mg: float — toxicity is dose-dependent", use_it=True):
+        super().__init__(score=9)
+        self.feature = feature
+        self.use_it = use_it
+
+    def complete(self, system, user, schema):
+        from temper_skills.schemas import (
+            ArbitrationEntry, PersonaVerdict, ProposedNode, ProposedTree, ProposerArbitration,
+        )
+        import re as _re
+        if schema is PersonaVerdict:
+            m = _re.search(r"Your angle \((\w+)\)", user)
+            persona = m.group(1) if m else "unknown"
+            with self._lock:
+                self.calls["verdict"] += 1
+                self.personas_seen.append(persona)
+            if persona == "schema_critic":
+                return PersonaVerdict(persona=persona, score=6, verdict="schema_too_thin",
+                                      detail="thin", proposed_features=[self.feature])
+            return PersonaVerdict(persona=persona, score=9, verdict="ok", detail="ok")
+        if schema is ProposerArbitration:
+            self.calls["arbitration"] += 1
+            # branch on dose_mg once the schema exposes it (co-evolution made it available)
+            if self.use_it and "dose_mg" in user:
+                tree = ProposedTree(nodes=[ProposedNode(
+                    condition="dose_mg is not None and dose_mg > 5", outcome="toxic",
+                    sources=["schema_critic"], gray_zone=None)], default_outcome="route_default")
+            else:
+                tree = ProposedTree(nodes=[ProposedNode(
+                    condition='priority == "high"', outcome="escalate_urgent",
+                    sources=["c"], gray_zone=None)], default_outcome="route_default")
+            return ProposerArbitration(
+                entries=[ArbitrationEntry(persona="schema_critic", decision="changed", rationale="added")],
+                convergence_estimate=90, tree=tree)
+        return super().complete(system, user, schema)
+
+
+def test_added_feature_that_earns_a_branch_joins_the_schema():
+    be = _EvolveBackend(use_it=True)
+    tree = distill(_sources(), backend=be, profile="standard", fn_name="route_ticket")
+    assert "dose_mg" in tree.features                      # co-evolved into the schema
+    assert tree.added_features == ["dose_mg: float — toxicity is dose-dependent"]
+    assert not tree.schema_gaps                            # earned its place → not a gap
+    assert any("dose_mg" in n.condition for n in tree.nodes)
+
+
+def test_added_feature_that_earns_no_branch_is_reverted_to_a_gap():
+    be = _EvolveBackend(use_it=False)  # proposer never branches on dose_mg
+    tree = distill(_sources(), backend=be, profile="standard", fn_name="route_ticket")
+    assert "dose_mg" not in tree.features                  # reverted out of the schema
+    assert tree.schema_gaps == ["dose_mg: float — toxicity is dose-dependent"]
+    assert not tree.added_features
+
+
+def test_evolve_schema_off_keeps_legacy_advisory_behavior():
+    be = _EvolveBackend(use_it=True)
+    tree = distill(_sources(), backend=be, profile="standard", fn_name="route_ticket",
+                   evolve_schema=False)
+    assert "dose_mg" not in tree.features                  # never added to the schema
+    assert tree.schema_gaps == ["dose_mg: float — toxicity is dose-dependent"]
+    assert not tree.added_features
+
+
+def test_co_evolution_does_not_mutate_caller_sources():
+    src = _sources()
+    before = set(src.feature_names)
+    distill(src, backend=_EvolveBackend(use_it=True), profile="standard", fn_name="route_ticket")
+    assert set(src.feature_names) == before               # caller's schema untouched
+
+
 def test_stable_scores_plateau_and_stop():
     # FakeBackend returns the same tree+scores every round, so after the first
     # round nothing improves — the loop plateaus and stops (quick stop_quiet=2):

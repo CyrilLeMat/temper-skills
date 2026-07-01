@@ -21,20 +21,28 @@ reviewers. Everything runs on the user's Claude Code subscription via the Task t
 
 ## Operating rule — run autonomously (read this first)
 
-**You make the decisions; the loop is the point.** There are **exactly two** moments you
-may block the user, and no others:
+**You make the decisions; the loop is the point.** The schema and the tree **co-evolve** — you
+start from a *naive* schema + a naive tree and let the loop grow and prune both. There are
+**exactly two** human touchpoints, and no others:
 
-1. **Schema accept/edit** — once, up front (the inferred features cap what the tree can express).
-2. **The per-round gate** — Continue / Stop / Abort (skipped on `quick`).
+1. **The per-round gate** — Continue / Stop / Abort (skipped on `quick`). The only mid-run block.
+2. **The final review** — before shipping, the user reviews the *co-evolved* schema, the outcome
+   set, the recorded gray zones, and the validation dataset. This is review-the-output (a
+   sign-off), **not** answering questions mid-run.
+
+There is **no up-front schema gate**. Seed a naive schema yourself and start the loop; the
+`schema_critic` grows it, the `outcome_critic` flags a too-coarse outcome set, and the
+`overengineering_critic` + the earn-a-branch guard prune what doesn't earn its place. The schema
+is a *loop output*, reviewed at the end (it's the caller's integration contract), not a
+pre-commitment.
 
 For **everything else, decide and record — do not ask.** Specifically, **never** raise an
-`AskUserQuestion` / multiple-choice modal to have the user choose feature breadth, whether
-to keep/drop a branch, how to resolve a gray zone, or any "which design do you prefer"
-question. Those are the loop's job: the `overengineering_critic` prunes complexity, and you
-resolve gray zones with the safest defensible default and **record** them (see Gray zones).
-The user ratifies by *reviewing* recorded provenance, not by answering questions mid-run. If
-you catch yourself about to open a question modal for anything other than the two gates
-above: stop, make the defensible call, record it, and keep going.
+`AskUserQuestion` / multiple-choice modal to have the user choose feature breadth, whether to
+keep/drop a branch or feature, how to resolve a gray zone, or any "which design do you prefer"
+question. Those are the loop's job: the critics grow/prune, and you resolve gray zones with the
+safest defensible default and **record** them (see Gray zones). If you catch yourself about to
+open a question modal for anything other than the per-round gate: stop, make the defensible call,
+record it, and keep going.
 
 ## Inputs
 
@@ -49,28 +57,29 @@ be absent at inference, so guard before comparing (`x is not None and x < 1`, ne
 `x < 1`) and coerce strings (`(s or "").strip().lower()`). A condition must never raise on a
 missing feature.
 
-Keep the inferred schema **tight**. Drop features that are circular (a feature that *is* the
-answer, like `is_known_toxic_food`) or that the source skill never implies (`dog_age_years`
-for a skill that doesn't mention age). A bloated schema gives the loop infinite surface and
-it won't converge — the schema is the ceiling (§2.5).
+### Seed a naive schema — the loop co-evolves it
 
-### The one pre-loop human decision: the schema (accept or edit)
+Do **not** try to get the schema right up front, and do **not** gate on it. Seed a *naive,
+tight* schema — the features the source obviously decides on — and start the loop. Drop features
+that are circular (a feature that *is* the answer, like `is_known_toxic_food`); when in doubt
+leave a plausible feature out. Then let the loop co-evolve it:
 
-When you infer the schema, present it and ask exactly one thing: **"Accept these features,
-or edit the list?"** That's the only legitimate pre-loop gate (§11.4) — the schema caps
-what the tree can ever express, and a silent extraction error would poison everything.
+- the **`schema_critic`** grows it — each round it can name a feature the source implies that the
+  current schema can't express (e.g. `minutes_since_exercise` on `decide_meal`). You **add** it
+  to the working schema so the very next round can branch on it.
+- the **earn-a-branch guard** prunes it — a feature you added must earn a surviving branch within
+  ~2 rounds (the proposer actually branches on it and it survives the `overengineering_critic`).
+  If it never does, **revert it** out of the schema and record it as an advisory gap. This bounds
+  schema size by tree size, so the loop still converges — the schema is no longer a fixed ceiling.
+- the **`overengineering_critic`** prunes branches within the schema, every round.
 
-**Do NOT ask the user anything else here.** In particular, do **not** ask them to choose
-the feature-set *breadth*, whether to include dose/weight/form branches, or whether to
-"let the critic collapse." That is the loop's job, not the user's:
+The user does not choose feature breadth — that is exactly what the co-evolution is for.
+Offloading it to the user defeats the tool. The user's only schema involvement is the **final
+review** (below): they read the co-evolved schema + outcome set and sign off, because it's the
+contract the caller must extract against.
 
-- **Seed the loop with the full inferred feature set.** Let the proposer branch on whatever
-  it judges relevant.
-- **The `overengineering_critic` prunes** features and branches a thin skill doesn't justify
-  — that is its entire purpose. Offloading that judgment to the user defeats the tool.
-
-So the human touchpoints are exactly two: (1) accept/edit the schema, once, up front; and
-(2) the per-round Continue / Stop / Abort gate below. Nothing else is a question for them.
+So the human touchpoints are exactly two: (1) the per-round Continue / Stop / Abort gate, and
+(2) the final review/sign-off. Nothing else is a question for them.
 
 ## The personas
 
@@ -121,13 +130,14 @@ truth. The three counterweights always return `proposed_tests: []`:
 
 - The `overengineering_critic` removes complexity; it adds no cases, features, or outcomes.
 - The `schema_critic` uses `verdict: "schema_too_thin"` and fills **`proposed_features`** — each
-  a `name: type — why` for a feature the source implies but the schema can't express. These are
-  **advisory and may re-open the schema gate** (see below), not branches you add to the tree.
+  a `name: type — why` for a feature the source implies but the schema can't express. You **add**
+  load-bearing ones to the working schema (co-evolution, see below); the earn-a-branch guard
+  reverts any that don't get used. They are growth signals, not branches you add to the tree.
 - The `outcome_critic` uses `verdict: "outcome_too_coarse"` and fills **`proposed_outcomes`** —
   each an `outcome — why` for an answer the source implies but the outcome set can't express.
-  Also **advisory**: record it as a gray zone by default, and widen the outcome set only when a
-  gap is load-bearing (the dual of the schema re-gate). Every other persona leaves both
-  `proposed_features` and `proposed_outcomes` empty.
+  Widen the outcome set when the gap is load-bearing; otherwise record it as a gray zone (the
+  output-side dual). Every other persona leaves both `proposed_features` and `proposed_outcomes`
+  empty.
 
 **`score` is always the TREE's robustness from your angle — 0 = the tree fails badly
 through your lens, 10 = solid, nothing to add.** It is NOT how successful your attack
@@ -158,32 +168,45 @@ The loop stops when **no round improves on the best for `stop after N quiet roun
 
 ## The loop
 
-1. **Draft** the initial tree yourself (proposer) from the skill + schema + constraints.
-   Cover obvious cases. Where the source **underdetermines** an answer (a genuine gray
-   zone — e.g. "the skill says 'when in doubt, say no' but never lists safe foods"),
+1. **Draft** a naive initial tree yourself (proposer) from the skill + naive schema +
+   constraints. Cover obvious cases. Where the source **underdetermines** an answer (a genuine
+   gray zone — e.g. "the skill says 'when in doubt, say no' but never lists safe foods"),
    **resolve it yourself with the safest defensible default** consistent with the HARD
    constraints and the source's stated bias, and **record it as a `gray_zone`** on the
    node. Do **not** stop to ask the user how to resolve it — see "Gray zones" below.
 2. **Critique** — spawn the profile's panel (the attackers + the structural counterweights) in
    parallel with the current tree; collect their scored JSON verdicts.
-3. **Arbitrate** — spawn **one independent `arbiter` subagent**, separate from you-the-proposer.
-   It receives the current tree, the panel's verdicts, the constraints, and the schema — but
-   **not** your defense of the draft — and rules `kept` / `changed` / `rejected` per persona
-   with a one-line rationale (the *arbitrage log*), then returns the revised tree. It owes the
-   draft no deference: keep a branch only because the logic and source justify it, not because
-   it is already there; add a branch only if a critique justifies it AND an expert would write
-   it by hand; collapse branches the `overengineering_critic` flags; honor the `schema_critic`
-   (see re-gate below); never contradict a HARD constraint. You then apply its tree and track
-   `rounds_survived` per node (matched by condition). **Do not arbitrate your own draft** — the
-   proposer defending its own tree is the bias this split removes. (For a `quick`/unattended run
-   you may fold the arbiter back into the proposer to save a spawn; standard/audit-grade always
-   use a separate arbiter.)
-4. **Show the round panel** — round N, per-persona `score/10` (sorted worst-first), the
-   arbitrage log, current tree preview, and `min/mean` score.
-5. **Gate** — ask the user: Continue · Stop and review · Abort. (Skip the gate only if they
+3. **Co-evolve the schema/outcomes** — apply the expressiveness critics *before* arbitrating so
+   the same round can use them:
+   - if the `schema_critic` named a feature (`proposed_features`), **add it to the working
+     schema** and note the round you added it. Now the arbiter can branch on it.
+   - if the `outcome_critic` named an outcome (`proposed_outcomes`), **widen the outcome set** if
+     the gap is load-bearing (else record it as a gray zone).
+   - **earn-a-branch-or-revert:** a feature/outcome you added must earn a surviving branch within
+     ~2 rounds. If, ~2 rounds after you added it, no branch uses it (or the
+     `overengineering_critic` would cut it), **revert it** and record it as an advisory gap. This
+     keeps the schema no bigger than the tree needs.
+4. **Arbitrate** — spawn **one independent `arbiter` subagent**, separate from you-the-proposer.
+   It receives the current tree, the panel's verdicts, the constraints, and the **current
+   (possibly grown) schema** — but **not** your defense of the draft — and rules `kept` /
+   `changed` / `rejected` per persona with a one-line rationale (the *arbitrage log*), then
+   returns the revised tree. It owes the draft no deference: keep a branch only because the logic
+   and source justify it, not because it is already there; add a branch only if a critique
+   justifies it AND an expert would write it by hand (including branching on a newly-added
+   feature); collapse branches the `overengineering_critic` flags; never contradict a HARD
+   constraint. You then apply its tree and track `rounds_survived` per node (matched by
+   condition). **Do not arbitrate your own draft** — the proposer defending its own tree is the
+   bias this split removes. (For a `quick`/unattended run you may fold the arbiter back into the
+   proposer to save a spawn; standard/audit-grade always use a separate arbiter.)
+5. **Write the validation dataset** — pipe this round's `proposed_tests` to the per-round writer
+   (see below) so `output/<fn>.validation.jsonl` and its behavior-lock test grow on disk.
+6. **Show the round panel** — round N, per-persona `score/10` (sorted worst-first), the
+   arbitrage log, any schema/outcome change this round, current tree preview, and `min/mean`.
+7. **Gate** — ask the user: Continue · Stop and review · Abort. (Skip the gate only if they
    asked for an unattended/quick run.)
-6. **Converge** — apply the convergence rule from *Profiles & convergence* above (plateau on
-   no improvement for the profile's quiet-round count, the round cap, or the user stops).
+8. **Converge** — apply the convergence rule from *Profiles & convergence* above (plateau on
+   no improvement for the profile's quiet-round count, the round cap, or the user stops). A
+   schema/outcome change is an improvement — it resets the quiet-round count.
 
 ### Build the validation set as you go — written to disk every round
 
@@ -235,26 +258,26 @@ these by **recording them and signing off at review** (§2.5, §4.4) — they ap
 - **Never raise a blocking question to resolve a gray zone**, and never batch a list of
   design questions. The user ratifies or overrides by reading the recorded gray zones at
   the round gate or in the final output — that is the sign-off.
-- The **only** blocking interactions in the whole run are: (1) the one-time schema
-  accept/edit, and (2) the per-round Continue / Stop / Abort gate. If you're about to ask
-  the user anything else, stop — make the defensible call, record it, and surface it.
+- The **only** blocking interaction in the whole run is the per-round Continue / Stop / Abort
+  gate. If you're about to ask the user anything else, stop — make the defensible call, record
+  it, and surface it at the final review.
 
-### Expressiveness gaps (schema & outcome): advisory, with one principled re-gate
+### Expressiveness gaps drive co-evolution (not a re-gate)
 
-The `schema_critic` reports features the source needs but the schema can't express, and the
-`outcome_critic` reports answers the source needs but the outcome set can't express. Neither can
-fix the tree directly (the feature/outcome doesn't exist yet). Handle both the same way:
+The `schema_critic` reports features the source needs but the schema can't express; the
+`outcome_critic` reports answers the source needs but the outcome set can't express. In the
+co-evolving model these are **not** a special "re-gate" — they are the normal growth signal:
 
-- **Advisory by default.** Record each gap as a `gray_zone` on the node that had to punt or
-  over-approximate — a *schema* gap (e.g. `decide_meal`'s "no minutes-since-exercise → route to
-  wait") or an *outcome* gap (e.g. "can't say 'wait, then a treat', so an already-fed dog that
-  just exercised routes to `treat_only`"). The tree ships with the limitation documented, not
-  hidden.
-- **Re-gate only when load-bearing.** If a gap is so central that the tree can't be correct
-  without it, you may **re-open the schema accept/edit gate once** (gate #1) to add the feature
-  *or widen the outcome set*, then reseed the loop. This is the *single* sanctioned exception to
-  "exactly two gates" — still gate #1, surfaced from evidence, not a new kind of question. Don't
-  reopen for a marginal nice-to-have; record those as gray zones and move on.
+- **Grow, don't just record.** When a critic names a load-bearing gap, **add** the feature to the
+  working schema (or widen the outcome set) the same round, so the arbiter can branch on it next.
+  You do not stop to ask the user — adding it is the loop's job.
+- **Earn-a-branch-or-revert bounds the growth.** An added feature/outcome that never earns a
+  surviving branch within ~2 rounds is **reverted** and recorded as an advisory gap (a
+  `gray_zone` on the node that had to punt — e.g. an *outcome* gap "can't say 'wait, then a
+  treat', so an already-fed dog that just exercised routes to `treat_only`"). This is what keeps
+  a mutable schema from ballooning — a feature only survives if the tree actually uses it.
+- **The user sees it at the final review.** The co-evolved schema, the outcome set, what grew,
+  and what reverted are all surfaced for sign-off at the end — never as a mid-run question.
 
 ## Export (deterministic — no LLM)
 

@@ -54,6 +54,10 @@ class DecisionTree:
     # vocabulary can't express them, so two distinct answers collapse into one label. Advisory:
     # a prompt to widen the outcome set. Metadata only, not emitted into source.
     outcome_gaps: "list | None" = None
+    # Features the schema_critic proposed that the loop ADDED to the schema and the tree then
+    # earned a branch on (co-evolving schema). Surfaced for the final schema review — the loop
+    # grew the schema by these. Metadata only, not emitted into source.
+    added_features: "list | None" = None
 
     def to_source(self) -> str:
         """Render the tree as a zero-dependency Python module."""

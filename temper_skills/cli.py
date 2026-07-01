@@ -276,6 +276,7 @@ def ingest(
     cost_line = f"~${cost:.4f} (metered)" if cost is not None else "subscription — no metered cost"
     console.print(Panel(tree.to_source(), title=f"Exported {out}", border_style="green"))
     _print_example_check(tree)
+    _print_added_features(tree)
     _print_schema_gaps(tree)
     _print_outcome_gaps(tree)
     _write_proposed_examples(tree, out)
@@ -303,6 +304,19 @@ def ingest(
         manifest["backend"] = be.describe()
         manifest["cost_usd"] = cost
         _emit_json(manifest)
+
+
+def _print_added_features(tree) -> None:
+    """Surface the co-evolved schema growth for the final review: features the schema_critic
+    proposed that the loop ADDED and the tree then earned a branch on. Review before shipping —
+    the schema is the caller's integration contract."""
+    added = getattr(tree, "added_features", None)
+    if not added:
+        return
+    lines = ["[green]The loop grew the schema — these features were added and earned a branch. "
+             "Review them; they're now part of the caller's extraction contract:[/]"]
+    lines += [f"  • {a}" for a in added]
+    console.print(Panel("\n".join(lines), title="✎ schema grew (review)", border_style="green"))
 
 
 def _print_schema_gaps(tree) -> None:
