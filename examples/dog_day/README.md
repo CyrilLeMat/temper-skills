@@ -10,19 +10,24 @@ decision at a time, so a skill that holds several must be split first.
 Run `audit` on it and it doesn't say "temper" — it says **DECOMPOSE FIRST**, because the
 three axes would only *average* three different decisions.
 
+The output is a **spec-compliant [Agent Skill](https://agentskills.io/specification)** — a
+`SKILL.md` + `scripts/` + `assets/` folder, so the tempered flow is a portable skill any
+skills-compatible agent can load, not a loose pile of files:
+
 ```
 input/
   skill.md                  the flow: walk? · feed? · vet? · then write a note
-output/                     ← schemas proposed by `decompose --emit-schemas` + ratified; trees from a live run
-  decide_walk.schema.py     DecideWalk  — hours-since × weather × temperature_c × energy × availability
-  decide_meal.schema.py     DecideMeal  — coupled: just_exercised + minutes_since_exercise + had_full_meal_today from decide_walk/day
-  decide_vet.schema.py      DecideVet   — severity × duration × age (Ottawa-style)
-  decide_walk.py            the frozen tree (one per decision), with inline provenance
-  decide_meal.py
-  decide_vet.py
-  *.validation.jsonl        per-decision validation dataset the loop built (committed; review to ratify)
-  test_decide_*.py          behavior-lock tests (always green); disputes stay in the dataset, never xfail
-  dog_day.tempered.md       the orchestrator: chains the 3 trees + writes the note
+output/
+  dog-day/                  ← the tempered flow, as an Agent Skill (name matches the dir)
+    SKILL.md                orchestrator: chains the 3 trees + writes the note (imports from scripts/)
+    scripts/                executable code (spec: self-contained — the trees import nothing)
+      decide_walk.py        the frozen tree (one per decision), with inline provenance
+      decide_meal.py        coupled: just_exercised/minutes_since_exercise/had_full_meal_today ← decide_walk/day
+      decide_vet.py         severity × duration × age (Ottawa-style)
+      test_decide_*.py      behavior-lock tests (always green); disputes stay in the dataset, never xfail
+    assets/                 spec: "Data files … schemas" live here
+      decide_*.schema.py    the per-decision input contract
+      *.validation.jsonl    per-decision validation dataset the loop built (committed; review to ratify)
 ```
 
 This is the only **complete** decompose chain in the examples — the three trees are real
@@ -62,10 +67,11 @@ temper-skills ingest examples/dog_day/input/skill.md --backend auto -y \
 #    … repeat for decide_meal and decide_vet
 ```
 
-The committed result: **three small deterministic trees + a thin orchestrator skill**
-(`dog_day.tempered.md`) that chains them — feeding `decide_walk`'s outcome into `decide_meal`
-as `just_exercised` — and writes the note. That's the DMN-vs-BPMN split: the decision logic
-is frozen code, the orchestration and the prose stay with the model.
+The committed result: a **spec-compliant Agent Skill** (`output/dog-day/`) — three small
+deterministic trees in `scripts/` + a thin orchestrator `SKILL.md` that chains them, feeding
+`decide_walk`'s outcome into `decide_meal` as `just_exercised`, and writes the note. That's the
+DMN-vs-BPMN split: the decision logic is frozen code, the orchestration and the prose stay with
+the model — packaged as a portable skill.
 
 ## Honest scope
 

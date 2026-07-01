@@ -11,12 +11,21 @@ no LLM.
 
 from __future__ import annotations
 
+import json
 import re
 import sys
+from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from .export_tree import tree_from_dict
+from .export_tree import (
+    enrich_validation,
+    load_validation,
+    merge_cases,
+    render_behavior_lock,
+    render_ratified,
+    tree_from_dict,
+)
 from .tree import DecisionTree
 
 
@@ -125,6 +134,7 @@ def render_orchestrator_skill(
     original_skill_text: str | None = None,
     *,
     description: str | None = None,
+    import_prefix: str = "",
 ) -> str:
     """A multi-tree tempered skill: the flow's orchestrator.
 
@@ -132,6 +142,8 @@ def render_orchestrator_skill(
     agent runs delegates each frozen decision to its tree (respecting ``consumes`` coupling)
     and keeps only the generative steps. ``items`` is one dict per decision with keys
     ``fn``, ``module``, ``features``, ``consumes`` (fn_names it chains from), ``gray_zones``.
+    ``import_prefix`` (e.g. ``"scripts."``) prefixes the tree imports for the spec skill-dir
+    layout, where the trees live in ``scripts/`` and the agent runs from the skill root.
     """
     role = _role_line(original_skill_text)
     fns = ", ".join(it["fn"] for it in items) or "its decisions"
@@ -158,7 +170,7 @@ def render_orchestrator_skill(
         out.append("Extract " + ", ".join(f"`{f}`" for f in it["features"]) + ", then:")
         out += [
             "```python",
-            f"from {it['module']} import {it['fn']}",
+            f"from {import_prefix}{it['module']} import {it['fn']}",
             f"{it['fn']}_verdict = {module_call(it['module'], it['fn'], it['features'])}",
             "```",
         ]
@@ -176,6 +188,64 @@ def render_orchestrator_skill(
         "regenerate this orchestrator when a tree changes.",
     ]
     return "\n".join(out) + "\n"
+
+
+def arrange_skill_dir(
+    skill_dir: str,
+    name: str,
+    decisions: list[dict],
+    *,
+    generative_steps: list[str] | None = None,
+    original_skill_text: str | None = None,
+    description: str | None = None,
+) -> Path:
+    """Write a spec-compliant Agent Skill folder (agentskills.io) for one or more frozen trees.
+
+    Layout, per the spec's named directories:
+      SKILL.md                          orchestrator (delegates each decision to its tree)
+      scripts/<module>.py               the frozen tree (self-contained, zero deps)
+      scripts/test_<module>.py          behavior-lock test (+ _ratified.py if any ratified case)
+      assets/<module>.schema.py         the input schema      (spec: "Data files … schemas" → assets/)
+      assets/<module>.validation.jsonl  the validation dataset (spec: data files → assets/)
+
+    ``decisions`` is one dict per tree: ``{tree: DecisionTree, module: str,
+    schema_src: str|None, consumes: list[str]}``. The SKILL.md imports the trees as
+    ``from scripts.<module> import <fn>`` (agent runs from the skill root)."""
+    root = Path(skill_dir)
+    name = skill_name(name)
+    scripts, assets = root / "scripts", root / "assets"
+    scripts.mkdir(parents=True, exist_ok=True)
+    assets.mkdir(parents=True, exist_ok=True)
+
+    items: list[dict] = []
+    for d in decisions:
+        tree, module = d["tree"], d["module"]
+        tree.export(str(scripts / f"{module}.py"))
+
+        proposed = getattr(tree, "proposed_examples", None) or []
+        val_path = assets / f"{module}.validation.jsonl"
+        enriched = enrich_validation(tree, merge_cases(load_validation(str(val_path)), proposed))
+        if enriched:
+            val_path.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in enriched))
+            (scripts / f"test_{module}.py").write_text(
+                render_behavior_lock(module, tree.fn_name, enriched))
+            rat = render_ratified(module, tree.fn_name, enriched)
+            if rat:
+                (scripts / f"test_{module}_ratified.py").write_text(rat)
+        if d.get("schema_src"):
+            (assets / f"{module}.schema.py").write_text(d["schema_src"])
+
+        items.append({
+            "fn": tree.fn_name, "module": module, "features": list(tree.features),
+            "consumes": d.get("consumes", []),
+            "gray_zones": [n.gray_zone for n in tree.nodes if n.gray_zone],
+        })
+
+    md = render_orchestrator_skill(name, items, generative_steps=generative_steps,
+                                   original_skill_text=original_skill_text,
+                                   description=description, import_prefix="scripts.")
+    (root / "SKILL.md").write_text(md)
+    return root
 
 
 class WovenSkill(BaseModel):
