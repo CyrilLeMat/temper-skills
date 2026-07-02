@@ -111,6 +111,12 @@ def load_dataset(path: str) -> list[dict]:
     The loop can *propose* test cases (tagged ``"status": "proposed"``), but a
     machine-authored label must never gate anything until a human ratifies it — so
     proposed entries are skipped here. An entry with no ``status`` is treated as
-    ratified (the hand-authored sets predate the field)."""
-    data = json.loads(open(path).read())
+    ratified (the hand-authored sets predate the field).
+
+    Accepts a JSON array or JSONL (the skill-dir ``assets/*.validation.jsonl``)."""
+    text = open(path).read()
+    if path.endswith(".jsonl"):
+        data = [json.loads(ln) for ln in text.splitlines() if ln.strip()]
+    else:
+        data = json.loads(text)
     return [e for e in data if e.get("status") != "proposed"]
