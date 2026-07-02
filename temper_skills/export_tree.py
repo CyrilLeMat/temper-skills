@@ -26,6 +26,7 @@ import sys
 from pathlib import Path
 
 from .tree import DecisionNode, DecisionTree
+from .validation_case import ValidationCase, canon
 
 
 def _compile(tree: DecisionTree):
@@ -56,35 +57,17 @@ def enrich_validation(tree: DecisionTree, raw: list[dict]) -> list[dict]:
         except Exception as e:
             prediction = f"ERROR: {type(e).__name__}: {e}"
         expected = case.get("expected", "")
+        # agrees: None = no proposed label to compare (or tree errored); else does the
+        # tree's current answer match the proposed/ratified label?
         agrees = None if (expected == "" or _is_error(prediction)) else (expected == prediction)
-        record = {
-            "input": case["input"],
-            "expected": expected,
-            "rationale": case.get("rationale", ""),
-            "tree_prediction": prediction,
-            # None = no proposed label to compare (or tree errored); else does the tree's
-            # current answer match the proposed/ratified label?
-            "agrees": agrees,
-            # "proposed" = panel-authored, ungated; "resolved" = proposer settled a contested
-            # cell (no domain oracle); "ratified" = a human domain owner blessed the label.
-            "status": case.get("status", "proposed"),
-        }
-        # Pass through loop provenance if the case carries it (round/run id land here in the
-        # per-round writer; harmless when absent).
-        for k in ("source", "round", "first_seen_round", "run_id"):
-            if case.get(k) is not None:
-                record[k] = case[k]
-        out.append(record)
+        vc = ValidationCase.from_dict(case)
+        vc.expected, vc.tree_prediction, vc.agrees = expected, prediction, agrees
+        out.append(vc.to_record())
     return out
 
 
 # Back-compat alias — older callers/imports referenced enrich_proposed.
 enrich_proposed = enrich_validation
-
-
-def _canon(inp: dict) -> str:
-    """Stable dedup key for a case input (feature order-independent)."""
-    return json.dumps(inp, sort_keys=True, ensure_ascii=False)
 
 
 def load_validation(path: str | Path) -> list[dict]:
@@ -106,12 +89,12 @@ def merge_cases(existing: list[dict], new: list[dict], *,
     by_key: dict[str, dict] = {}
     order: list[str] = []
     for row in existing:
-        k = _canon(row["input"])
+        k = canon(row["input"])
         if k not in by_key:
             by_key[k] = dict(row)
             order.append(k)
     for case in new:
-        k = _canon(case["input"])
+        k = canon(case["input"])
         if k in by_key:
             src = case.get("source")
             if src:
@@ -121,19 +104,17 @@ def merge_cases(existing: list[dict], new: list[dict], *,
                     srcs.append(src)
                     row["source"] = ";".join(srcs)
             continue
-        row = {
-            "input": case["input"],
-            "expected": case.get("expected", ""),
-            "rationale": case.get("rationale", ""),
-            "status": case.get("status", "proposed"),
-        }
-        if case.get("source"):
-            row["source"] = case["source"]
-        if first_seen_round is not None:
-            row["first_seen_round"] = first_seen_round
-        if run_id is not None:
-            row["run_id"] = run_id
-        by_key[k] = row
+        # A fresh row keeps only what its finder authored — never stale enrichment
+        # (enrich_validation recomputes prediction/agreement against the current tree).
+        by_key[k] = ValidationCase(
+            input=case["input"],
+            expected=case.get("expected", ""),
+            rationale=case.get("rationale", ""),
+            status=case.get("status", "proposed"),
+            source=case.get("source"),
+            first_seen_round=first_seen_round,
+            run_id=run_id,
+        ).to_record()
         order.append(k)
     return [by_key[k] for k in order]
 

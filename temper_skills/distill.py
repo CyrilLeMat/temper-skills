@@ -7,7 +7,7 @@ import json
 import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, NamedTuple
 
 from .backends import Backend, auto_backend
 from .schemas import (
@@ -28,6 +28,7 @@ from .sources import (
     Sources,
 )
 from .tree import DecisionNode, DecisionTree
+from .validation_case import ValidationCase, canon as _canon
 
 PROFILES = {
     # name:        (max_rounds, stop_after_quiet_rounds, interactive, provenance)
@@ -412,7 +413,7 @@ def distill(
     # by re-scoring them all against the FINAL proposed set (fair: one denominator).
     # `stop_key` is the running plateau tracker.
     candidates: list[tuple[ProposedTree, ProposerArbitration | None, float]] = [(tree, None, -1.0)]
-    stop_key = (_agreement(tree, sources, fn_name) or 1.0, -1.0, -1.0)
+    stop_key = SelectKey(_agreement(tree, sources, fn_name) or 1.0, -1.0, -1.0)
 
     for r in range(1, max_rounds + 1):
         # Feed the panel the proposer's settled trade-offs (the working tree's gray zones +
@@ -484,9 +485,9 @@ def distill(
         # current one. A regressing round is discarded and the NEXT round re-attempts from
         # the best tree (with a caution to the proposer) — so one bad collapse can't poison
         # the rest of the run. The final export still picks the best candidate across rounds.
-        new_q = (agreement if agreement is not None else 1.0,
-                 prop_passed / len(prop_items) if prop_items else 0.0,
-                 -len(new_tree.nodes))
+        new_q = AdoptKey(ratified=agreement if agreement is not None else 1.0,
+                         proposed=prop_passed / len(prop_items) if prop_items else 0.0,
+                         parsimony=-len(new_tree.nodes))
         if new_q >= _quality(tree, sources, prop_items, fn_name):
             tree = new_tree
             regressed_last = False
@@ -499,9 +500,9 @@ def distill(
 
         # Convergence: once no round beats the best for `stop_quiet` rounds, the loop has
         # plateaued — stop, whether the plateau is high (a good tree) or low (can't improve).
-        round_key = (agreement if agreement is not None else 1.0,
-                     prop_passed / len(prop_items) if prop_items else 0.0,
-                     result.mean_score)
+        round_key = SelectKey(ratified=agreement if agreement is not None else 1.0,
+                              proposed=prop_passed / len(prop_items) if prop_items else 0.0,
+                              panel_mean=result.mean_score)
         if round_key > stop_key:
             stop_key = round_key
             stale_rounds = 0
@@ -567,10 +568,6 @@ def _check_examples(tree: DecisionTree, examples: list[dict]):
     return run_validation(fn_from_tree(tree), dataset, label_match)
 
 
-def _canon(inp: dict) -> str:
-    return json.dumps(inp, sort_keys=True, default=str)
-
-
 def _harvest_proposed(
     verdicts: list[PersonaVerdict], rnd: int, acc: dict[str, dict], existing_inputs: set[str]
 ) -> None:
@@ -587,12 +584,10 @@ def _harvest_proposed(
             key = _canon(ex.input)
             if key in existing_inputs or key in acc:
                 continue
-            acc[key] = {
-                "input": ex.input,
-                "expected": ex.expected,
-                "rationale": ex.rationale,
-                "source": f"{v.persona} (round {rnd})",
-            }
+            acc[key] = ValidationCase(
+                input=ex.input, expected=ex.expected, rationale=ex.rationale,
+                source=f"{v.persona} (round {rnd})",
+            ).to_record()
 
 
 def _stamp_proposed(tree: DecisionTree, items: list[dict]) -> list[dict]:
@@ -638,6 +633,39 @@ def _propose_examples(
             for ex in proposed.examples]
 
 
+class AdoptKey(NamedTuple):
+    """Hill-climb key: may this round's ATTEMPT replace the working tree?
+
+    Correctness first — ratified ground truth, then the panel's proposed cases. Ties
+    break toward the SMALLER tree, so a node merge that changes no outcome is an
+    improvement but a collapse that drops a case is not. Only ever compare with
+    another AdoptKey — SelectKey deliberately breaks ties differently."""
+
+    ratified: float
+    proposed: float
+    parsimony: int  # -node_count: fewer nodes ranks higher
+
+
+class SelectKey(NamedTuple):
+    """Plateau + final-selection key: is the run still improving, and which candidate
+    ships. Same correctness prefix as AdoptKey; ties break toward the PANEL MEAN —
+    at equal case scores, prefer the tree the critics disliked least (parsimony
+    already had its say at adoption time)."""
+
+    ratified: float
+    proposed: float
+    panel_mean: float
+
+
+def _as_decision_tree(tree: ProposedTree, features: list[str], fn_name: str) -> DecisionTree:
+    """An executable DecisionTree from an in-flight ProposedTree — conditions/outcomes
+    only; provenance metadata is attached at finalize, not needed to score."""
+    return DecisionTree(
+        nodes=[DecisionNode(condition=n.condition, outcome=n.outcome) for n in tree.nodes],
+        default_outcome=tree.default_outcome, features=features, fn_name=fn_name,
+    )
+
+
 def _score(tree: ProposedTree, items: list[dict], features: list[str], fn_name: str) -> int:
     """How many of ``items`` (validation cases) the current tree satisfies (label match).
 
@@ -647,11 +675,7 @@ def _score(tree: ProposedTree, items: list[dict], features: list[str], fn_name: 
         return 0
     from .validate import fn_from_tree, label_match
 
-    dt = DecisionTree(
-        nodes=[DecisionNode(condition=n.condition, outcome=n.outcome) for n in tree.nodes],
-        default_outcome=tree.default_outcome, features=features, fn_name=fn_name,
-    )
-    fn = fn_from_tree(dt)
+    fn = fn_from_tree(_as_decision_tree(tree, features, fn_name))
     passed = 0
     for it in items:
         try:
@@ -682,14 +706,14 @@ def _select_best(
     flattered or penalised by how many cases existed when it ran. Ratified ground truth
     is the lexicographic primary — never traded away to match an adversary-proposed label."""
     best = (candidates[0][0], candidates[0][1])
-    best_key = (-1.0, -1.0, -1.0)
+    best_key = SelectKey(-1.0, -1.0, -1.0)
     for tree, arb, mean in candidates:
         rat = _agreement(tree, sources, fn_name)
-        key = (
-            rat if rat is not None else 1.0,
-            _score(tree, prop_items, sources.feature_names, fn_name) / len(prop_items)
+        key = SelectKey(
+            ratified=rat if rat is not None else 1.0,
+            proposed=_score(tree, prop_items, sources.feature_names, fn_name) / len(prop_items)
             if prop_items else 0.0,
-            mean,
+            panel_mean=mean,
         )
         if key > best_key:
             best_key = key
@@ -697,16 +721,13 @@ def _select_best(
     return best
 
 
-def _quality(tree: ProposedTree, sources: Sources, prop_items: list[dict], fn_name: str):
-    """Rank a tree: (ratified pass-rate, proposed pass-rate, fewer nodes). Higher is better.
-
-    Ratified ground truth dominates; then how many adversary-proposed cases it passes; then,
-    at equal correctness, the simpler tree wins — so a node merge that changes no outcome is
-    an improvement, but a collapse that drops a case is not."""
+def _quality(tree: ProposedTree, sources: Sources, prop_items: list[dict], fn_name: str) -> AdoptKey:
+    """The working tree's AdoptKey (see AdoptKey for the tie-break rationale)."""
     rat = _agreement(tree, sources, fn_name)
     prop_rate = (_score(tree, prop_items, sources.feature_names, fn_name) / len(prop_items)
                  if prop_items else 0.0)
-    return (rat if rat is not None else 1.0, prop_rate, -len(tree.nodes))
+    return AdoptKey(ratified=rat if rat is not None else 1.0, proposed=prop_rate,
+                    parsimony=-len(tree.nodes))
 
 
 def _agreement(tree: ProposedTree, sources: Sources, fn_name: str) -> float | None:
@@ -718,12 +739,7 @@ def _agreement(tree: ProposedTree, sources: Sources, fn_name: str) -> float | No
     """
     if not sources.examples:
         return None
-    dt = DecisionTree(
-        nodes=[DecisionNode(condition=n.condition, outcome=n.outcome) for n in tree.nodes],
-        default_outcome=tree.default_outcome,
-        features=sources.feature_names,
-        fn_name=fn_name,
-    )
+    dt = _as_decision_tree(tree, sources.feature_names, fn_name)
     return _check_examples(dt, sources.examples).agreement_rate
 
 

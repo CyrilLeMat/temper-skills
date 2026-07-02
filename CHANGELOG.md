@@ -6,6 +6,14 @@ versions follow [SemVer](https://semver.org/) (pre-1.0: minor bumps may break).
 ## [Unreleased]
 
 ### Changed
+- Internal: the validation-case row shape is now defined once in
+  `validation_case.py` (stdlib-only, vendored with the exporters) and constructed
+  through it in distill/export_tree/skill_render — same on-disk JSONL shape and key
+  order as before. The loop's two scoring semantics got named types (`AdoptKey`:
+  parsimony tie-break for adopting a round's attempt; `SelectKey`: panel-mean
+  tie-break for plateau detection and final selection), with tests pinning the
+  difference. The vendored-scripts guard now also imports every vendored module
+  standalone, not just text-checks it.
 - Internal: compile orchestration extracted from the CLI into `pipelines.py`
   (`compile_tree`, `write_validation_artifacts`, `tree_manifest`, `load_schema`) —
   one code path now backs `ingest`, `guide`/`audit`'s temper, and

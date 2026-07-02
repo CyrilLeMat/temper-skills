@@ -23,7 +23,7 @@ _DEST = _ROOT / ".claude/skills/temper-skills/scripts"
 # Pure-stdlib only. export_skill is intentionally excluded (it pulls in pydantic for the
 # LLM-facing WovenSkill); skill_render carries the pydantic-free rendering + spec skill-dir
 # arrangement, so subagent mode can emit a full Agent Skill dir with no install.
-MODULES = ["tree", "export_tree", "update_validation", "skill_render"]
+MODULES = ["tree", "validation_case", "export_tree", "update_validation", "skill_render"]
 
 _BANNER = (
     "# VENDORED from temper_skills/{name}.py — DO NOT EDIT.\n"
@@ -36,6 +36,7 @@ def _transform(name: str, src: str) -> str:
     # scripts/ is a flat directory on sys.path[0], so package-relative imports become plain.
     src = src.replace("from .tree import", "from tree import")
     src = src.replace("from .export_tree import", "from export_tree import")
+    src = src.replace("from .validation_case import", "from validation_case import")
     return _BANNER.format(name=name) + src
 
 

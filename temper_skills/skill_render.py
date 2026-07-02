@@ -36,6 +36,7 @@ from .export_tree import (
     tree_from_dict,
 )
 from .tree import DecisionTree
+from .validation_case import ValidationCase
 
 
 def _role_line(original: str | None) -> str:
@@ -240,8 +241,9 @@ def arrange_skill_dir(
         tree.export(str(scripts / f"{module}.py"))
 
         # Ratified ground truth wins its cell over panel proposals, so it goes first in the merge.
-        ratified = [{"input": c["input"], "expected": c["expected"], "status": "ratified",
-                     "rationale": c.get("rationale", ""), "source": c.get("source", "ratified")}
+        ratified = [ValidationCase(input=c["input"], expected=c["expected"],
+                                   rationale=c.get("rationale", ""), status="ratified",
+                                   source=c.get("source", "ratified")).to_record()
                     for c in d.get("ratified", [])]
         proposed = getattr(tree, "proposed_examples", None) or []
         val_path = assets / f"{module}.validation.jsonl"

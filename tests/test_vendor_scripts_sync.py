@@ -26,8 +26,26 @@ def test_vendored_scripts_exist_and_are_flat_imports():
         text = p.read_text()
         assert "VENDORED from temper_skills" in text
         # package-relative imports must have been flattened for standalone execution
-        assert "from .tree import" not in text
-        assert "from .export_tree import" not in text
+        import re
+        assert not re.search(r"^\s*from \.", text, re.M), \
+            f"unflattened relative import survives in {p.name}"
+
+
+def test_vendored_scripts_actually_import_flat():
+    # Text checks aren't enough: a NEW relative import that _transform doesn't know about
+    # passes the banner check but breaks standalone execution (bit us live when
+    # validation_case was added). Import every vendored module with ONLY scripts/ on the
+    # path, the way the subagent skill runs them.
+    import subprocess
+    import sys
+
+    code = (
+        f"import sys; sys.path.insert(0, {str(_DEST)!r}); "
+        + "; ".join(f"import {m}" for m in MODULES)
+    )
+    proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
+                          timeout=60)
+    assert proc.returncode == 0, f"vendored modules don't import standalone:\n{proc.stderr}"
 
 
 def test_render_is_deterministic():
