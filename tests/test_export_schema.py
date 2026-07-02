@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from conftest import FakeBackend
 
-from temper_skills.cli import _load_schema
+from temper_skills.pipelines import load_schema as _load_schema
 from temper_skills.export_schema import (
     _classname,
     normalization_notes,

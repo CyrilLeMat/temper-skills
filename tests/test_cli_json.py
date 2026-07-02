@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from temper_skills.cli import _tree_manifest
+from temper_skills.pipelines import tree_manifest as _tree_manifest
 from temper_skills.tree import DecisionNode, DecisionTree
 
 

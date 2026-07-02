@@ -5,6 +5,14 @@ versions follow [SemVer](https://semver.org/) (pre-1.0: minor bumps may break).
 
 ## [Unreleased]
 
+### Changed
+- Internal: compile orchestration extracted from the CLI into `pipelines.py`
+  (`compile_tree`, `write_validation_artifacts`, `tree_manifest`, `load_schema`) —
+  one code path now backs `ingest`, `guide`/`audit`'s temper, and
+  `decompose --temper-each`; importable without typer/Rich. The CLI no longer
+  mutates a module-global console (each command owns its UI surface), which also
+  fixes `decompose --json` mixing panels into the stdout manifest.
+
 ## [0.0.2] — 2026-07-02
 
 ### Fixed

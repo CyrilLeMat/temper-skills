@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
-from rich.console import Console
 from typer.testing import CliRunner
 
 from temper_skills import cli
@@ -14,13 +12,8 @@ from temper_skills.backends.base import Backend
 from temper_skills.ingest import InferredFeature, InferredSchema
 
 runner = CliRunner()
-
-
-@pytest.fixture(autouse=True)
-def _fresh_console(monkeypatch):
-    # --json reroutes the module-global console to stderr; reset it per test so
-    # panel/table assertions don't depend on test order.
-    monkeypatch.setattr(cli, "console", Console())
+# No console fixture needed: each command builds its own Console, so there is no
+# module-global to reset between tests.
 
 
 class RoutingBackend(Backend):

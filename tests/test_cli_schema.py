@@ -6,7 +6,7 @@ import json
 
 from pydantic import BaseModel
 
-from temper_skills.cli import _load_schema
+from temper_skills.pipelines import load_schema as _load_schema
 
 
 def test_load_pydantic_from_pyfile(tmp_path):
