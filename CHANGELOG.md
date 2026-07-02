@@ -5,9 +5,21 @@ versions follow [SemVer](https://semver.org/) (pre-1.0: minor bumps may break).
 
 ## [Unreleased]
 
+## [0.0.2] — 2026-07-02
+
+### Fixed
+- `ApiBackend`: concurrent first calls raced instructor's lazy provider/mode
+  registration ("Available modes: []") — the fan-out in `audit <dir>` hit it on
+  16/17 skills. First call is now serialized, then fully concurrent.
+- `audit --json`: human console lines could corrupt the JSON stream on stdout;
+  panels now go to stderr (same contract as `ingest`/`guide`).
+- `[vertex]` extra now installs `google-cloud-aiplatform` — litellm's
+  `vertex_ai/*` route imports `vertexai`, so the documented setup actually works.
+
 ### Added
 - Ruff lint in CI; Python 3.10–3.13 test matrix; `py.typed` marker; PyPI
-  classifiers and project URLs; Dependabot; this changelog.
+  classifiers (incl. Python versions) and project URLs; Dependabot;
+  CONTRIBUTING/SECURITY; this changelog.
 
 ## [0.0.1] — 2026-07-02
 
@@ -29,5 +41,6 @@ First public release — on [PyPI](https://pypi.org/project/temper-skills/).
 - First ecosystem audit: all 17 skills in anthropics/skills
   (`docs/audits/anthropic-skills-2026-07-02.md`).
 
-[Unreleased]: https://github.com/CyrilLeMat/temper-skills/compare/v0.0.1...HEAD
+[Unreleased]: https://github.com/CyrilLeMat/temper-skills/compare/v0.0.2...HEAD
+[0.0.2]: https://github.com/CyrilLeMat/temper-skills/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/CyrilLeMat/temper-skills/releases/tag/v0.0.1
