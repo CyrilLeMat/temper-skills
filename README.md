@@ -13,22 +13,23 @@
 | temper\_skills/backends/base.py         |       17 |        0 |    100% |           |
 | temper\_skills/cli.py                   |      464 |      107 |     77% |61, 69, 82-86, 88-89, 108-112, 167-169, 177, 181-183, 210-211, 227-229, 241, 281-284, 293-296, 305-309, 317-325, 338-340, 385-414, 471-473, 487, 490-503, 536-537, 568-569, 642, 654-657, 661-663, 729-731, 756-758, 765-767, 784-785, 799-801, 823-829, 833 |
 | temper\_skills/decompose.py             |       30 |        0 |    100% |           |
-| temper\_skills/distill.py               |      313 |       11 |     96% |74, 235, 261, 450, 586, 659-660, 671-672, 744, 756 |
+| temper\_skills/distill.py               |      321 |       11 |     97% |75, 236, 262, 451, 583, 683-684, 695-696, 760, 772 |
 | temper\_skills/export\_schema.py        |       31 |        0 |    100% |           |
 | temper\_skills/export\_skill.py         |       48 |        3 |     94% |92-98, 128 |
-| temper\_skills/export\_tree.py          |      128 |        2 |     98% |  171, 311 |
+| temper\_skills/export\_tree.py          |      118 |        2 |     98% |  152, 292 |
 | temper\_skills/incremental.py           |       53 |        0 |    100% |           |
 | temper\_skills/ingest.py                |       38 |        0 |    100% |           |
 | temper\_skills/pipelines.py             |       72 |        0 |    100% |           |
 | temper\_skills/schemas.py               |       34 |        0 |    100% |           |
 | temper\_skills/skill\_docs.py           |       50 |        5 |     90% |108-110, 115-116 |
-| temper\_skills/skill\_render.py         |      141 |        7 |     95% |192, 256, 290, 297-300, 307, 317 |
+| temper\_skills/skill\_render.py         |      142 |        7 |     95% |193, 258, 292, 299-302, 309, 319 |
 | temper\_skills/sources.py               |       33 |        0 |    100% |           |
 | temper\_skills/tree.py                  |       60 |        0 |    100% |           |
 | temper\_skills/update\_validation.py    |       54 |        0 |    100% |           |
 | temper\_skills/validate.py              |       65 |        0 |    100% |           |
-| temper\_skills/vendor\_scripts.py       |       27 |        0 |    100% |           |
-| **TOTAL**                               | **2018** |  **138** | **93%** |           |
+| temper\_skills/validation\_case.py      |       38 |        1 |     97% |        77 |
+| temper\_skills/vendor\_scripts.py       |       28 |        0 |    100% |           |
+| **TOTAL**                               | **2056** |  **139** | **93%** |           |
 
 
 ## Setup coverage badge
