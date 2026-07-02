@@ -156,3 +156,23 @@ def test_canonical_parking_tree_passes_its_validation_set():
     fn, data = _canonical_skill("parking", "parking", "can_i_park")
     r = run_validation(fn, data, label_match)
     assert r.passed(1.0), [(d.input, d.expected, d.predicted) for d in r.disagreements]
+
+
+def test_fn_from_json_compiles_a_tree_dict(tmp_path):
+    p = tmp_path / "tree.json"
+    p.write_text(json.dumps({
+        "fn_name": "route",
+        "features": ["x"],
+        "default_outcome": "low",
+        "nodes": [{"condition": "x is not None and x >= 10", "outcome": "high"}],
+    }))
+    fn = fn_from_json(str(p))
+    assert fn({"x": 12}) == "high" and fn({"x": 1}) == "low"
+
+
+def test_fn_from_pyfile_picks_named_function(tmp_path):
+    p = tmp_path / "two.py"
+    p.write_text("def a(i):\n    return 'a'\n\ndef b(i):\n    return 'b'\n")
+    assert fn_from_pyfile(str(p), "b")({}) == "b"
+    with pytest.raises(ValueError, match="disambiguate"):
+        fn_from_pyfile(str(p))
