@@ -112,3 +112,49 @@ def test_cli_empty_stdin_is_a_quiet_refresh(tmp_path, monkeypatch):
     assert main([str(tree_path), str(out), "--round", "1"]) == 0
     # no cases, no dataset file needed, but it must not crash
     assert not (tmp_path / "route.validation.jsonl").exists() or _rows(out) == []
+
+
+def test_main_usage_error_on_wrong_positionals(capsys):
+    assert main([]) == 2
+    assert "usage:" in capsys.readouterr().err
+
+
+def test_main_rejects_non_list_stdin(tmp_path, monkeypatch, capsys):
+    import io
+
+    tree = tmp_path / "tree.json"
+    tree.write_text(json.dumps(TREE_V1))
+    monkeypatch.setattr("sys.stdin", io.StringIO('{"input": {"x": 1}}'))
+    assert main([str(tree), str(tmp_path / "route.py")]) == 2
+    assert "JSON list" in capsys.readouterr().err
+
+
+def test_main_happy_path_with_flag_forms(tmp_path, monkeypatch, capsys):
+    import io
+
+    tree = tmp_path / "tree.json"
+    tree.write_text(json.dumps(TREE_V1))
+    out = tmp_path / "route.py"
+    cases = [{"input": {"x": 20}, "expected": "high", "source": "ech#r3"}]
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(cases)))
+    assert main(["--round=3", "--run-id=RUN-B", str(tree), str(out)]) == 0
+    assert "[round 3]" in capsys.readouterr().out
+    rows = _rows(out)
+    assert rows[0]["first_seen_round"] == 3 and rows[0]["run_id"] == "RUN-B"
+
+
+def test_module_entrypoint(tmp_path, monkeypatch):
+    import io
+    import runpy
+    import sys
+
+    import pytest
+
+    tree = tmp_path / "tree.json"
+    tree.write_text(json.dumps(TREE_V1))
+    monkeypatch.setattr(sys, "argv",
+                        ["update_validation", str(tree), str(tmp_path / "route.py")])
+    monkeypatch.setattr("sys.stdin", io.StringIO("[]"))
+    with pytest.raises(SystemExit) as exc:
+        runpy.run_module("temper_skills.update_validation", run_name="__main__")
+    assert exc.value.code == 0

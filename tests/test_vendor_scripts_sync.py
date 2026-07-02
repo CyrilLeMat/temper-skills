@@ -34,3 +34,24 @@ def test_vendored_scripts_exist_and_are_flat_imports():
 def test_render_is_deterministic():
     for name in MODULES:
         assert render(name) == render(name)
+
+
+def test_vendor_writes_missing_scripts(tmp_path, monkeypatch):
+    from temper_skills import vendor_scripts
+
+    dest = tmp_path / "scripts"
+    monkeypatch.setattr(vendor_scripts, "_DEST", dest)
+    stale = vendor_scripts.vendor(check=True)          # nothing exists yet
+    assert len(stale) == len(MODULES) and not dest.exists()
+    written = vendor_scripts.vendor(check=False)
+    assert len(written) == len(MODULES)
+    assert sorted(p.name for p in dest.iterdir()) == sorted(f"{m}.py" for m in MODULES)
+    assert vendor_scripts.vendor(check=True) == []     # now in sync
+
+
+def test_module_entrypoint_reports_in_sync(capsys):
+    # the repo's vendored copies are in sync (guarded above), so this is a no-op run
+    import runpy
+
+    runpy.run_module("temper_skills.vendor_scripts", run_name="__main__")
+    assert "in sync" in capsys.readouterr().out

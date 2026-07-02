@@ -62,3 +62,24 @@ def test_recrystallize_seeds_and_carries_survival():
     assert kept.rounds_survived == 12
     # the stale branch the new tree dropped shows up as removed
     assert [n.condition for n in diff.removed] == ['security_score > 0.99']
+
+
+def test_render_diff_lists_every_change_kind():
+    from temper_skills.incremental import render_diff
+
+    old = _tree([
+        DecisionNode('priority == "high"', "escalate_urgent"),
+        DecisionNode('security_score > 0.8', "escalate_security"),
+        DecisionNode('priority == "spam"', "discard"),
+    ])
+    new = _tree([
+        DecisionNode('priority == "high"', "escalate_urgent"),
+        DecisionNode('security_score > 0.8', "human_review"),
+        DecisionNode('priority == "low"', "route_low"),
+    ], default="new_default")
+    out = render_diff(diff_trees(old, new))
+    assert '+ added    if (priority == "low") -> route_low' in out
+    assert '- removed  if (priority == "spam") -> discard' in out
+    assert "~ changed  if (security_score > 0.8): 'escalate_security' -> 'human_review'" in out
+    assert "~ default  'route_default' -> 'new_default'" in out
+    assert "= unchanged 1 node(s)" in out

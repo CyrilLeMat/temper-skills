@@ -84,3 +84,65 @@ def test_cli_runs_false_when_crashing(monkeypatch):
 
     monkeypatch.setattr(agent_cli.subprocess, "run", boom)
     assert cli_runs("claude") is False
+
+
+def test_preset_argv_and_text_extractors():
+    from temper_skills.backends.agent_cli import (
+        _claude_argv,
+        _claude_text,
+        _opencode_argv,
+        _opencode_text,
+        _qualify_opencode_model,
+    )
+
+    assert _claude_argv("hi", "claude-sonnet-4-6") == [
+        "claude", "-p", "hi", "--model", "claude-sonnet-4-6", "--output-format", "json"]
+    assert _claude_text('{"result": "the reply"}') == "the reply"
+    assert _opencode_argv("hi", "claude-sonnet-4-6")[-1] == "anthropic/claude-sonnet-4-6"
+    assert _qualify_opencode_model("openai/gpt-4o") == "openai/gpt-4o"
+    assert _opencode_text("raw stdout") == "raw stdout"
+
+
+def test_extract_json_handles_escaped_quotes_and_unbalanced():
+    assert _extract_json('{"s": "escaped \\" quote"}') == '{"s": "escaped \\" quote"}'
+    assert _extract_json('{"never": "closes"') is None
+
+
+def test_run_returns_extracted_text(monkeypatch):
+    be = AgentCliBackend(preset="claude", model="m")
+
+    class P:
+        returncode = 0
+        stdout = '{"result": "hello"}'
+        stderr = ""
+
+    monkeypatch.setattr(agent_cli.subprocess, "run", lambda *a, **k: P())
+    assert be._run("prompt") == "hello"
+
+
+def test_run_raises_on_nonzero_exit(monkeypatch):
+    be = AgentCliBackend(preset="opencode", model="m")
+
+    class P:
+        returncode = 3
+        stdout = ""
+        stderr = "boom"
+
+    monkeypatch.setattr(agent_cli.subprocess, "run", lambda *a, **k: P())
+    with pytest.raises(RuntimeError, match="exited 3"):
+        be._run("prompt")
+
+
+def test_complete_retries_on_schema_invalid_json(monkeypatch):
+    be = AgentCliBackend(preset="opencode", model="m")
+    calls = {"n": 0}
+
+    def fake_run(prompt):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return '{"wrong_field": true}'  # JSON but not the schema -> ValidationError retry
+        return '{"persona":"literalist","score":7,"verdict":"ok","detail":"d"}'
+
+    monkeypatch.setattr(be, "_run", fake_run)
+    v = be.complete("sys", "usr", PersonaVerdict)
+    assert calls["n"] == 2 and v.score == 7

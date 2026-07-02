@@ -33,5 +33,8 @@ testpaths = ["tests"]
 source = ["temper_skills"]
 relative_files = true   # required by the coverage badge action
 
+[tool.coverage.report]
+fail_under = 90
+
 [tool.hatch.build.targets.wheel]
 packages = ["temper_skills"]
