@@ -1,8 +1,13 @@
 # Adoption plan — make temper-skills something people actually run
 
-> **Status (2026-07-02):** sequencing steps 1–4 implemented (C1, C4, A1, A2, B1, B2, C2,
-> C3, A3). Step 5 — **publish + the ecosystem-audit post** — is what remains. B3 stays
-> gated on demand.
+> **Status (2026-07-02, evening):** steps 1–4 implemented; step 5 mostly done — repo
+> public with description/topics, **v0.0.1 on PyPI** (trusted publishing via release.yml,
+> `uvx temper-skills` verified cold), GitHub release out, and the first ecosystem audit
+> committed (docs/audits/anthropic-skills-2026-07-02.md: 17 official skills, 0 clean
+> temper, 11 bundling 2–5 decisions). **Remaining:** marketplace/awesome-list submissions
+> (outward PRs — need a go-ahead), the launch post itself (a community-corpus sweep would
+> give it stronger `temper` verdicts than Anthropic's creative skills). B3 stays gated on
+> demand.
 
 Three initiatives, one funnel. Today the project only delivers value at the end of a long
 belief chain (understand tempering → ratify a schema → run a 20-round loop → get a tree).
