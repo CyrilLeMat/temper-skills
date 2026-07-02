@@ -52,7 +52,7 @@ def render_schema_source(inferred: InferredSchema) -> str:
         "from pydantic import BaseModel",
         "",
         "",
-        f"# Proposed by temper-skills from the skill — THIS IS THE CONTRACT the deterministic",
+        "# Proposed by temper-skills from the skill — THIS IS THE CONTRACT the deterministic",
         f"# tree branches on. Review every field (and the {cls} name) before pinning it with",
         f"#   temper-skills ingest <skill.md> --schema {{this_file}}:{cls}",
         f"class {cls}(BaseModel):",

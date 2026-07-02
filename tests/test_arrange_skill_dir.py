@@ -94,7 +94,7 @@ def test_behavior_lock_is_green(tmp_path):
                                      "module": "decide_a"}])
     ns: dict = {}
     exec(compile((d / "scripts" / "decide_a.py").read_text(), "<g>", "exec"), ns)
-    rows = [json.loads(l) for l in (d / "assets" / "decide_a.validation.jsonl")
-            .read_text().splitlines() if l.strip()]
+    rows = [json.loads(line) for line in (d / "assets" / "decide_a.validation.jsonl")
+            .read_text().splitlines() if line.strip()]
     for r in rows:
         assert ns["decide_a"](r["input"]) == r["tree_prediction"]   # locked to the tree's own output

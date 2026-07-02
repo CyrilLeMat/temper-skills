@@ -153,7 +153,8 @@ def test_main_emits_behavior_lock_and_ratified_files(tmp_path):
         {"input": {"food_item": "peanut butter", "food_form": "low_fat"},
          "expected": "xylitol risk", "status": "ratified", "rationale": "human blessed"},
     ]}
-    src = tmp_path / "tree.json"; src.write_text(json.dumps(tree_with))
+    src = tmp_path / "tree.json"
+    src.write_text(json.dumps(tree_with))
     out = tmp_path / "checker.py"
     assert main([str(src), str(out)]) == 0
     lock = tmp_path / "test_checker.py"

@@ -17,10 +17,10 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-Action = Literal["temper", "externalize_data", "build_normalizer", "delegate_prose", "decompose"]
-
 from .backends import Backend, auto_backend
 from .ingest import InferredFeature, InferredSchema, ingest_skill
+
+Action = Literal["temper", "externalize_data", "build_normalizer", "delegate_prose", "decompose"]
 
 
 class JudgeScores(BaseModel):

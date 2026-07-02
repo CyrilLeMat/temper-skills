@@ -106,7 +106,8 @@ def test_cli_reads_stdin(tmp_path, monkeypatch):
 
 def test_cli_empty_stdin_is_a_quiet_refresh(tmp_path, monkeypatch):
     import io
-    tree_path = tmp_path / "tree.json"; tree_path.write_text(json.dumps(TREE_V1))
+    tree_path = tmp_path / "tree.json"
+    tree_path.write_text(json.dumps(TREE_V1))
     out = tmp_path / "route.py"
     monkeypatch.setattr("sys.stdin", io.StringIO(""))
     assert main([str(tree_path), str(out), "--round", "1"]) == 0

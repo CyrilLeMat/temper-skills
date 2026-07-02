@@ -6,7 +6,7 @@ import copy
 import json
 import re
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable
 
 from .backends import Backend, auto_backend

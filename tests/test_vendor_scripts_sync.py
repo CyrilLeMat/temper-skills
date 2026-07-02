@@ -7,7 +7,6 @@ update_validation}.py without re-running `python -m temper_skills.vendor_scripts
 
 from __future__ import annotations
 
-from pathlib import Path
 
 from temper_skills.vendor_scripts import MODULES, _DEST, render, vendor
 

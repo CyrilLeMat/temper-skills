@@ -7,7 +7,6 @@ from pathlib import Path
 
 from temper_skills.audit import FitnessReport
 from temper_skills.audit_report import (
-    Finding,
     LibraryRow,
     discover_skills,
     findings_of,

@@ -2,6 +2,9 @@
 
 [![CI](https://github.com/CyrilLeMat/temper-skills/actions/workflows/ci.yml/badge.svg)](https://github.com/CyrilLeMat/temper-skills/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/CyrilLeMat/temper-skills/python-coverage-comment-action-data/endpoint.json)](https://github.com/CyrilLeMat/temper-skills/tree/python-coverage-comment-action-data)
+[![PyPI](https://img.shields.io/pypi/v/temper-skills)](https://pypi.org/project/temper-skills/)
+[![Python](https://img.shields.io/pypi/pyversions/temper-skills)](https://pypi.org/project/temper-skills/)
+[![License](https://img.shields.io/github/license/CyrilLeMat/temper-skills)](LICENSE)
 
 > Your skill is silently making decisions. Temper-Skills finds them, gets adversarial
 > reviewers to write a **test suite** for them, and freezes the logic into deterministic

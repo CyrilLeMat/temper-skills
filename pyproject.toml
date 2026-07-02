@@ -11,6 +11,18 @@ requires-python = ">=3.10"
 license = "Apache-2.0"
 authors = [{ name = "Cyril", email = "cyril@hellosunrise.com" }]
 keywords = ["llm", "agents", "skills", "testing", "evals", "decision-tree", "adversarial", "determinism"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Software Development :: Quality Assurance",
+    "Typing :: Typed",
+]
 dependencies = [
     "litellm>=1.50",      # provider-agnostic model routing (Anthropic, OpenAI, Gemini, local, …)
     "instructor>=1.5",    # Pydantic-validated structured output + retries over LiteLLM
@@ -19,8 +31,14 @@ dependencies = [
     "rich>=13.0",
 ]
 
+[project.urls]
+Homepage = "https://github.com/CyrilLeMat/temper-skills"
+Repository = "https://github.com/CyrilLeMat/temper-skills"
+Issues = "https://github.com/CyrilLeMat/temper-skills/issues"
+Changelog = "https://github.com/CyrilLeMat/temper-skills/blob/main/CHANGELOG.md"
+
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pytest-cov>=5.0"]
+dev = ["pytest>=8.0", "pytest-cov>=5.0", "ruff>=0.8"]
 vertex = [                      # Claude-on-Vertex via LiteLLM + gcloud ADC (no API key)
     "google-auth>=2.0",
     "google-cloud-aiplatform>=1.38",   # litellm's vertex_ai/* route imports `vertexai`
@@ -31,6 +49,15 @@ temper-skills = "temper_skills.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+# Lint only for now: enforcing ruff-format is deferred until no branches are in
+# flight (a whole-repo reformat conflicts with everything open).
+# examples/ holds loop-GENERATED trees (never hand-edited — regenerate instead)
+# and demo run.py scripts with sys.path-before-import; neither is lint territory.
+extend-exclude = ["examples"]
 
 [tool.coverage.run]
 source = ["temper_skills"]

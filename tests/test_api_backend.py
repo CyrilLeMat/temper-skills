@@ -16,7 +16,10 @@ def test_route_qualifies_bare_ids():
 
 def _stub_client(obj, usage):
     completion = SimpleNamespace(usage=usage)
-    create = lambda **kw: (obj, completion)
+
+    def create(**kw):
+        return obj, completion
+
     return SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
         create_with_completion=create)))
 
