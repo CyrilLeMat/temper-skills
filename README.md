@@ -8,12 +8,12 @@
 | temper\_skills/audit.py                 |       86 |        0 |    100% |           |
 | temper\_skills/audit\_report.py         |       98 |        2 |     98% |   189-190 |
 | temper\_skills/backends/\_\_init\_\_.py |       25 |        1 |     96% |        17 |
-| temper\_skills/backends/agent\_cli.py   |       91 |        0 |    100% |           |
+| temper\_skills/backends/agent\_cli.py   |       95 |        0 |    100% |           |
 | temper\_skills/backends/api.py          |       50 |        0 |    100% |           |
 | temper\_skills/backends/base.py         |       17 |        0 |    100% |           |
-| temper\_skills/cli.py                   |      464 |      107 |     77% |61, 69, 82-86, 88-89, 108-112, 167-169, 177, 181-183, 210-211, 227-229, 241, 281-284, 293-296, 305-309, 317-325, 338-340, 385-414, 471-473, 487, 490-503, 536-537, 568-569, 642, 654-657, 661-663, 729-731, 756-758, 765-767, 784-785, 799-801, 823-829, 833 |
+| temper\_skills/cli.py                   |      471 |      108 |     77% |61, 69, 82-86, 88-89, 108-112, 167-169, 177, 181-183, 210-211, 227-229, 242, 282-285, 294-297, 306-310, 317, 326-334, 347-349, 394-423, 480-482, 496, 499-512, 545-546, 577-578, 651, 663-666, 670-672, 740-742, 767-769, 776-778, 795-796, 810-812, 834-840, 844 |
 | temper\_skills/decompose.py             |       30 |        0 |    100% |           |
-| temper\_skills/distill.py               |      321 |       11 |     97% |75, 236, 262, 451, 583, 683-684, 695-696, 760, 772 |
+| temper\_skills/distill.py               |      325 |       10 |     97% |75, 236, 262, 588, 688-689, 700-701, 765, 777 |
 | temper\_skills/export\_schema.py        |       31 |        0 |    100% |           |
 | temper\_skills/export\_skill.py         |       48 |        3 |     94% |92-98, 128 |
 | temper\_skills/export\_tree.py          |      118 |        2 |     98% |  152, 292 |
@@ -29,7 +29,7 @@
 | temper\_skills/validate.py              |       65 |        0 |    100% |           |
 | temper\_skills/validation\_case.py      |       38 |        1 |     97% |        77 |
 | temper\_skills/vendor\_scripts.py       |       28 |        0 |    100% |           |
-| **TOTAL**                               | **2056** |  **139** | **93%** |           |
+| **TOTAL**                               | **2071** |  **139** | **93%** |           |
 
 
 ## Setup coverage badge
