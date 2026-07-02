@@ -386,6 +386,7 @@ def distill(
     stale_rounds = 0
     regressed_last = False
     last_arbitration: ProposerArbitration | None = None
+    loop_error: str | None = None
 
     # The proposed validation set grows as the loop runs: every persona (except the
     # overengineering_critic) contributes discriminating cases each round, deduped here
@@ -443,12 +444,14 @@ def distill(
                 _harvest_proposed(verdicts, r, proposed, existing_inputs)
             arbitration = _arbitrate(backend, sources, tree, verdicts,
                                      incremental=incremental, regressed_last=regressed_last)
-        except Exception:
+        except Exception as e:
             # A transient backend failure shouldn't throw away the rounds already
             # paid for. With nothing to salvage (round 1), re-raise; otherwise keep
-            # the best tree so far and finalize it.
+            # the best tree so far and finalize it — recording WHAT failed, so
+            # "converged" and "crashed mid-run" stay distinguishable downstream.
             if last_arbitration is None:
                 raise
+            loop_error = f"round {r}: {type(e).__name__}: {e}"
             break
         new_tree = _sanitize(arbitration.tree)
         last_arbitration = arbitration
@@ -538,6 +541,8 @@ def distill(
                 schema_gaps.setdefault(spec, None)
 
     final = _finalize(best_tree, arb_for_final, survival, sources, model_tag, profile, provenance, fn_name)
+    if loop_error:
+        final.loop_error = loop_error  # the run ended early on this failure, not on convergence
     if added_features:
         final.added_features = added_features  # the loop grew the schema by these (review them)
     if schema_gaps:

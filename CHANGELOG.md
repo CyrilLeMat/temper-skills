@@ -5,6 +5,14 @@ versions follow [SemVer](https://semver.org/) (pre-1.0: minor bumps may break).
 
 ## [Unreleased]
 
+### Fixed
+- A backend failure after round 1 no longer masquerades as convergence: the loop
+  still keeps the best tree so far, but records `loop_error` on the result — shown
+  as a warning in the CLI and exposed in the `--json` manifest (agents must not
+  read such a run as converged).
+- Agent-CLI backend: a timed-out or transiently failing CLI call now gets the same
+  corrective retry as invalid JSON, instead of bypassing the retry path entirely.
+
 ### Changed
 - Internal: the validation-case row shape is now defined once in
   `validation_case.py` (stdlib-only, vendored with the exporters) and constructed

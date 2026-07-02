@@ -118,7 +118,13 @@ class AgentCliBackend(Backend):
         prompt = base
         last_err: Exception | None = None
         for attempt in range(2):
-            text = self._run(prompt)
+            try:
+                text = self._run(prompt)
+            except (subprocess.TimeoutExpired, RuntimeError) as e:
+                # A timed-out or transiently failing CLI call gets the same single
+                # retry as invalid JSON — a slow turn must not bypass the retry path.
+                last_err = e
+                continue
             blob = _extract_json(text)
             if blob is not None:
                 try:

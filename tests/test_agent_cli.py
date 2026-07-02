@@ -146,3 +146,49 @@ def test_complete_retries_on_schema_invalid_json(monkeypatch):
     monkeypatch.setattr(be, "_run", fake_run)
     v = be.complete("sys", "usr", PersonaVerdict)
     assert calls["n"] == 2 and v.score == 7
+
+
+# ---- transient CLI failures join the retry path (a timeout must not bypass it) ----
+
+def test_complete_retries_after_timeout_then_succeeds(monkeypatch):
+    import subprocess
+
+    be = AgentCliBackend(preset="opencode", model="m")
+    calls = {"n": 0}
+
+    def fake_run(prompt):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise subprocess.TimeoutExpired(cmd="opencode", timeout=300)
+        return '{"persona":"literalist","score":8,"verdict":"ok","detail":"ok"}'
+
+    monkeypatch.setattr(be, "_run", fake_run)
+    v = be.complete("sys", "usr", PersonaVerdict)
+    assert calls["n"] == 2 and v.persona == "literalist"
+
+
+def test_complete_retries_after_cli_exit_error(monkeypatch):
+    be = AgentCliBackend(preset="opencode", model="m")
+    calls = {"n": 0}
+
+    def fake_run(prompt):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("opencode CLI exited 1: transient")
+        return '{"persona":"literalist","score":8,"verdict":"ok","detail":"ok"}'
+
+    monkeypatch.setattr(be, "_run", fake_run)
+    assert be.complete("sys", "usr", PersonaVerdict).score == 8
+
+
+def test_complete_raises_with_cause_after_repeated_timeouts(monkeypatch):
+    import subprocess
+
+    be = AgentCliBackend(preset="opencode", model="m")
+
+    def fake_run(prompt):
+        raise subprocess.TimeoutExpired(cmd="opencode", timeout=300)
+
+    monkeypatch.setattr(be, "_run", fake_run)
+    with pytest.raises(RuntimeError, match="300"):
+        be.complete("sys", "usr", PersonaVerdict)

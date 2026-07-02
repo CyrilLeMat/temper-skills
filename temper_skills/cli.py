@@ -231,6 +231,7 @@ def ingest(
     cost = be.cost_estimate()
     cost_line = f"~${cost:.4f} (metered)" if cost is not None else "subscription — no metered cost"
     ui.print(Panel(tree.to_source(), title=f"Exported {result.tree_path}", border_style="green"))
+    _print_loop_error(ui, tree)
     _print_example_check(ui, tree)
     _print_added_features(ui, tree)
     _print_schema_gaps(ui, tree)
@@ -307,6 +308,14 @@ def _print_outcome_gaps(ui: Console, tree) -> None:
              "widening the outcome vocabulary and re-running:[/]"]
     lines += [f"  • {g}" for g in gaps]
     ui.print(Panel("\n".join(lines), title="✎ outcome gaps (advisory)", border_style="yellow"))
+
+
+def _print_loop_error(ui: Console, tree) -> None:
+    """A run that ended on a backend failure must not read as a converged run."""
+    err = getattr(tree, "loop_error", None)
+    if err:
+        ui.print(f"[yellow]⚠ the loop ended early on a backend failure ({err}) — "
+                 "the best tree so far was kept; consider re-running[/]")
 
 
 def _print_example_check(ui: Console, tree) -> None:
@@ -673,6 +682,7 @@ def _decompose_pipeline(ui: Console, skill, be, out_dir, profile, *, temper_each
                            schema=load_schema(schema_path), fn_name=d.fn_name,
                            gate=_make_gate(ui, False), propose_examples=True,
                            skill_style=None)  # the orchestrator below stitches the flow
+        _print_loop_error(ui, res.tree)
         if res.suite:
             _print_validation_panel(ui, res.suite)
         items.append({"fn": d.fn_name, "module": d.fn_name, "features": res.tree.features,
@@ -696,6 +706,7 @@ def _temper_pipeline(ui: Console, skill, be, out_dir, profile, *, schema_spec=No
     res = compile_tree(skill, be, out_dir=out_dir, profile=profile, schema=pinned,
                        fn_name=fn, gate=_make_gate(ui, False), confirm=lambda i: True,
                        propose_examples=True)
+    _print_loop_error(ui, res.tree)
     if res.suite:
         _print_validation_panel(ui, res.suite)
     ui.print(Panel(f"tree → {res.tree_path}\ntempered skill → {res.skill_path}",

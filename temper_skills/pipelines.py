@@ -146,6 +146,9 @@ def tree_manifest(tree: DecisionTree, tree_path: str, skill_path: str | None) ->
         "fn_name": tree.fn_name,
         "tree_path": tree_path,
         "tempered_skill_path": skill_path,
+        # non-None = the loop ended early on this backend failure (best tree so far
+        # was kept) — an agent must not read that run as "converged".
+        "loop_error": getattr(tree, "loop_error", None),
         "validation_dataset_path": validation_path if proposed else None,
         "validation_case_count": len(proposed),
         "features": list(tree.features),

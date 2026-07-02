@@ -564,3 +564,38 @@ def test_ratified_example_disagreement_surfaced():
     rep = tree.example_report
     assert rep.agreements == 0 and len(rep.disagreements) == 1
     assert rep.disagreements[0].predicted == "route_default"
+
+
+# ---- loop errors: a crash after round 1 is salvaged AND recorded ----
+
+class _CrashOnArbitration(FakeBackend):
+    """Raises on the Nth arbitration — i.e. mid-round-N — to exercise the salvage path."""
+
+    def __init__(self, crash_on_round: int):
+        super().__init__()
+        self.crash_on_round = crash_on_round
+
+    def complete(self, system, user, schema):
+        from temper_skills.schemas import ProposerArbitration
+        if schema is ProposerArbitration and self.calls["arbitration"] + 1 >= self.crash_on_round:
+            raise RuntimeError("backend fell over")
+        return super().complete(system, user, schema)
+
+
+def test_backend_crash_after_round_one_keeps_tree_and_records_loop_error():
+    tree = distill(_sources(), backend=_CrashOnArbitration(crash_on_round=2),
+                   profile="quick", fn_name="route_ticket")
+    assert tree.nodes  # the round-1 tree was salvaged
+    assert "round 2: RuntimeError: backend fell over" in tree.loop_error
+
+
+def test_backend_crash_on_round_one_still_raises():
+    with pytest.raises(RuntimeError, match="fell over"):
+        distill(_sources(), backend=_CrashOnArbitration(crash_on_round=1),
+                profile="quick", fn_name="route_ticket")
+
+
+def test_clean_run_has_no_loop_error():
+    tree = distill(_sources(), backend=FakeBackend(), profile="quick",
+                   fn_name="route_ticket")
+    assert getattr(tree, "loop_error", None) is None

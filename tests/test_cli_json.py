@@ -73,3 +73,12 @@ def test_manifest_summarizes_ratified_examples():
 def test_manifest_ratified_examples_none_when_unchecked():
     m = _tree_manifest(_tree(), "out/x.py", "out/x.tempered.md")
     assert m["ratified_examples"] is None
+
+
+def test_manifest_surfaces_loop_error():
+    t = _tree()
+    m = _tree_manifest(t, "out/x.py", "out/x.tempered.md")
+    assert m["loop_error"] is None            # clean run
+    t.loop_error = "round 3: RuntimeError: backend fell over"
+    m = _tree_manifest(t, "out/x.py", "out/x.tempered.md")
+    assert "round 3" in m["loop_error"]       # an agent must not read this as converged
