@@ -22,13 +22,13 @@ jobs:
         run: pytest -q
       - name: Validate the canonical trees (dogfood the CI gate)
         run: |
-          temper-skills validate examples/dog_food/output/dog_food_checker.py \
-            examples/dog_food/output/validation_set.json --fn can_dog_eat
-          temper-skills validate examples/ticket_routing/output/route_ticket.py \
-            examples/ticket_routing/output/validation_set.json --fn route_ticket --match exact
-          temper-skills validate examples/license_compat/output/assess_license.py \
-            examples/license_compat/output/validation_set.json --fn assess_license --match exact
-          temper-skills validate examples/ankle_sprain/output/assess_ankle.py \
-            examples/ankle_sprain/output/validation_set.json --fn assess_ankle --match exact
-          temper-skills validate examples/parking/output/can_i_park.py \
-            examples/parking/output/validation_set.json --fn can_i_park --match exact
+          temper-skills validate examples/dog_food/output/dog-food/scripts/can_dog_eat.py \
+            examples/dog_food/output/dog-food/assets/can_dog_eat.validation.jsonl --fn can_dog_eat
+          temper-skills validate examples/ticket_routing/output/ticket-routing/scripts/route_ticket.py \
+            examples/ticket_routing/output/ticket-routing/assets/route_ticket.validation.jsonl --fn route_ticket
+          temper-skills validate examples/license_compat/output/license-compat/scripts/assess_license.py \
+            examples/license_compat/output/license-compat/assets/assess_license.validation.jsonl --fn assess_license
+          temper-skills validate examples/ankle_sprain/output/ankle-sprain/scripts/assess_ankle.py \
+            examples/ankle_sprain/output/ankle-sprain/assets/assess_ankle.validation.jsonl --fn assess_ankle
+          temper-skills validate examples/parking/output/parking/scripts/can_i_park.py \
+            examples/parking/output/parking/assets/can_i_park.validation.jsonl --fn can_i_park

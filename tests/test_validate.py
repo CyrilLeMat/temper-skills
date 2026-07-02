@@ -100,6 +100,18 @@ def test_load_dataset_skips_unratified_proposed_cases(tmp_path):
     assert [e["input"] for e in data] == [{"x": 1}, {"x": 2}]
 
 
+def test_load_dataset_reads_jsonl_skill_assets(tmp_path):
+    """The skill-dir assets/*.validation.jsonl format must feed the same gate."""
+    p = tmp_path / "set.validation.jsonl"
+    p.write_text("\n".join([
+        json.dumps({"input": {"x": 1}, "expected": "a", "status": "ratified"}),
+        "",
+        json.dumps({"input": {"x": 2}, "expected": "b", "status": "proposed"}),
+    ]))
+    data = load_dataset(str(p))
+    assert [e["input"] for e in data] == [{"x": 1}]
+
+
 def _canonical_skill(example: str, skill: str, fn: str):
     """(compiled tree fn, ratified cases) from a committed example Agent Skill dir.
 
