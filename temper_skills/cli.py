@@ -285,7 +285,7 @@ def ingest(
     _print_added_features(tree)
     _print_schema_gaps(tree)
     _print_outcome_gaps(tree)
-    _write_validation_dataset(tree, out)
+    suite = _write_validation_dataset(tree, out)
 
     # Close the loop: a tempered skill.md that delegates the decision to the tree.
     module = Path(out).with_suffix("").name
@@ -302,7 +302,20 @@ def ingest(
     else:
         md = render_tempered_skill(tree, module, original_skill_text=original)
     Path(md_path).write_text(md)
-    console.print(f"[green]✓ tempered skill ({skill_style}) → {md_path}[/]  (delegates the decision to {module}.{tree.fn_name})")
+
+    # The closing summary leads with the test suite — the artifact most users came for;
+    # the tree is how it stays cheap (zero LLM calls at inference).
+    done = []
+    if suite:
+        flag = (f"  ·  [yellow]{suite['disputes']} open disagreement(s) to review[/]"
+                if suite["disputes"] else "")
+        done.append(f"[green]✓[/] {suite['cases']}-case test suite → {suite['test_path']}{flag}")
+        done.append(f"    [dim]labels are proposed, not ground truth — ratify them in "
+                    f"{suite['dataset_path']}[/]")
+    done.append(f"[green]✓[/] deterministic tree → {out}  [dim](zero LLM calls at inference)[/]")
+    done.append(f"[green]✓[/] tempered skill ({skill_style}) → {md_path}  "
+                f"[dim](delegates the decision to {module}.{tree.fn_name})[/]")
+    console.print(Panel("\n".join(done), title="Done", border_style="green"))
     console.print(f"[dim]backend {be.describe()} · cost: {cost_line}[/]")
 
     if json_out:
@@ -391,13 +404,14 @@ def _print_proposed_schema(inferred: InferredSchema, path: Path, skill: str) -> 
                         border_style="magenta"))
 
 
-def _write_validation_dataset(tree, out: str) -> None:
+def _write_validation_dataset(tree, out: str) -> dict | None:
     """Emit the committed validation dataset + behavior-lock tests (same artifacts as
     export_tree): <stem>.validation.jsonl (the debate surface), test_<stem>.py (always green),
-    and test_<stem>_ratified.py (only if a case is ratified). Disagreements are data, not tests."""
+    and test_<stem>_ratified.py (only if a case is ratified). Disagreements are data, not tests.
+    Returns the artifact counts/paths for the end-of-run summary, or None if no cases."""
     proposed = getattr(tree, "proposed_examples", None)
     if not proposed:
-        return
+        return None
     stem = str(Path(out).with_suffix(""))
     merged = merge_cases(load_validation(stem + ".validation.jsonl"), proposed)
     enriched = enrich_validation(tree, merged)
@@ -419,6 +433,12 @@ def _write_validation_dataset(tree, out: str) -> None:
                  f"({len(disputes)} open disagreement(s))[/]")
     console.print(Panel("\n".join(lines), title="✎ validation dataset (awaiting ratification)",
                         border_style="magenta"))
+    return {
+        "cases": len(enriched),
+        "disputes": len(disputes),
+        "test_path": str(Path(out).with_name("test_" + Path(out).name)),
+        "dataset_path": stem + ".validation.jsonl",
+    }
 
 
 @app.command()
@@ -486,30 +506,33 @@ def validate(
 
     pct = report.agreement_rate * 100
     color = "green" if report.passed(min_agreement) else "red"
-    lines = [f"Agreement: [{color}]{report.agreements}/{report.total} ({pct:.1f}%)[/]"]
+    lines = [f"Passed: [{color}]{report.agreements}/{report.total} case(s) ({pct:.1f}%)[/]"]
     if report.disagreements:
-        lines.append("\n[bold]Disagreements[/] — each is a tree bug or a mislabeled example; sign off:")
+        lines.append("\n[bold]Failures[/] — each is a tree bug or a mislabeled case; sign off:")
         for d in report.disagreements:
             lines.append(f"  input={d.input}")
             lines.append(f"    expected [green]{d.expected}[/]  ·  got [red]{d.predicted}[/]")
-    console.print(Panel("\n".join(lines), title=f"validate {artifact}", border_style=color))
+    console.print(Panel("\n".join(lines), title=f"test run — {artifact}", border_style=color))
     if not report.passed(min_agreement):
         raise typer.Exit(1)
 
 
 @app.command()
 def audit(
-    skill: str = typer.Argument(..., help="Path to the skill.md to assess for temper-fitness."),
+    skill: str = typer.Argument(..., help="A skill.md to audit — or a DIRECTORY to sweep as a library."),
     model: str = typer.Option("claude-sonnet-4-6", help="Model: any LiteLLM id."),
     backend: str = typer.Option("auto", help="LLM backend: auto | api | claude | opencode."),
     profile: str = typer.Option("standard", help=f"Temper profile if you follow the action: {list(PROFILES)}."),
     out_dir: str = typer.Option(".", help="Where to write trees/skill if you follow the action."),
-    json_out: bool = typer.Option(False, "--json", help="Emit the FitnessReport as JSON (for a pipeline / the Evolve Server)."),
+    report_md: str = typer.Option(None, "--report", help="Also write the findings as a Markdown report (pasteable in a PR)."),
+    json_out: bool = typer.Option(False, "--json", help="Emit the FitnessReport(s) as JSON (for a pipeline / the Evolve Server)."),
 ):
-    """Decide whether a skill's logic is worth tempering, before spending the loop.
+    """Find out what a skill is silently deciding — and what to do about it.
 
-    Exits 0 for 'temper'/'caveats', 3 for 'skip' — so a pipeline can triage a whole
-    skill library and only crystallize the fits.
+    Point it at one skill.md for a findings report, or at a directory to audit the
+    whole library (one cheap judge turn per skill, in parallel), ranked by what's most
+    worth acting on. Exits 0 when anything is actionable, 3 when everything is a skip —
+    so a pipeline can triage a library and only crystallize the fits.
     """
     from .audit import audit_skill
 
@@ -518,8 +541,16 @@ def audit(
     except (ValueError, RuntimeError) as e:
         console.print(f"[red]Backend error:[/] {e}")
         raise typer.Exit(1)
-    report = audit_skill(skill, backend=be)
 
+    if Path(skill).is_dir():
+        _audit_library(skill, be, json_out=json_out, report_md=report_md)
+        return
+
+    report = audit_skill(skill, backend=be)
+    if report_md:
+        from .audit_report import render_audit_md
+        Path(report_md).write_text(render_audit_md(report, skill))
+        console.print(f"[dim]report → {report_md}[/]")
     if json_out:
         console.print_json(report.model_dump_json())
         if report.verdict == "skip":
@@ -542,68 +573,86 @@ def audit(
         raise typer.Exit(3)
 
 
-_VERDICT = {
-    "temper":  ("green",  "worth freezing into a deterministic tree"),
-    "caveats": ("yellow", "temperable — but read the ⚠ before you commit to it"),
-    "skip":    ("red",    "don't bother — the loop won't converge on a clean tree"),
-}
-_AXIS_Q = {
-    "decisiveness":  "does it resolve to a finite verdict, or is it open-ended generation?",
-    "combinatorics": "is the hardness in feature INTERACTIONS, or a flat unbounded lookup?",
-    "stakes":        "is it repeated/auditable enough that freezing pays off?",
-}
+_HEADLINE_COLOR = {"temper": "green", "caveats": "yellow", "skip": "red"}
 
 
-def _band(score: int) -> str:
-    return "weak" if score <= 3 else "moderate" if score <= 6 else "strong"
+def _audit_library(root: str, be, *, json_out: bool, report_md: str | None) -> None:
+    """The library sweep: rank every skill under ``root`` by what's most worth acting on."""
+    from .audit_report import audit_library, headline_of, render_library_md, top_finding
+
+    rows = audit_library(root, be)
+    if not rows:
+        console.print(f"[red]no skills found under {root}[/] "
+                      "[dim](looked for SKILL.md files, then any non-furniture .md)[/]")
+        raise typer.Exit(2)
+
+    if json_out:
+        _emit_json([
+            {"path": str(r.path),
+             **({"error": r.error} if r.error else _json.loads(r.report.model_dump_json()))}
+            for r in rows
+        ])
+    else:
+        from rich.table import Table
+        table = Table(title=f"Skill library audit — {root} ({len(rows)} skill(s))",
+                      border_style="cyan", show_lines=False, pad_edge=False)
+        table.add_column("skill", style="bold", overflow="fold")
+        table.add_column("verdict")
+        table.add_column("top finding", overflow="fold")
+        table.add_column("fix", style="dim")
+        for row in rows:
+            rel = row.path.relative_to(root) if row.path.is_relative_to(Path(root)) else row.path
+            if row.report is None:
+                table.add_row(str(rel), "[red]audit failed[/]", row.error or "", "—")
+                continue
+            r = row.report
+            label, _ = headline_of(r)
+            color = "cyan" if r.recommended_action == "decompose" else _HEADLINE_COLOR[r.verdict]
+            table.add_row(str(rel), f"[{color}]{label}[/]", top_finding(r),
+                          r.recommended_action)
+        console.print(table)
+        console.print("[dim]details per skill: temper-skills audit <path>  ·  "
+                      "shareable report: --report audit.md[/]")
+
+    if report_md:
+        Path(report_md).write_text(render_library_md(rows, root))
+        console.print(f"[dim]report → {report_md}[/]")
+    if all(r.report is None or r.report.verdict == "skip" for r in rows):
+        raise typer.Exit(3)
 
 
 def _print_fitness(report, skill: str) -> None:
-    if report.recommended_action == "decompose":
-        color = "cyan"
-        header = (f"[cyan][bold]DECOMPOSE FIRST[/] — a flow of ~{report.distinct_decisions} "
-                  f"decisions; the {report.verdict.upper()} verdict below averages them[/]")
-    else:
-        color, gloss = _VERDICT[report.verdict]
-        header = f"[{color}][bold]{report.verdict.upper()}[/] — {gloss}[/]"
+    """Findings for the skill's AUTHOR — what it silently decides and what to do about
+    it — not a gate verdict for the temper pipeline (audit_report owns the wording)."""
+    from .audit_report import findings_of, headline_of
+
+    label, gloss = headline_of(report)
+    color = "cyan" if report.recommended_action == "decompose" else _HEADLINE_COLOR[report.verdict]
     body = [
-        header,
-        f"fn: [bold]{report.fn_name}[/]   ·   {skill}",
-        "",
-        "[dim]Scores 0–10 (judged by the model) · what each axis asks:[/]",
+        f"[{color}][bold]{label}[/] — {gloss}[/]",
+        f"decision: [bold]{report.fn_name}[/]   ·   {skill}",
     ]
-    for axis in ("decisiveness", "combinatorics", "stakes"):
-        score = getattr(report, axis)
-        body.append(f"  [bold]{axis:<13}[/] {score}/10  [dim]{_band(score):<8}[/]  {_AXIS_Q[axis]}")
-        why = report.rationale.get(axis)
-        if why:
-            body.append(f"       [dim]“{why}”[/]")
 
-    body.append(
-        f"  [bold]{'closure':<13}[/] {report.schema_closure:.0%}        "
-        f"[dim]share of the {report.n_features} feature(s) with a bounded value space "
-        "(computed, not judged)[/]"
-    )
-    if report.open_features:
-        body.append(
-            "       [dim]free-text (value space NOT bounded — your normalizer owns these): [/]"
-            + ", ".join(report.open_features)
-        )
+    said = [(a, report.rationale.get(a)) for a in ("decisiveness", "combinatorics", "stakes")]
+    if any(why for _, why in said):
+        body += ["", "[bold]What this skill is deciding[/]"]
+        body += [f"  [dim]{axis}:[/] {why}" for axis, why in said if why]
 
-    body += ["", "[bold]Why this verdict[/]"]
-    body += [f"  [green]✓[/] {r}" for r in report.reasons]
-    body += [f"  [yellow]⚠[/] {c}" for c in report.caveats]
+    body += ["", "[bold]Findings[/]"]
+    for f in findings_of(report):
+        mark = "[green]✓[/]" if f.severity == "good" else "[yellow]⚠[/]"
+        body.append(f"  {mark} {f.text}")
+        body.append(f"       [dim]fix: {f.fix}[/]")
+
     if report.action_hint:
-        body += [
-            "",
-            f"[bold]Next action: {report.recommended_action.upper()}[/] — {report.action_hint}",
-        ]
+        body += ["", f"[bold]Recommended: {report.recommended_action.upper()}[/] — {report.action_hint}"]
     body += [
         "",
-        "[dim]TEMPER = freeze it · CAVEATS = freeze but mind the ⚠ · "
-        "SKIP (exit 3) = don't bother[/]",
+        f"[dim]scores: decisiveness {report.decisiveness}/10 · interactions "
+        f"{report.combinatorics}/10 · stakes {report.stakes}/10 · bounded inputs "
+        f"{report.schema_closure:.0%} of {report.n_features} feature(s)[/]",
     ]
-    console.print(Panel("\n".join(body), title="Temper fitness", border_style=color))
+    console.print(Panel("\n".join(body), title="Skill audit", border_style=color))
 
 
 def _plan_body(decomp, coup, reports) -> str:
@@ -830,5 +879,29 @@ def guide(
         _emit_json(_guide_manifest(action, final, "compiled"))
 
 
-if __name__ == "__main__":
+def _implicit_command(arg: str) -> str | None:
+    """Bare invocation: `temper-skills <dir>` sweeps the library, `temper-skills <file>`
+    runs the guided tour — one thing to remember instead of five subcommands. Explicit
+    subcommand names and flags always win."""
+    names = {(c.name or c.callback.__name__).replace("_", "-") for c in app.registered_commands}
+    if arg.startswith("-") or arg in names:
+        return None
+    p = Path(arg)
+    if not p.exists():
+        return None
+    return "audit" if p.is_dir() else "guide"
+
+
+def main() -> None:
+    """Console-script entry: resolve a bare path to its implicit command, then dispatch."""
+    import sys
+
+    if len(sys.argv) > 1:
+        implicit = _implicit_command(sys.argv[1])
+        if implicit:
+            sys.argv.insert(1, implicit)
     app()
+
+
+if __name__ == "__main__":
+    main()

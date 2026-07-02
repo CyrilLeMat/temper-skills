@@ -5,12 +5,12 @@ build-backend = "hatchling.build"
 [project]
 name = "temper-skills"
 version = "0.0.1"
-description = "Turn your agent's decision logic from a prompt into deterministic, versionable Python code."
+description = "Adversarial reviewers write a test suite for your agent skill's decision logic — and freeze that logic into deterministic Python that must keep passing."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 authors = [{ name = "Cyril", email = "cyril@hellosunrise.com" }]
-keywords = ["llm", "agents", "decision-tree", "adversarial", "determinism"]
+keywords = ["llm", "agents", "skills", "testing", "evals", "decision-tree", "adversarial", "determinism"]
 dependencies = [
     "litellm>=1.50",      # provider-agnostic model routing (Anthropic, OpenAI, Gemini, local, …)
     "instructor>=1.5",    # Pydantic-validated structured output + retries over LiteLLM
@@ -24,7 +24,7 @@ dev = ["pytest>=8.0"]
 vertex = ["google-auth>=2.0"]   # Claude-on-Vertex via LiteLLM + gcloud ADC (no API key)
 
 [project.scripts]
-temper-skills = "temper_skills.cli:app"
+temper-skills = "temper_skills.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

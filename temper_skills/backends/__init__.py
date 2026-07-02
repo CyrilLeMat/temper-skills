@@ -33,7 +33,12 @@ def auto_backend(model: str | None = None) -> Backend:
         return AgentCliBackend(preset="claude", model=model or "claude-sonnet-4-6")
     if cli_runs("opencode"):
         return AgentCliBackend(preset="opencode", model=model or "claude-sonnet-4-6")
+    # This error IS onboarding — a cold `uvx temper-skills audit` lands here first.
     raise RuntimeError(
-        "No backend available. Set ANTHROPIC_API_KEY for the API backend, or install "
-        "and log into an agent CLI (claude / opencode) for the subscription backend."
+        "no LLM backend detected. Any ONE of these unblocks every command:\n\n"
+        "  1. an Anthropic API key      export ANTHROPIC_API_KEY=sk-ant-...\n"
+        "  2. the Claude Code CLI       npm install -g @anthropic-ai/claude-code   (run `claude` once to log in)\n"
+        "  3. the opencode CLI          https://opencode.ai/docs  (any provider it is logged into)\n\n"
+        "then re-run. Force a specific one with --backend api|claude|opencode "
+        "(or TEMPER_BACKEND=...)."
     )
