@@ -1,6 +1,6 @@
 ---
 name: temper-skills
-description: Compile an agent's decision logic — a prompt, skill.md, or playbook — into a deterministic, auditable Python decision tree by driving the installed temper-skills CLI (never reimplementing the logic in prose). Use in agents without a native subagent primitive (Cursor, Hermes, generic tools) when routing/decision logic needs to be tested, versioned in a PR, or made independent of model updates; requires `pip install temper-skills` and a model backend (a logged-in claude/opencode CLI or an API key). Not for continuous scoring, text generation, or logic with no documentation the model can reach.
+description: Give an agent skill's decision logic a test suite and a deterministic implementation — a labeled validation dataset plus versionable Python — by driving the installed temper-skills CLI (never reimplementing the logic in prose). Use in agents without a native subagent primitive (Cursor, Hermes, generic tools) when the user wants to test, eval, audit, temper, freeze, or harden the routing/decision logic of a prompt, skill.md, or playbook ("test my skill", "what is this skill deciding?"), including auditing a whole skills directory; requires `pip install temper-skills` and a model backend (a logged-in claude/opencode CLI or an API key). Not for continuous scoring, text generation, or logic with no documentation the model can reach.
 license: Apache-2.0
 allowed-tools: Bash, Read, Write
 metadata:
@@ -64,6 +64,16 @@ ambiguous), then run the one-command tour:
 ```bash
 temper-skills guide <path/to/skill.md> --json
 ```
+
+**If the user points at a directory** (a skill library), sweep it instead of guiding one file —
+the audit is a report worth relaying on its own:
+
+```bash
+temper-skills audit <dir> --json --report audit.md
+```
+
+Relay the ranked findings (the JSON is a list of per-skill reports, most actionable first) and
+offer to `guide` the top pick. `audit.md` is a shareable Markdown version for a PR.
 
 **Always pass `--json`.** `guide` and `ingest` then emit a machine-readable manifest on
 **stdout** and send the human Rich panels to **stderr** — read the manifest, do not scrape the

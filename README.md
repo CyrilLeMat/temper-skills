@@ -1,16 +1,35 @@
 # Temper-Skills
 
-> Skills are flows of decisions. Temper finds them — and freezes the ones worth freezing into deterministic code.
+> Your skill is silently making decisions. Temper-Skills finds them, gets adversarial
+> reviewers to write a **test suite** for them, and freezes the logic into deterministic
+> Python that must keep passing.
 
 A skill or prompt is usually a *flow*: a few decisions (classify, route, escalate, judge)
-tangled together with generation and orchestration. **Temper-Skills works on the decision,
-not the skill.** `audit` tells you which decisions are tree-shaped, `decompose` splits a flow
-into them, and an **adversarial loop** freezes each into deterministic, versionable Python you
-can read, review in a PR, and pin in CI — with **zero LLM calls at inference**.
+tangled with generation — re-derived from prose on every call, with no tests. Temper-Skills
+gives that decision logic what code gets: **a reviewed, labeled test suite** (the cases are
+written by adversarial persona reviewers, not by the model grading itself) and **a
+deterministic implementation** — readable Python you can diff in a PR and pin in CI, with
+**zero LLM calls at inference**.
+
+## Quickstart — what is your skill silently deciding?
+
+```bash
+uvx temper-skills audit path/to/skill.md    # one skill: findings + a recommended fix
+uvx temper-skills audit .claude/skills/     # your whole library, ranked (--report audit.md to share)
+```
+
+No config. It needs any one backend: an `ANTHROPIC_API_KEY`, or a logged-in `claude` /
+`opencode` CLI — and tells you exactly what to do if none is found. Inside **Claude Code**
+there's nothing to install at all: [`/temper path/to/skill.md`](#two-ways-to-run-it) runs on
+your subscription.
+
+Bare `temper-skills <path>` does the right thing: a directory gets the library sweep, a file
+gets the guided tour (`guide`: audit → follow the recommended action with a few `[1]`
+presses → a full generated skill).
 
 ```
-skill.md ──audit──▶ verdict + recommended action
-                      ├─ temper           → run the loop, get a deterministic tree
+skill.md ──audit──▶ findings + recommended fix
+                      ├─ temper           → run the loop: test suite + deterministic tree
                       ├─ decompose         → it's a flow: split into N decisions, temper each
                       ├─ externalize_data  → flat lookup: emit a data file + matcher, not a tree
                       ├─ build_normalizer  → real logic on free-text input: pin the features first
@@ -20,22 +39,25 @@ skill.md ──audit──▶ verdict + recommended action
 The pipeline is three steps — **audit → (decompose) → temper** — and you can stop after any of
 them. The rest of this README walks them in order.
 
-**Just want the tour?** `temper-skills guide skill.md` runs the whole thing interactively: it
-audits, follows the recommended action with a few `[1]` presses, and ends by printing the full
-generated skill — one tree (a tempered skill) or, for a flow, N trees + an orchestrator. The
-individual commands (`audit`, `decompose`) also offer the next step as a `[1]` prompt when run
-in a terminal.
-
 ---
 
-## Step 1 — `audit`: is there a decision here worth freezing?
+## Step 1 — `audit`: what is this skill deciding, and what should you do about it?
 
-Before spending the loop, find out whether a skill is even tree-shaped. `audit` scores it on
-four axes and routes it to an action — cheap enough to fan across a whole skill library.
+The audit is a health report for a skill's decision logic — worth reading even if you never
+temper. It names the decision, reports findings in plain terms (implicit decisions bundled
+together, free-text inputs whose answers will drift call-to-call, lookup tails wearing a
+tree's clothes), and recommends a fix per finding. Point it at a directory and it sweeps the
+whole library in parallel, ranked by what's most worth acting on; `--report audit.md` writes
+the findings as Markdown you can paste in a PR.
 
 ```bash
-temper-skills audit skill.md          # exit 0 for temper/caveats, 3 for skip — pipeline-friendly
+temper-skills audit skill.md              # findings for one skill
+temper-skills audit .claude/skills/       # ranked table for a library
+temper-skills audit skill.md --report audit.md   # shareable Markdown report
+# exit 0 when anything is actionable, 3 when everything is a skip — pipeline-friendly
 ```
+
+Under the findings sit four scored axes:
 
 - **decisiveness** — does it resolve to a finite verdict, or is it open-ended generation?
 - **combinatorics** — is the hardness in feature *interactions*, or a flat unbounded lookup?
@@ -43,10 +65,10 @@ temper-skills audit skill.md          # exit 0 for temper/caveats, 3 for skip �
 - **schema closure** *(computed, not judged)* — what share of the features pin to a bounded
   value space? Free-text fields leak into the normalizer you own.
 
-The three judged axes come from **one LLM call**; the verdict (`temper` / `caveats` / `skip`)
-and the recommended action are **pure functions** of the four, so the audit is as reproducible
-and explainable as the tree it gates. The same call also reports `distinct_decisions` — when
-it's ≥2, the skill is a flow and the action becomes `decompose` (Step 2).
+The three judged axes come from **one LLM call**; the findings and the recommended action are
+**pure functions** of the four, so the audit is as reproducible and explainable as the tree it
+gates. The same call also reports `distinct_decisions` — when it's ≥2, the skill is a flow and
+the action becomes `decompose` (Step 2).
 
 | Action | When | Who does it |
 | --- | --- | --- |
@@ -84,10 +106,17 @@ See [`examples/dog_day/`](examples/dog_day/) — a daily dog-care assistant spli
 `decide_walk` / `decide_meal` (chained) / `decide_vet` + the owner's note, the first complete
 decompose chain in the examples.
 
-## Step 3 — `temper`: freeze one decision into a tree
+## Step 3 — `temper`: freeze one decision into tests + a tree
 
-This is the engine. Given a decision's schema + constraints (or a skill to infer them from), an
-**adversarial loop** compiles the logic into a deterministic tree:
+This is the engine. An **adversarial loop** reviews the decision from several angles; what
+you get out is a labeled test suite the reviewers wrote, plus the deterministic code that
+passes it:
+
+```
+✓ 14-case test suite → test_route_ticket.py  ·  3 open disagreement(s) to review
+✓ deterministic tree → route_ticket.py  (zero LLM calls at inference)
+✓ tempered skill → route_ticket.tempered.md
+```
 
 ```python
 import temper_skills
@@ -343,9 +372,9 @@ a good citizen of that ecosystem, not a replacement for it.
 
 ## Honest scope
 
-- **Built and tested:** `audit` (fitness + action routing), `decompose` (flow → per-decision
-  mini-schemas), the adversarial `temper` loop, `validate`, incremental mode, the tempered-skill
-  emitter.
+- **Built and tested:** `audit` (findings + action routing, one skill or a library sweep with
+  `--report`), `decompose` (flow → per-decision mini-schemas), the adversarial `temper` loop,
+  `validate`, incremental mode, the tempered-skill emitter.
 - **Deferred:** the `clarify` and `generate_examples` actions (they need a signal the audit
   doesn't yet collect); the `--temper-each` orchestrator is a deterministic template (no woven
   variant yet); `audit_decision` can over-count `distinct_decisions` on an already-atomic

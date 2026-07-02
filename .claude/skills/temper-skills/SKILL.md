@@ -1,6 +1,6 @@
 ---
 name: temper-skills
-description: Compile an agent's decision logic (a prompt or skill.md) into a deterministic, versionable Python decision tree via an adversarial multi-persona loop that runs natively in Claude Code — proposer plus persona subagents through the Task tool, entirely on your Claude Code subscription, no install and no API key. Use inside Claude Code when the user wants to "temper", "distill", "freeze", or "harden" the routing/decision logic of a skill, prompt, or playbook into testable code, or to turn a skill.md into a decision tree. Not for continuous scoring, text generation, or agents without a subagent primitive (there, use the temper-skills CLI/library instead).
+description: Give an agent skill's decision logic a test suite and a deterministic implementation — a labeled validation dataset plus versionable Python — via an adversarial multi-persona loop that runs natively in Claude Code: proposer plus persona subagents through the Task tool, entirely on your Claude Code subscription, no install and no API key. Use inside Claude Code when the user wants to "test", "eval", "audit", "temper", "distill", "freeze", or "harden" the routing/decision logic of a skill, prompt, or playbook ("test my skill", "what is this skill deciding?"), to audit a whole skills directory, or to turn a skill.md into a decision tree. Not for continuous scoring, text generation, or agents without a subagent primitive (there, use the temper-skills CLI/library instead).
 license: Apache-2.0
 allowed-tools: Task, Bash, Read, Write
 metadata:
@@ -47,6 +47,11 @@ record it, and keep going.
 ## Inputs
 
 - A target `skill.md` / prompt (the logic to migrate), path given by the user.
+  **If the path is a directory** (a skill library), do not start the loop: audit each
+  discovered skill yourself — one judged pass per skill (decisiveness / combinatorics /
+  stakes, plus how many features pin to a bounded value space) — and present a ranked
+  findings table (skill · verdict · top finding · fix), most actionable first. The audit
+  is a report worth having on its own; offer to temper the top pick, don't assume it.
 - A **schema**: the pre-computed structured features the tree may branch on. If the user
   doesn't supply one, infer it from the skill (feature name + type + one-line meaning).
 - Optional `hard` constraints (non-negotiable rules) and a few ratified examples.
