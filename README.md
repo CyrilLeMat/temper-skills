@@ -13,7 +13,7 @@
 | temper\_skills/backends/base.py         |       17 |        0 |    100% |           |
 | temper\_skills/cli.py                   |      471 |      108 |     77% |61, 69, 82-86, 88-89, 108-112, 167-169, 177, 181-183, 210-211, 227-229, 242, 282-285, 294-297, 306-310, 317, 326-334, 347-349, 394-423, 480-482, 496, 499-512, 545-546, 577-578, 651, 663-666, 670-672, 740-742, 767-769, 776-778, 795-796, 810-812, 834-840, 844 |
 | temper\_skills/decompose.py             |       30 |        0 |    100% |           |
-| temper\_skills/distill.py               |      325 |       10 |     97% |75, 236, 262, 588, 688-689, 700-701, 765, 777 |
+| temper\_skills/distill.py               |      326 |       10 |     97% |80, 241, 267, 593, 693-694, 705-706, 770, 782 |
 | temper\_skills/export\_schema.py        |       31 |        0 |    100% |           |
 | temper\_skills/export\_skill.py         |       48 |        3 |     94% |92-98, 128 |
 | temper\_skills/export\_tree.py          |      118 |        2 |     98% |  152, 292 |
@@ -21,7 +21,7 @@
 | temper\_skills/ingest.py                |       38 |        0 |    100% |           |
 | temper\_skills/pipelines.py             |       72 |        0 |    100% |           |
 | temper\_skills/schemas.py               |       34 |        0 |    100% |           |
-| temper\_skills/skill\_docs.py           |       50 |        5 |     90% |108-110, 115-116 |
+| temper\_skills/skill\_docs.py           |       55 |        5 |     91% |128-130, 135-136 |
 | temper\_skills/skill\_render.py         |      142 |        7 |     95% |193, 258, 292, 299-302, 309, 319 |
 | temper\_skills/sources.py               |       33 |        0 |    100% |           |
 | temper\_skills/tree.py                  |       60 |        0 |    100% |           |
@@ -29,7 +29,7 @@
 | temper\_skills/validate.py              |       65 |        0 |    100% |           |
 | temper\_skills/validation\_case.py      |       38 |        1 |     97% |        77 |
 | temper\_skills/vendor\_scripts.py       |       28 |        0 |    100% |           |
-| **TOTAL**                               | **2071** |  **139** | **93%** |           |
+| **TOTAL**                               | **2077** |  **139** | **93%** |           |
 
 
 ## Setup coverage badge
