@@ -60,6 +60,11 @@ PROFILE_PERSONAS: dict[str, list[Persona]] = {
 # bounds schema growth by tree size so the loop still converges (§ the "earn-a-branch" guard).
 _EARN_ROUNDS = 2
 
+# The structural critics never contribute validation cases — they restructure
+# (schema/outcomes/pruning), they don't find inputs. Single-sourced into the skill
+# docs (skill_docs.py) and pinned against the SKILL.md prose (test_skill_prose_sync).
+HARVEST_EXCLUDED = (OVERENGINEERING_CRITIC.name, SCHEMA_CRITIC.name, OUTCOME_CRITIC.name)
+
 _JSON_TYPE = {"float": "number", "int": "integer", "bool": "boolean", "str": "string"}
 
 
@@ -581,7 +586,7 @@ def _harvest_proposed(
     The cases ride along in the verdicts the personas already return, so this is free.
     The two counterweights are skipped — they restructure, they don't add cases."""
     for v in verdicts:
-        if v.persona in (OVERENGINEERING_CRITIC.name, SCHEMA_CRITIC.name, OUTCOME_CRITIC.name):
+        if v.persona in HARVEST_EXCLUDED:
             continue
         for ex in v.proposed_tests:
             if not ex.input:

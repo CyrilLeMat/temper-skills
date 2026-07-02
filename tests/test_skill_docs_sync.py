@@ -35,3 +35,15 @@ def test_convergence_block_is_plateau_not_threshold():
     block = render_block("convergence")
     assert "plateau" in block
     assert "threshold" in block  # explicitly contrasts against the old (drifted) rule
+
+
+def test_loop_invariants_block_carries_the_code_facts():
+    from temper_skills.distill import _EARN_ROUNDS, HARVEST_EXCLUDED
+    from temper_skills.validation_case import STATUSES
+
+    block = render_block("loop-invariants")
+    assert f"**{_EARN_ROUNDS} rounds**" in block
+    for name in HARVEST_EXCLUDED:
+        assert f"`{name}`" in block
+    for status in STATUSES:
+        assert f"`{status}`" in block

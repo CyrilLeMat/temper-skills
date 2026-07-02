@@ -21,6 +21,11 @@ ruff check temper_skills tests        # lint (CI-enforced)
 - **Generated artifacts are dogfooded.** CI re-validates the example trees against
   their datasets (`temper-skills validate`); regenerate outputs rather than
   hand-editing them.
+- **The skill prose is pinned to the code.** The subagent SKILL.md re-states the
+  loop in prose. Its tables and fact card are generated (`skill_docs.py` — edit
+  code, re-run it); its narrative's algorithmic claims are pinned by
+  `test_skill_prose_sync.py`. If you change loop behavior in `distill.py`, expect
+  one of those to fail until the prose is updated to match — that's the point.
 - Comment sparingly — genuine "why", not narration. Match the style around you.
 
 ## Releases (maintainer)

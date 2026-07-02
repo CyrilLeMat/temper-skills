@@ -6,6 +6,12 @@ versions follow [SemVer](https://semver.org/) (pre-1.0: minor bumps may break).
 ## [Unreleased]
 
 ### Fixed
+- Subagent SKILL.md drift: the harvest instruction told the orchestrator to exclude
+  only the `overengineering_critic` from validation-case collection, while the
+  library excludes all three structural critics. The prose now matches; a generated
+  "Loop invariants" fact card (earn-a-branch window, harvest exclusions, statuses,
+  the gate) plus `test_skill_prose_sync.py` pin the narrative's algorithmic claims
+  to `distill.py` so this class of drift fails CI.
 - A backend failure after round 1 no longer masquerades as convergence: the loop
   still keeps the best tree so far, but records `loop_error` on the result — shown
   as a warning in the CLI and exposed in the `--json` manifest (agents must not

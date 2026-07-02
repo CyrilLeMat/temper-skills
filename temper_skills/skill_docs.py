@@ -18,8 +18,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from .distill import PROFILE_PERSONAS, PROFILES
+from .distill import _EARN_ROUNDS, HARVEST_EXCLUDED, PROFILE_PERSONAS, PROFILES
 from .sources import DEFAULT_PERSONAS, OUTCOME_CRITIC, OVERENGINEERING_CRITIC, SCHEMA_CRITIC
+from .validation_case import STATUSES
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -76,10 +77,29 @@ def _render_convergence() -> str:
     )
 
 
+def _render_loop_invariants() -> str:
+    """The loop's fact card: the numbers/sets the surrounding prose narrates. The prose
+    may paraphrase them (test_skill_prose_sync pins that); this block IS them."""
+    excluded = ", ".join(f"`{n}`" for n in HARVEST_EXCLUDED)
+    statuses = " → ".join(f"`{s}`" for s in STATUSES)
+    return (
+        _EDIT_HINT.format(src="distill.py / validation_case.py")
+        + "\n\n"
+        + f"- **earn-a-branch window:** an added feature/outcome must earn a surviving "
+          f"branch within **{_EARN_ROUNDS} rounds** or be reverted to an advisory gap.\n"
+        + f"- **case harvest excludes:** {excluded} — the structural critics restructure; "
+          "they don't add cases.\n"
+        + f"- **case statuses:** {statuses} — only a human-set `ratified` gates anything.\n"
+        + "- **the only mid-run gate:** Continue · Stop and review · Abort. Everything "
+          "else is decided, recorded, and reviewed at the end."
+    )
+
+
 RENDERERS = {
     "personas": _render_personas,
     "profiles": _render_profiles,
     "convergence": _render_convergence,
+    "loop-invariants": _render_loop_invariants,
 }
 
 

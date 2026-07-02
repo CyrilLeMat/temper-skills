@@ -213,12 +213,24 @@ The loop stops when **no round improves on the best for `stop after N quiet roun
    no improvement for the profile's quiet-round count, the round cap, or the user stops). A
    schema/outcome change is an improvement — it resets the quiet-round count.
 
+### Loop invariants
+
+<!-- BEGIN GENERATED:loop-invariants -->
+_Generated from `temper_skills/distill.py / validation_case.py` — edit there, then run `python -m temper_skills.skill_docs`._
+
+- **earn-a-branch window:** an added feature/outcome must earn a surviving branch within **2 rounds** or be reverted to an advisory gap.
+- **case harvest excludes:** `overengineering_critic`, `schema_critic`, `outcome_critic` — the structural critics restructure; they don't add cases.
+- **case statuses:** `proposed` → `resolved` → `ratified` — only a human-set `ratified` gates anything.
+- **the only mid-run gate:** Continue · Stop and review · Abort. Everything else is decided, recorded, and reviewed at the end.
+<!-- END GENERATED:loop-invariants -->
+
 ### Build the validation set as you go — written to disk every round
 
 Pick one `run_id` for the whole temper (e.g. a UTC timestamp) and reuse it every round. Each
 round, after you apply the arbiter's tree, harvest the `proposed_tests` from every persona
-EXCEPT the `overengineering_critic` and **write them to disk immediately** by piping them to
-the deterministic per-round writer — do not wait for export:
+EXCEPT the structural critics — `overengineering_critic`, `schema_critic`, `outcome_critic`
+(they restructure; they don't add cases) — and **write them to disk immediately** by piping
+them to the deterministic per-round writer — do not wait for export:
 
 ```bash
 echo '<this round's proposed_tests as a JSON list>' | \
