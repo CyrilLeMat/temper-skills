@@ -7,6 +7,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # coverage badge data branch
     strategy:
       fail-fast: false
       matrix:
@@ -19,7 +21,12 @@ jobs:
       - name: Install
         run: pip install -e ".[dev]"
       - name: Test suite
-        run: pytest -q
+        run: pytest -q --cov
+      - name: Publish coverage badge data
+        if: matrix.python-version == '3.12' && github.ref == 'refs/heads/main'
+        uses: py-cov-action/python-coverage-comment-action@v3
+        with:
+          GITHUB_TOKEN: ${{ github.token }}
       - name: Validate the canonical trees (dogfood the CI gate)
         run: |
           temper-skills validate examples/dog_food/output/dog-food/scripts/can_dog_eat.py \
