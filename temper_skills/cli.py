@@ -536,6 +536,8 @@ def audit(
     """
     from .audit import audit_skill
 
+    if json_out:
+        _route_console_to_stderr()  # stdout must carry ONLY the machine-readable report(s)
     try:
         be = get_backend(backend, model)
     except (ValueError, RuntimeError) as e:
@@ -552,7 +554,7 @@ def audit(
         Path(report_md).write_text(render_audit_md(report, skill))
         console.print(f"[dim]report → {report_md}[/]")
     if json_out:
-        console.print_json(report.model_dump_json())
+        _emit_json(_json.loads(report.model_dump_json()))
         if report.verdict == "skip":
             raise typer.Exit(3)
         return

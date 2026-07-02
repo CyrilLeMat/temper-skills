@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+from rich.console import Console
 from typer.testing import CliRunner
 
 from temper_skills import cli
@@ -12,6 +14,13 @@ from temper_skills.backends.base import Backend
 from temper_skills.ingest import InferredFeature, InferredSchema
 
 runner = CliRunner()
+
+
+@pytest.fixture(autouse=True)
+def _fresh_console(monkeypatch):
+    # --json reroutes the module-global console to stderr; reset it per test so
+    # panel/table assertions don't depend on test order.
+    monkeypatch.setattr(cli, "console", Console())
 
 
 class RoutingBackend(Backend):
@@ -81,6 +90,18 @@ def test_dir_sweep_json_is_a_report_list(tmp_path, monkeypatch):
     assert len(rows) == 2
     assert rows[0]["verdict"] == "temper" and rows[0]["path"].endswith("router/SKILL.md")
     assert rows[1]["verdict"] == "skip"
+
+
+def test_dir_sweep_json_with_report_keeps_stdout_parseable(tmp_path, monkeypatch):
+    # Regression: the "report → …" console line must go to stderr, never corrupt
+    # the JSON stream on stdout (bit the first live corpus sweep).
+    monkeypatch.setattr(cli, "get_backend", lambda n, m: RoutingBackend())
+    out = tmp_path / "audit.md"
+    res = runner.invoke(cli.app, ["audit", str(_lib(tmp_path)), "--json",
+                                  "--report", str(out)])
+    assert res.exit_code == 0
+    assert len(json.loads(res.stdout)) == 2
+    assert out.exists()
 
 
 def test_dir_sweep_writes_md_report(tmp_path, monkeypatch):

@@ -21,7 +21,10 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
-vertex = ["google-auth>=2.0"]   # Claude-on-Vertex via LiteLLM + gcloud ADC (no API key)
+vertex = [                      # Claude-on-Vertex via LiteLLM + gcloud ADC (no API key)
+    "google-auth>=2.0",
+    "google-cloud-aiplatform>=1.38",   # litellm's vertex_ai/* route imports `vertexai`
+]
 
 [project.scripts]
 temper-skills = "temper_skills.cli:main"

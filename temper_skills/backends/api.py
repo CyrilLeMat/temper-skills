@@ -51,8 +51,24 @@ class ApiBackend(Backend):
         self.max_tokens = max_tokens
         self.cost = 0.0
         self._lock = threading.Lock()  # personas run concurrently — guard the counters
+        self._warm_lock = threading.Lock()
+        self._warmed = False
 
     def complete(self, system: str, user: str, schema: type[T]) -> T:
+        # Instructor registers its provider/mode handlers lazily on the FIRST call;
+        # concurrent first calls race that registration and fail with
+        # "Mode (...) is not registered. Available modes: []" (seen on `audit <dir>`,
+        # where the fan-out makes the very first backend calls concurrent). Serialize
+        # until one call has succeeded, then run fully concurrent.
+        if not self._warmed:
+            with self._warm_lock:
+                if not self._warmed:
+                    obj = self._complete(system, user, schema)
+                    self._warmed = True
+                    return obj
+        return self._complete(system, user, schema)
+
+    def _complete(self, system: str, user: str, schema: type[T]) -> T:
         obj, completion = self._client.chat.completions.create_with_completion(
             model=self._route,
             max_tokens=self.max_tokens,

@@ -344,6 +344,11 @@ can_dog_eat(normalize("a slice of Dark Chocolate cake"))   # -> "no — toxic, n
 
 ## Where this fits — skill ecosystems
 
+**Real sweep:** [docs/audits/anthropic-skills-2026-07-02.md](docs/audits/anthropic-skills-2026-07-02.md)
+runs the audit over Anthropic's 17 official skills — none is a clean freeze candidate (the
+audit says no most of the time; that's the point), but 11 of 17 bundle 2–5 separable
+decisions in one prompt.
+
 In a system that **evolves and deduplicates skills from sessions** (e.g. SkillClaw), you can't
 hand-pick which skills to harden. The audit is the automated triage: fan it across the library,
 crystallize the decisions worth crystallizing, decompose the flows, and **delegate the rest** —
