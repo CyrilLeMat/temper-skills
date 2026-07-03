@@ -86,12 +86,12 @@ def _render_loop_invariants() -> str:
         _EDIT_HINT.format(src="distill.py / validation_case.py")
         + "\n\n"
         + f"- **earn-a-branch window:** an added feature/outcome must earn a surviving "
-          f"branch within **{_EARN_ROUNDS} rounds** or be reverted to an advisory gap.\n"
+        f"branch within **{_EARN_ROUNDS} rounds** or be reverted to an advisory gap.\n"
         + f"- **case harvest excludes:** {excluded} — the structural critics restructure; "
-          "they don't add cases.\n"
+        "they don't add cases.\n"
         + f"- **case statuses:** {statuses} — only a human-set `ratified` gates anything.\n"
         + "- **the only mid-run gate:** Continue · Stop and review · Abort. Everything "
-          "else is decided, recorded, and reviewed at the end."
+        "else is decided, recorded, and reviewed at the end."
     )
 
 
@@ -110,7 +110,8 @@ def render_block(block_id: str) -> str:
 def _apply(text: str) -> str:
     for block_id in RENDERERS:
         pattern = re.compile(
-            r"(<!-- BEGIN GENERATED:%s -->\n).*?(\n<!-- END GENERATED:%s -->)" % (block_id, block_id),
+            r"(<!-- BEGIN GENERATED:%s -->\n).*?(\n<!-- END GENERATED:%s -->)"
+            % (block_id, block_id),
             re.S,
         )
         text = pattern.sub(lambda m: m.group(1) + render_block(block_id) + m.group(2), text)

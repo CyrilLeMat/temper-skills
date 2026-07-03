@@ -41,8 +41,12 @@ def _console(json_out: bool = False) -> Console:
     return Console(stderr=True) if json_out else Console()
 
 
-_VERDICT_MARK = {"ok": "[green]✓[/]", "missing_case": "[yellow]⚠[/]",
-                 "collapsible": "[yellow]⚠[/]", "contradiction": "[red]✗[/]"}
+_VERDICT_MARK = {
+    "ok": "[green]✓[/]",
+    "missing_case": "[yellow]⚠[/]",
+    "collapsible": "[yellow]⚠[/]",
+    "contradiction": "[red]✗[/]",
+}
 
 
 def _confirm_schema(ui: Console, inferred: InferredSchema, auto: bool = False) -> bool:
@@ -87,7 +91,9 @@ def _make_gate(ui: Console, interactive: bool):
         if r.proposed_count:
             ppct = 100 * r.proposed_passed / r.proposed_count
             bits.append(f"[cyan]{r.proposed_passed}/{r.proposed_count} proposed ({ppct:.0f}%)[/]")
-        validation = "   ✎ validation set — tree passes " + (", ".join(bits) if bits else "0 cases (none yet)")
+        validation = "   ✎ validation set — tree passes " + (
+            ", ".join(bits) if bits else "0 cases (none yet)"
+        )
         conv = r.arbitration.convergence_estimate
         ccolor = "green" if conv >= 80 else "yellow" if conv >= 50 else "red"
         body = [
@@ -107,7 +113,9 @@ def _make_gate(ui: Console, interactive: bool):
             return "continue"
         choice = Prompt.ask(
             "Continue [Enter] · Stop and review [s] · Abort [q]",
-            choices=["", "s", "q"], default="", show_choices=False,
+            choices=["", "s", "q"],
+            default="",
+            show_choices=False,
         )
         return {"": "continue", "s": "stop", "q": "abort"}[choice]
 
@@ -119,10 +127,10 @@ def ingest(
     skill: str = typer.Argument(..., help="Path to the skill.md to migrate."),
     profile: str = typer.Option("standard", help=f"One of {list(PROFILES)}."),
     out: str = typer.Option("decision_tree.generated.py", help="Output .py path."),
-    model: str = typer.Option("claude-sonnet-4-6", help="Model: any LiteLLM id (claude-sonnet-4-6, openai/gpt-4o, …)."),
-    backend: str = typer.Option(
-        "auto", help="LLM backend: auto | api | claude | opencode."
+    model: str = typer.Option(
+        "claude-sonnet-4-6", help="Model: any LiteLLM id (claude-sonnet-4-6, openai/gpt-4o, …)."
     ),
+    backend: str = typer.Option("auto", help="LLM backend: auto | api | claude | opencode."),
     examples: str = typer.Option(
         None, help="JSON file of ratified examples [{input, expected}] to check the tree against."
     ),
@@ -133,31 +141,44 @@ def ingest(
         "template", help="Tempered skill style: template (deterministic) | woven (LLM-rewritten)."
     ),
     schema: str = typer.Option(
-        None, help="Pin a schema: 'file.py:ClassName' (Pydantic) or a .json JSON Schema. "
-        "If omitted, the schema is inferred from the skill."
+        None,
+        help="Pin a schema: 'file.py:ClassName' (Pydantic) or a .json JSON Schema. "
+        "If omitted, the schema is inferred from the skill.",
     ),
     propose_schema: bool = typer.Option(
-        False, "--propose-schema",
+        False,
+        "--propose-schema",
         help="Draft the schema from the skill, write it to schema.proposed.py for you to "
-             "review/edit, then STOP. Re-run pinning it with --schema to distill. The loop "
-             "never runs on an unratified schema."),
+        "review/edit, then STOP. Re-run pinning it with --schema to distill. The loop "
+        "never runs on an unratified schema.",
+    ),
     fn: str = typer.Option(None, help="Decision function name (used with --schema)."),
-    yes: bool = typer.Option(False, "--yes", "-y",
-                             help="Non-interactive: auto-accept the inferred schema and don't stop "
-                                  "at each round — run to convergence/cap (panels still print)."),
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        "-y",
+        help="Non-interactive: auto-accept the inferred schema and don't stop "
+        "at each round — run to convergence/cap (panels still print).",
+    ),
     propose_examples: bool = typer.Option(
-        True, "--propose-examples/--no-propose-examples",
+        True,
+        "--propose-examples/--no-propose-examples",
         help="Have the loop draft discriminating test cases for its gray zones, for you "
-             "to ratify and feed back via --examples (written to <out>.validation.jsonl)."),
+        "to ratify and feed back via --examples (written to <out>.validation.jsonl).",
+    ),
     require_fit: bool = typer.Option(
-        False, "--require-fit",
+        False,
+        "--require-fit",
         help="Run the fitness audit first and abort (exit 3) if the verdict is 'skip' — "
-             "so a pipeline won't burn the loop on a known bad fit (e.g. a flat lookup)."),
+        "so a pipeline won't burn the loop on a known bad fit (e.g. a flat lookup).",
+    ),
     json_out: bool = typer.Option(
-        False, "--json",
+        False,
+        "--json",
         help="Emit a machine-readable result manifest to stdout (paths, gray zones, proposed "
-             "examples); human panels go to stderr. Implies non-interactive (auto-accepts the "
-             "inferred schema, runs to convergence) — for agents/pipelines driving the CLI."),
+        "examples); human panels go to stderr. Implies non-interactive (auto-accepts the "
+        "inferred schema, runs to convergence) — for agents/pipelines driving the CLI.",
+    ),
 ):
     """Compile a skill's decision logic into a deterministic Python tree."""
     ui = _console(json_out)
@@ -169,34 +190,44 @@ def ingest(
         raise typer.Exit(1)
     if require_fit:
         from .audit import audit_skill
+
         rep = audit_skill(skill, backend=be)
         if rep.verdict == "skip":
-            ui.print(f"[red]Not a temper fit:[/] {'; '.join(rep.reasons)}  "
-                     "[dim](drop --require-fit to override)[/]")
+            ui.print(
+                f"[red]Not a temper fit:[/] {'; '.join(rep.reasons)}  "
+                "[dim](drop --require-fit to override)[/]"
+            )
             raise typer.Exit(3)
-        ui.print(f"[green]fitness: {rep.verdict}[/]"
-                 + (f"  ⚠ {'; '.join(rep.caveats)}" if rep.caveats else ""))
+        ui.print(
+            f"[green]fitness: {rep.verdict}[/]"
+            + (f"  ⚠ {'; '.join(rep.caveats)}" if rep.caveats else "")
+        )
     if propose_schema:
         if schema:
-            ui.print("[red]--propose-schema and --schema are mutually exclusive[/] "
-                     "(--propose-schema drafts a schema; --schema pins one).")
+            ui.print(
+                "[red]--propose-schema and --schema are mutually exclusive[/] "
+                "(--propose-schema drafts a schema; --schema pins one)."
+            )
             raise typer.Exit(2)
         from .ingest import ingest_skill
+
         inferred = ingest_skill(skill, schema=None, backend=be, propose_schema_only=True)
         out_path = Path("schema.proposed.py")
         out_path.write_text(render_schema_source(inferred))
         _print_proposed_schema(ui, inferred, out_path, skill)
         if json_out:
-            _emit_json({
-                "proposed_schema_path": str(out_path),
-                "fn_name": inferred.fn_name,
-                "class": _classname(inferred.fn_name),
-                "features": [
-                    {"name": f.name, "type": f.type, "description": f.description}
-                    for f in inferred.features
-                ],
-                "constraints": list(inferred.constraints),
-            })
+            _emit_json(
+                {
+                    "proposed_schema_path": str(out_path),
+                    "fn_name": inferred.fn_name,
+                    "class": _classname(inferred.fn_name),
+                    "features": [
+                        {"name": f.name, "type": f.type, "description": f.description}
+                        for f in inferred.features
+                    ],
+                    "constraints": list(inferred.constraints),
+                }
+            )
         raise typer.Exit(0)
 
     pinned = load_schema(schema) if schema else None
@@ -210,19 +241,33 @@ def ingest(
         except OSError as e:
             ui.print(f"[yellow]checkpoint write failed ({e})[/]")
 
-    ui.print(f"[cyan]Reading {skill}[/]  ·  backend: [bold]{be.describe()}[/]"
-             + (f"  ·  schema: {schema}" if schema else "  ·  schema: inferred")
-             + (f"  ·  {len(ratified)} ratified example(s)" if ratified else "")
-             + f"  ·  [dim]writing each round → {tree_path}[/]")
-    confirm = (lambda i: _confirm_schema(ui, i, auto=True)) if (yes or json_out) \
+    ui.print(
+        f"[cyan]Reading {skill}[/]  ·  backend: [bold]{be.describe()}[/]"
+        + (f"  ·  schema: {schema}" if schema else "  ·  schema: inferred")
+        + (f"  ·  {len(ratified)} ratified example(s)" if ratified else "")
+        + f"  ·  [dim]writing each round → {tree_path}[/]"
+    )
+    confirm = (
+        (lambda i: _confirm_schema(ui, i, auto=True))
+        if (yes or json_out)
         else (lambda i: _confirm_schema(ui, i))
+    )
     try:
         result = compile_tree(
-            skill, be, out_dir=str(out_p.parent), stem=out_p.stem, profile=profile,
-            schema=pinned, fn_name=fn, examples=ratified,
-            propose_examples=propose_examples, gate=_make_gate(ui, interactive),
-            confirm=confirm, checkpoint=_checkpoint,
-            skill_style=skill_style, skill_out=skill_out,
+            skill,
+            be,
+            out_dir=str(out_p.parent),
+            stem=out_p.stem,
+            profile=profile,
+            schema=pinned,
+            fn_name=fn,
+            examples=ratified,
+            propose_examples=propose_examples,
+            gate=_make_gate(ui, interactive),
+            confirm=confirm,
+            checkpoint=_checkpoint,
+            skill_style=skill_style,
+            skill_out=skill_out,
         )
     except KeyboardInterrupt as e:
         ui.print(f"[red]Aborted:[/] {e}")
@@ -239,8 +284,10 @@ def ingest(
     if result.suite:
         _print_validation_panel(ui, result.suite)
     if result.weave_error:
-        ui.print(f"[yellow]weave failed ({result.weave_error}); "
-                 "fell back to the deterministic template[/]")
+        ui.print(
+            f"[yellow]weave failed ({result.weave_error}); "
+            "fell back to the deterministic template[/]"
+        )
     _print_done(ui, result, skill_style, cost_line, be.describe())
 
     if json_out:
@@ -250,24 +297,29 @@ def ingest(
         _emit_json(manifest)
 
 
-def _print_done(ui: Console, result: CompileResult, skill_style: str,
-                cost_line: str, backend_desc: str) -> None:
+def _print_done(
+    ui: Console, result: CompileResult, skill_style: str, cost_line: str, backend_desc: str
+) -> None:
     """The closing summary leads with the test suite — the artifact most users came for;
     the tree is how it stays cheap (zero LLM calls at inference)."""
     done = []
     if result.suite:
         s = result.suite
-        flag = (f"  ·  [yellow]{s.disputes} open disagreement(s) to review[/]"
-                if s.disputes else "")
+        flag = f"  ·  [yellow]{s.disputes} open disagreement(s) to review[/]" if s.disputes else ""
         done.append(f"[green]✓[/] {s.cases}-case test suite → {s.test_path}{flag}")
-        done.append(f"    [dim]labels are proposed, not ground truth — ratify them in "
-                    f"{s.dataset_path}[/]")
-    done.append(f"[green]✓[/] deterministic tree → {result.tree_path}  "
-                "[dim](zero LLM calls at inference)[/]")
+        done.append(
+            f"    [dim]labels are proposed, not ground truth — ratify them in {s.dataset_path}[/]"
+        )
+    done.append(
+        f"[green]✓[/] deterministic tree → {result.tree_path}  "
+        "[dim](zero LLM calls at inference)[/]"
+    )
     if result.skill_path:
         module = Path(result.tree_path).with_suffix("").name
-        done.append(f"[green]✓[/] tempered skill ({skill_style}) → {result.skill_path}  "
-                    f"[dim](delegates the decision to {module}.{result.tree.fn_name})[/]")
+        done.append(
+            f"[green]✓[/] tempered skill ({skill_style}) → {result.skill_path}  "
+            f"[dim](delegates the decision to {module}.{result.tree.fn_name})[/]"
+        )
     ui.print(Panel("\n".join(done), title="Done", border_style="green"))
     ui.print(f"[dim]backend {backend_desc} · cost: {cost_line}[/]")
 
@@ -279,8 +331,10 @@ def _print_added_features(ui: Console, tree) -> None:
     added = getattr(tree, "added_features", None)
     if not added:
         return
-    lines = ["[green]The loop grew the schema — these features were added and earned a branch. "
-             "Review them; they're now part of the caller's extraction contract:[/]"]
+    lines = [
+        "[green]The loop grew the schema — these features were added and earned a branch. "
+        "Review them; they're now part of the caller's extraction contract:[/]"
+    ]
     lines += [f"  • {a}" for a in added]
     ui.print(Panel("\n".join(lines), title="✎ schema grew (review)", border_style="green"))
 
@@ -291,8 +345,10 @@ def _print_schema_gaps(ui: Console, tree) -> None:
     gaps = getattr(tree, "schema_gaps", None)
     if not gaps:
         return
-    lines = ["[yellow]The schema_critic judged the schema too thin to fully express the "
-             "source. The tree punts on these — consider adding them and re-running:[/]"]
+    lines = [
+        "[yellow]The schema_critic judged the schema too thin to fully express the "
+        "source. The tree punts on these — consider adding them and re-running:[/]"
+    ]
     lines += [f"  • {g}" for g in gaps]
     ui.print(Panel("\n".join(lines), title="✎ schema gaps (advisory)", border_style="yellow"))
 
@@ -303,9 +359,11 @@ def _print_outcome_gaps(ui: Console, tree) -> None:
     gaps = getattr(tree, "outcome_gaps", None)
     if not gaps:
         return
-    lines = ["[yellow]The outcome_critic judged the outcome set too coarse to express every "
-             "answer the source calls for. Two distinct answers collapse into one — consider "
-             "widening the outcome vocabulary and re-running:[/]"]
+    lines = [
+        "[yellow]The outcome_critic judged the outcome set too coarse to express every "
+        "answer the source calls for. Two distinct answers collapse into one — consider "
+        "widening the outcome vocabulary and re-running:[/]"
+    ]
     lines += [f"  • {g}" for g in gaps]
     ui.print(Panel("\n".join(lines), title="✎ outcome gaps (advisory)", border_style="yellow"))
 
@@ -314,8 +372,10 @@ def _print_loop_error(ui: Console, tree) -> None:
     """A run that ended on a backend failure must not read as a converged run."""
     err = getattr(tree, "loop_error", None)
     if err:
-        ui.print(f"[yellow]⚠ the loop ended early on a backend failure ({err}) — "
-                 "the best tree so far was kept; consider re-running[/]")
+        ui.print(
+            f"[yellow]⚠ the loop ended early on a backend failure ({err}) — "
+            "the best tree so far was kept; consider re-running[/]"
+        )
 
 
 def _print_example_check(ui: Console, tree) -> None:
@@ -326,20 +386,27 @@ def _print_example_check(ui: Console, tree) -> None:
     if not r.disagreements:
         ui.print(f"[green]✓ ratified examples: {r.agreements}/{r.total} agree[/]")
         return
-    lines = [f"[red]{r.agreements}/{r.total} ratified examples agree[/] — "
-             "each disagreement is a tree bug or a mislabeled example; sign off:"]
+    lines = [
+        f"[red]{r.agreements}/{r.total} ratified examples agree[/] — "
+        "each disagreement is a tree bug or a mislabeled example; sign off:"
+    ]
     for d in r.disagreements:
         lines.append(f"  input={d.input}")
         lines.append(f"    expected [green]{d.expected}[/]  ·  got [red]{d.predicted}[/]")
-    ui.print(Panel("\n".join(lines), title="⚠ ratified-example disagreements",
-                   border_style="yellow"))
+    ui.print(
+        Panel("\n".join(lines), title="⚠ ratified-example disagreements", border_style="yellow")
+    )
 
 
 def _print_proposed_schema(ui: Console, inferred: InferredSchema, path: Path, skill: str) -> None:
     """Surface the drafted contract + its normalization burden, awaiting ratification."""
     notes = normalization_notes(inferred)
-    lines = [f"Decision function: [bold]{inferred.fn_name}[/]",
-             f"Class: [bold]{_classname(inferred.fn_name)}[/]", "", "Fields:"]
+    lines = [
+        f"Decision function: [bold]{inferred.fn_name}[/]",
+        f"Class: [bold]{_classname(inferred.fn_name)}[/]",
+        "",
+        "Fields:",
+    ]
     for f in inferred.features:
         warn = f"   [yellow]⚠ {notes[f.name]}[/]" if f.name in notes else ""
         lines.append(f"  • {f.name}: {f.type}{warn}")
@@ -348,44 +415,67 @@ def _print_proposed_schema(ui: Console, inferred: InferredSchema, path: Path, sk
         for c in inferred.constraints:
             lines.append(f"  • {c}  [hard]")
     if notes:
-        lines.append("\n[dim]The tree is only as safe as the normalizer feeding these "
-                     "exact-match fields. A Literal closes the space and helps the loop "
-                     "converge; a bare str reopens it.[/]")
+        lines.append(
+            "\n[dim]The tree is only as safe as the normalizer feeding these "
+            "exact-match fields. A Literal closes the space and helps the loop "
+            "converge; a bare str reopens it.[/]"
+        )
     cls = _classname(inferred.fn_name)
-    lines.append(f"\n[bold]proposed labels, not ground truth.[/] Review/edit [bold]{path}[/], "
-                 f"then re-run to distill:\n  [bold]temper-skills ingest {skill} "
-                 f"--schema {path}:{cls}[/]")
-    ui.print(Panel("\n".join(lines), title="✎ proposed schema (awaiting ratification)",
-                   border_style="magenta"))
+    lines.append(
+        f"\n[bold]proposed labels, not ground truth.[/] Review/edit [bold]{path}[/], "
+        f"then re-run to distill:\n  [bold]temper-skills ingest {skill} "
+        f"--schema {path}:{cls}[/]"
+    )
+    ui.print(
+        Panel(
+            "\n".join(lines),
+            title="✎ proposed schema (awaiting ratification)",
+            border_style="magenta",
+        )
+    )
 
 
 def _print_validation_panel(ui: Console, suite: SuiteResult) -> None:
     """Render the proposed validation dataset (already written by the pipeline)."""
-    lines = [f"The loop drafted [bold]{suite.cases}[/] validation case(s) — [bold]proposed "
-             "labels, not ground truth.[/] Review, fix any label, set [bold]\"status\": "
-             '"ratified"[/], and re-run to anchor these cells. Disagreements are data (not '
-             "failing tests):"]
+    lines = [
+        f"The loop drafted [bold]{suite.cases}[/] validation case(s) — [bold]proposed "
+        'labels, not ground truth.[/] Review, fix any label, set [bold]"status": '
+        '"ratified"[/], and re-run to anchor these cells. Disagreements are data (not '
+        "failing tests):"
+    ]
     for e in suite.enriched:
         flag = "  [yellow](differs from tree)[/]" if e["agrees"] is False else ""
         src = f" [dim]— {e['source']}[/]" if e.get("source") else ""
         lines.append(f"  input={e['input']}{src}")
-        lines.append(f"    proposed [green]{e['expected']}[/]  ·  tree says [cyan]{e['tree_prediction']}[/]{flag}")
+        lines.append(
+            f"    proposed [green]{e['expected']}[/]  ·  tree says [cyan]{e['tree_prediction']}[/]{flag}"
+        )
         lines.append(f"    [dim]{e['rationale']}[/]")
-    lines.append(f"\n[dim]dataset → {suite.dataset_path} · behavior-lock → "
-                 f"{suite.test_path} ({suite.disputes} open disagreement(s))[/]")
-    ui.print(Panel("\n".join(lines), title="✎ validation dataset (awaiting ratification)",
-                   border_style="magenta"))
+    lines.append(
+        f"\n[dim]dataset → {suite.dataset_path} · behavior-lock → "
+        f"{suite.test_path} ({suite.disputes} open disagreement(s))[/]"
+    )
+    ui.print(
+        Panel(
+            "\n".join(lines),
+            title="✎ validation dataset (awaiting ratification)",
+            border_style="magenta",
+        )
+    )
 
 
 @app.command()
 def incremental(
     prior: str = typer.Argument(..., help="Prior tree.json to evolve."),
     skill: str = typer.Option(None, help="Updated skill.md to fold in (optional)."),
-    constraint: list[str] = typer.Option([], "--constraint", "-c",
-                                          help="New HARD constraint (repeatable)."),
+    constraint: list[str] = typer.Option(
+        [], "--constraint", "-c", help="New HARD constraint (repeatable)."
+    ),
     profile: str = typer.Option("standard", help=f"One of {list(PROFILES)}."),
     out: str = typer.Option("decision_tree.generated.py", help="Output .py path."),
-    model: str = typer.Option("claude-sonnet-4-6", help="Model: any LiteLLM id (claude-sonnet-4-6, openai/gpt-4o, …)."),
+    model: str = typer.Option(
+        "claude-sonnet-4-6", help="Model: any LiteLLM id (claude-sonnet-4-6, openai/gpt-4o, …)."
+    ),
     backend: str = typer.Option("auto", help="auto | api | claude | opencode."),
     fn: str = typer.Option(None, help="Override the function name."),
     yes: bool = typer.Option(False, "--yes", "-y", help="Don't stop at each round."),
@@ -393,9 +483,11 @@ def incremental(
     """Re-crystallize an existing tree against new constraints/sources; show the diff."""
     ui = _console()
     prior_tree = tree_from_dict(_json.loads(Path(prior).read_text()))
-    schema = {"type": "object",
-              "properties": {f: {} for f in prior_tree.features},
-              "additionalProperties": True}
+    schema = {
+        "type": "object",
+        "properties": {f: {} for f in prior_tree.features},
+        "additionalProperties": True,
+    }
     sources = Sources(
         schema=schema,
         constraints=[{"rule": c, "hard": True} for c in constraint],
@@ -407,12 +499,18 @@ def incremental(
         ui.print(f"[red]Backend error:[/] {e}")
         raise typer.Exit(1)
     interactive = PROFILES[profile][2] and not yes
-    ui.print(f"[cyan]Evolving {prior}[/]  ·  backend: [bold]{be.describe()}[/]  "
-             f"·  +{len(constraint)} constraint(s)")
+    ui.print(
+        f"[cyan]Evolving {prior}[/]  ·  backend: [bold]{be.describe()}[/]  "
+        f"·  +{len(constraint)} constraint(s)"
+    )
     try:
         new_tree, diff = recrystallize(
-            prior_tree, sources, profile=profile, backend=be,
-            gate=_make_gate(ui, interactive), fn_name=fn,
+            prior_tree,
+            sources,
+            profile=profile,
+            backend=be,
+            gate=_make_gate(ui, interactive),
+            fn_name=fn,
         )
     except KeyboardInterrupt as e:
         ui.print(f"[red]Aborted:[/] {e}")
@@ -457,13 +555,23 @@ def validate(
 
 @app.command()
 def audit(
-    skill: str = typer.Argument(..., help="A skill.md to audit — or a DIRECTORY to sweep as a library."),
+    skill: str = typer.Argument(
+        ..., help="A skill.md to audit — or a DIRECTORY to sweep as a library."
+    ),
     model: str = typer.Option("claude-sonnet-4-6", help="Model: any LiteLLM id."),
     backend: str = typer.Option("auto", help="LLM backend: auto | api | claude | opencode."),
-    profile: str = typer.Option("standard", help=f"Temper profile if you follow the action: {list(PROFILES)}."),
+    profile: str = typer.Option(
+        "standard", help=f"Temper profile if you follow the action: {list(PROFILES)}."
+    ),
     out_dir: str = typer.Option(".", help="Where to write trees/skill if you follow the action."),
-    report_md: str = typer.Option(None, "--report", help="Also write the findings as a Markdown report (pasteable in a PR)."),
-    json_out: bool = typer.Option(False, "--json", help="Emit the FitnessReport(s) as JSON (for a pipeline / the Evolve Server)."),
+    report_md: str = typer.Option(
+        None, "--report", help="Also write the findings as a Markdown report (pasteable in a PR)."
+    ),
+    json_out: bool = typer.Option(
+        False,
+        "--json",
+        help="Emit the FitnessReport(s) as JSON (for a pipeline / the Evolve Server).",
+    ),
 ):
     """Find out what a skill is silently deciding — and what to do about it.
 
@@ -488,6 +596,7 @@ def audit(
     report = audit_skill(skill, backend=be)
     if report_md:
         from .audit_report import render_audit_md
+
         Path(report_md).write_text(render_audit_md(report, skill))
         ui.print(f"[dim]report → {report_md}[/]")
     if json_out:
@@ -500,11 +609,26 @@ def audit(
     action = report.recommended_action
     # Continuity: offer to follow the Next action right here (the threaded press-[1]).
     if ui.is_terminal and action in ("temper", "decompose"):
-        if Prompt.ask(f"[bold]1[/] run `{action}` now · [bold]2[/] just the audit",
-                      choices=["1", "2"], default="2") == "1":
+        if (
+            Prompt.ask(
+                f"[bold]1[/] run `{action}` now · [bold]2[/] just the audit",
+                choices=["1", "2"],
+                default="2",
+            )
+            == "1"
+        ):
             if action == "decompose":
-                _decompose_pipeline(ui, skill, be, out_dir, profile, temper_each=True,
-                                    yes_unratified=False, emit_schemas=False, json_out=False)
+                _decompose_pipeline(
+                    ui,
+                    skill,
+                    be,
+                    out_dir,
+                    profile,
+                    temper_each=True,
+                    yes_unratified=False,
+                    emit_schemas=False,
+                    json_out=False,
+                )
             else:
                 _temper_pipeline(ui, skill, be, out_dir, profile)
             return
@@ -521,20 +645,35 @@ def _audit_library(ui: Console, root: str, be, *, json_out: bool, report_md: str
 
     rows = audit_library(root, be)
     if not rows:
-        ui.print(f"[red]no skills found under {root}[/] "
-                 "[dim](looked for SKILL.md files, then any non-furniture .md)[/]")
+        ui.print(
+            f"[red]no skills found under {root}[/] "
+            "[dim](looked for SKILL.md files, then any non-furniture .md)[/]"
+        )
         raise typer.Exit(2)
 
     if json_out:
-        _emit_json([
-            {"path": str(r.path),
-             **({"error": r.error} if r.error else _json.loads(r.report.model_dump_json()))}
-            for r in rows
-        ])
+        _emit_json(
+            [
+                {
+                    "path": str(r.path),
+                    **(
+                        {"error": r.error}
+                        if r.report is None
+                        else _json.loads(r.report.model_dump_json())
+                    ),
+                }
+                for r in rows
+            ]
+        )
     else:
         from rich.table import Table
-        table = Table(title=f"Skill library audit — {root} ({len(rows)} skill(s))",
-                      border_style="cyan", show_lines=False, pad_edge=False)
+
+        table = Table(
+            title=f"Skill library audit — {root} ({len(rows)} skill(s))",
+            border_style="cyan",
+            show_lines=False,
+            pad_edge=False,
+        )
         table.add_column("skill", style="bold", overflow="fold")
         table.add_column("verdict")
         table.add_column("top finding", overflow="fold")
@@ -547,11 +686,12 @@ def _audit_library(ui: Console, root: str, be, *, json_out: bool, report_md: str
             r = row.report
             label, _ = headline_of(r)
             color = "cyan" if r.recommended_action == "decompose" else _HEADLINE_COLOR[r.verdict]
-            table.add_row(str(rel), f"[{color}]{label}[/]", top_finding(r),
-                          r.recommended_action)
+            table.add_row(str(rel), f"[{color}]{label}[/]", top_finding(r), r.recommended_action)
         ui.print(table)
-        ui.print("[dim]details per skill: temper-skills audit <path>  ·  "
-                 "shareable report: --report audit.md[/]")
+        ui.print(
+            "[dim]details per skill: temper-skills audit <path>  ·  "
+            "shareable report: --report audit.md[/]"
+        )
 
     if report_md:
         Path(report_md).write_text(render_library_md(rows, root))
@@ -584,7 +724,10 @@ def _print_fitness(ui: Console, report, skill: str) -> None:
         body.append(f"       [dim]fix: {f.fix}[/]")
 
     if report.action_hint:
-        body += ["", f"[bold]Recommended: {report.recommended_action.upper()}[/] — {report.action_hint}"]
+        body += [
+            "",
+            f"[bold]Recommended: {report.recommended_action.upper()}[/] — {report.action_hint}",
+        ]
     body += [
         "",
         f"[dim]scores: decisiveness {report.decisiveness}/10 · interactions "
@@ -604,8 +747,10 @@ def _plan_body(decomp, coup, reports) -> str:
         chain = "" if coup[d.fn_name] == "independent" else f"  ·  chain: {coup[d.fn_name]}"
         if reports:
             r = reports[d.fn_name]
-            body.append(f"  [bold]{d.fn_name}[/]  [{vcolor[r.verdict]}]audit: {r.verdict.upper()}[/]"
-                        f"  ·  → {r.recommended_action}{chain}")
+            body.append(
+                f"  [bold]{d.fn_name}[/]  [{vcolor[r.verdict]}]audit: {r.verdict.upper()}[/]"
+                f"  ·  → {r.recommended_action}{chain}"
+            )
         else:
             body.append(f"  [bold]{d.fn_name}[/]  →  {' / '.join(d.outcomes)}{chain}")
         body.append(f"      [dim]{d.description}[/]")
@@ -615,8 +760,19 @@ def _plan_body(decomp, coup, reports) -> str:
     return "\n".join(body)
 
 
-def _decompose_pipeline(ui: Console, skill, be, out_dir, profile, *, temper_each,
-                        yes_unratified, emit_schemas, json_out, interactive=True):
+def _decompose_pipeline(
+    ui: Console,
+    skill,
+    be,
+    out_dir,
+    profile,
+    *,
+    temper_each,
+    yes_unratified,
+    emit_schemas,
+    json_out,
+    interactive=True,
+):
     """The decompose flow, shared by the `decompose` command and `guide`. Returns the path
     to the orchestrator skill if it compiled, else None (plan-only or stopped to ratify)."""
     from .decompose import audit_decision, coupling, decompose_skill, Decomposition, InferredSchema
@@ -639,7 +795,9 @@ def _decompose_pipeline(ui: Console, skill, be, out_dir, profile, *, temper_each
         for d in decomp.decisions:
             p = out / f"{d.fn_name}.schema.py"
             if not p.exists():
-                p.write_text(render_schema_source(InferredSchema(fn_name=d.fn_name, features=d.features)))
+                p.write_text(
+                    render_schema_source(InferredSchema(fn_name=d.fn_name, features=d.features))
+                )
                 fresh.append(d.fn_name)
 
     run = temper_each and (not fresh or yes_unratified)
@@ -648,25 +806,42 @@ def _decompose_pipeline(ui: Console, skill, be, out_dir, profile, *, temper_each
     # temper (the per-decision audit is N extra LLM calls; pointless right before the loops).
     reports = {} if run else {d.fn_name: audit_decision(d, be) for d in decomp.decisions}
     if not run and json_out:
-        _emit_json({"decomposition": _json.loads(decomp.model_dump_json()),
-                    "audits": {k: _json.loads(r.model_dump_json()) for k, r in reports.items()}})
+        _emit_json(
+            {
+                "decomposition": _json.loads(decomp.model_dump_json()),
+                "audits": {k: _json.loads(r.model_dump_json()) for k, r in reports.items()},
+            }
+        )
     elif not json_out:
-        ui.print(Panel(_plan_body(decomp, coup, reports),
-                       title="Skill decomposition", border_style="cyan"))
+        ui.print(
+            Panel(
+                _plan_body(decomp, coup, reports), title="Skill decomposition", border_style="cyan"
+            )
+        )
 
     if not run:
         if temper_each and fresh:
-            ui.print(f"\n[yellow]Emitted {len(fresh)} schema(s) to {out}/ — ratify them "
-                     "(tighten free-text str → Literal) so the open-text actions become "
-                     "`temper`.[/]")
+            ui.print(
+                f"\n[yellow]Emitted {len(fresh)} schema(s) to {out}/ — ratify them "
+                "(tighten free-text str → Literal) so the open-text actions become "
+                "`temper`.[/]"
+            )
             if interactive and ui.is_terminal and not json_out:
-                if Prompt.ask("Next  [bold]1[/] temper each now (on these unratified schemas) · "
-                              "[bold]2[/] stop — I'll ratify first",
-                              choices=["1", "2"], default="2") == "1":
+                if (
+                    Prompt.ask(
+                        "Next  [bold]1[/] temper each now (on these unratified schemas) · "
+                        "[bold]2[/] stop — I'll ratify first",
+                        choices=["1", "2"],
+                        default="2",
+                    )
+                    == "1"
+                ):
                     run = True
             if not run:
-                ui.print(f"[dim]when ready: temper-skills decompose {skill} --temper-each "
-                         f"--out-dir {out}  (re-run reuses your ratified schemas)[/]")
+                ui.print(
+                    f"[dim]when ready: temper-skills decompose {skill} --temper-each "
+                    f"--out-dir {out}  (re-run reuses your ratified schemas)[/]"
+                )
         elif emit_schemas:
             for fn in fresh:
                 ui.print(f"[green]wrote[/] {out / f'{fn}.schema.py'}")
@@ -678,24 +853,43 @@ def _decompose_pipeline(ui: Console, skill, be, out_dir, profile, *, temper_each
     for d in decomp.decisions:
         schema_path = f"{out / f'{d.fn_name}.schema.py'}:{_classname(d.fn_name)}"
         ui.rule(f"[cyan]tempering {d.fn_name}[/]")
-        res = compile_tree(skill, be, out_dir=str(out), stem=d.fn_name, profile=profile,
-                           schema=load_schema(schema_path), fn_name=d.fn_name,
-                           gate=_make_gate(ui, False), propose_examples=True,
-                           skill_style=None)  # the orchestrator below stitches the flow
+        res = compile_tree(
+            skill,
+            be,
+            out_dir=str(out),
+            stem=d.fn_name,
+            profile=profile,
+            schema=load_schema(schema_path),
+            fn_name=d.fn_name,
+            gate=_make_gate(ui, False),
+            propose_examples=True,
+            skill_style=None,
+        )  # the orchestrator below stitches the flow
         _print_loop_error(ui, res.tree)
         if res.suite:
             _print_validation_panel(ui, res.suite)
-        items.append({"fn": d.fn_name, "module": d.fn_name, "features": res.tree.features,
-                      "consumes": d.consumes,
-                      "gray_zones": [n.gray_zone for n in res.tree.nodes if n.gray_zone]})
+        items.append(
+            {
+                "fn": d.fn_name,
+                "module": d.fn_name,
+                "features": res.tree.features,
+                "consumes": d.consumes,
+                "gray_zones": [n.gray_zone for n in res.tree.nodes if n.gray_zone],
+            }
+        )
 
     sp = Path(skill)
     name = sp.parent.parent.name if sp.parent.name == "input" else sp.stem
     md = render_orchestrator_skill(name, items, decomp.generative_steps, original)
     orch = out / f"{name}.tempered.md"
     orch.write_text(md)
-    ui.print(Panel(f"{len(items)} tree(s) → {out}/\norchestrator → {orch}",
-                   title="Tempered the flow", border_style="green"))
+    ui.print(
+        Panel(
+            f"{len(items)} tree(s) → {out}/\norchestrator → {orch}",
+            title="Tempered the flow",
+            border_style="green",
+        )
+    )
     return orch
 
 
@@ -703,35 +897,63 @@ def _temper_pipeline(ui: Console, skill, be, out_dir, profile, *, schema_spec=No
     """Freeze a single decision: run the loop, write the tree + a tempered skill. Returns
     the path to the tempered skill.md."""
     pinned = load_schema(schema_spec) if schema_spec else None
-    res = compile_tree(skill, be, out_dir=out_dir, profile=profile, schema=pinned,
-                       fn_name=fn, gate=_make_gate(ui, False), confirm=lambda i: True,
-                       propose_examples=True)
+    res = compile_tree(
+        skill,
+        be,
+        out_dir=out_dir,
+        profile=profile,
+        schema=pinned,
+        fn_name=fn,
+        gate=_make_gate(ui, False),
+        confirm=lambda i: True,
+        propose_examples=True,
+    )
     _print_loop_error(ui, res.tree)
     if res.suite:
         _print_validation_panel(ui, res.suite)
-    ui.print(Panel(f"tree → {res.tree_path}\ntempered skill → {res.skill_path}",
-                   title="Tempered the decision", border_style="green"))
+    ui.print(
+        Panel(
+            f"tree → {res.tree_path}\ntempered skill → {res.skill_path}",
+            title="Tempered the decision",
+            border_style="green",
+        )
+    )
+    assert res.skill_path is not None  # skill_style defaults to "template" on this path
     return Path(res.skill_path)
 
 
 @app.command()
 def decompose(
-    skill: str = typer.Argument(..., help="Path to a big skill.md (a flow) to split into decisions."),
+    skill: str = typer.Argument(
+        ..., help="Path to a big skill.md (a flow) to split into decisions."
+    ),
     model: str = typer.Option("claude-sonnet-4-6", help="Model: any LiteLLM id."),
     backend: str = typer.Option("auto", help="LLM backend: auto | api | claude | opencode."),
     emit_schemas: bool = typer.Option(
-        False, "--emit-schemas",
-        help="Write a per-decision mini-schema (<fn>.schema.py) you can ratify then `ingest`."),
+        False,
+        "--emit-schemas",
+        help="Write a per-decision mini-schema (<fn>.schema.py) you can ratify then `ingest`.",
+    ),
     temper_each: bool = typer.Option(
-        False, "--temper-each",
+        False,
+        "--temper-each",
         help="Run the whole plan: emit a schema per decision and STOP for ratification; once "
-             "ratified, re-run to temper each into a tree + emit the orchestrator skill."),
+        "ratified, re-run to temper each into a tree + emit the orchestrator skill.",
+    ),
     yes_unratified: bool = typer.Option(
-        False, "--yes-unratified",
-        help="With --temper-each: don't stop — temper now on the raw inferred schemas."),
-    profile: str = typer.Option("standard", help=f"Temper profile for --temper-each: {list(PROFILES)}."),
-    out_dir: str = typer.Option(".", help="Where schemas, trees, and the orchestrator are written."),
-    json_out: bool = typer.Option(False, "--json", help="Emit the Decomposition + per-decision audits as JSON."),
+        False,
+        "--yes-unratified",
+        help="With --temper-each: don't stop — temper now on the raw inferred schemas.",
+    ),
+    profile: str = typer.Option(
+        "standard", help=f"Temper profile for --temper-each: {list(PROFILES)}."
+    ),
+    out_dir: str = typer.Option(
+        ".", help="Where schemas, trees, and the orchestrator are written."
+    ),
+    json_out: bool = typer.Option(
+        False, "--json", help="Emit the Decomposition + per-decision audits as JSON."
+    ),
 ):
     """Split a flow-shaped skill into its decision points, audit each, and (optionally) temper them."""
     ui = _console(json_out)
@@ -740,22 +962,36 @@ def decompose(
     except (ValueError, RuntimeError) as e:
         ui.print(f"[red]Backend error:[/] {e}")
         raise typer.Exit(1)
-    _decompose_pipeline(ui, skill, be, out_dir, profile, temper_each=temper_each,
-                        yes_unratified=yes_unratified, emit_schemas=emit_schemas,
-                        json_out=json_out)
+    _decompose_pipeline(
+        ui,
+        skill,
+        be,
+        out_dir,
+        profile,
+        temper_each=temper_each,
+        yes_unratified=yes_unratified,
+        emit_schemas=emit_schemas,
+        json_out=json_out,
+    )
 
 
 @app.command()
 def guide(
-    skill: str = typer.Argument(..., help="Path to a skill.md to drive end-to-end, press-[1] style."),
+    skill: str = typer.Argument(
+        ..., help="Path to a skill.md to drive end-to-end, press-[1] style."
+    ),
     model: str = typer.Option("claude-sonnet-4-6", help="Model: any LiteLLM id."),
     backend: str = typer.Option("auto", help="LLM backend: auto | api | claude | opencode."),
-    profile: str = typer.Option("quick", help=f"Temper profile (quick keeps the demo short): {list(PROFILES)}."),
+    profile: str = typer.Option(
+        "quick", help=f"Temper profile (quick keeps the demo short): {list(PROFILES)}."
+    ),
     out_dir: str = typer.Option(".", help="Where trees and the (orchestrator) skill are written."),
     json_out: bool = typer.Option(
-        False, "--json",
+        False,
+        "--json",
         help="Emit a machine-readable manifest to stdout (audit verdict, action taken, status, "
-             "artifact paths); human panels go to stderr. For agents/pipelines driving the CLI."),
+        "artifact paths); human panels go to stderr. For agents/pipelines driving the CLI.",
+    ),
 ):
     """Guided demo: audit a skill, follow the recommended action with a few [1]s, and end with
     a full generated skill. The one-command tour of the whole pipeline."""
@@ -773,8 +1009,14 @@ def guide(
     _print_fitness(ui, report, skill)
     audit_dump = _json.loads(report.model_dump_json())
     if ui.is_terminal and not json_out:
-        if Prompt.ask("[bold]1[/] follow the recommendation · [bold]2[/] quit",
-                      choices=["1", "2"], default="1") != "1":
+        if (
+            Prompt.ask(
+                "[bold]1[/] follow the recommendation · [bold]2[/] quit",
+                choices=["1", "2"],
+                default="1",
+            )
+            != "1"
+        ):
             raise typer.Exit(0)
 
     def _guide_manifest(action: str, final, status: str) -> dict:
@@ -793,8 +1035,17 @@ def guide(
     final = None
     if action == "decompose":
         ui.rule("[bold]2 — decompose → temper each[/]")
-        final = _decompose_pipeline(ui, skill, be, out_dir, profile, temper_each=True,
-                                    yes_unratified=False, emit_schemas=False, json_out=False)
+        final = _decompose_pipeline(
+            ui,
+            skill,
+            be,
+            out_dir,
+            profile,
+            temper_each=True,
+            yes_unratified=False,
+            emit_schemas=False,
+            json_out=False,
+        )
     elif action == "temper":
         ui.rule("[bold]2 — temper[/]")
         final = _temper_pipeline(ui, skill, be, out_dir, profile)
@@ -820,7 +1071,10 @@ def _implicit_command(arg: str) -> str | None:
     """Bare invocation: `temper-skills <dir>` sweeps the library, `temper-skills <file>`
     runs the guided tour — one thing to remember instead of five subcommands. Explicit
     subcommand names and flags always win."""
-    names = {(c.name or c.callback.__name__).replace("_", "-") for c in app.registered_commands}
+    names = {
+        (c.name or (c.callback.__name__ if c.callback else "")).replace("_", "-")
+        for c in app.registered_commands
+    }
     if arg.startswith("-") or arg in names:
         return None
     p = Path(arg)

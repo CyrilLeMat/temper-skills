@@ -79,7 +79,7 @@ def _default_description(tree: DecisionTree, fn: str) -> str:
 
 
 def module_call(module: str, fn: str, feats: list[str]) -> str:
-    return f'{fn}({{{", ".join(f"{f!r}: {f}" for f in feats)}}})'
+    return f"{fn}({{{', '.join(f'{f!r}: {f}' for f in feats)}}})"
 
 
 def render_tempered_skill(
@@ -99,8 +99,9 @@ def render_tempered_skill(
     gray = [(i, n) for i, n in enumerate(tree.nodes, 1) if n.gray_zone]
 
     out: list[str] = []
-    out += _frontmatter(skill_name(name or module or fn),
-                        description or _default_description(tree, fn))
+    out += _frontmatter(
+        skill_name(name or module or fn), description or _default_description(tree, fn)
+    )
     out.append(f"# {fn} — skill (tempered by temper-skills)")
     out.append("")
     out.append(role)
@@ -118,21 +119,27 @@ def render_tempered_skill(
     out.append("1. Extract these structured features from the request:")
     for f in feats:
         out.append(f"   - `{f}`")
-    out.append("2. Call the decision tree and treat its result as authoritative"
-               + (f" (bundled at `{script_path}`):" if script_path else ":"))
+    out.append(
+        "2. Call the decision tree and treat its result as authoritative"
+        + (f" (bundled at `{script_path}`):" if script_path else ":")
+    )
     out.append("")
     out.append("   ```python")
     out.append(f"   from {import_prefix}{module} import {fn}")
     out.append("   verdict = " + fn + "({" + ", ".join(f'"{f}": {f}' for f in feats) + "})")
     out.append("   ```")
-    out.append("3. Relay `verdict` to the user. **Do not override it.** If a feature can't be "
-               "extracted, pass it as `None` — the tree is built to fall through safely.")
+    out.append(
+        "3. Relay `verdict` to the user. **Do not override it.** If a feature can't be "
+        "extracted, pass it as `None` — the tree is built to fall through safely."
+    )
     out.append("")
     if gray:
         out.append("## Gray zones to surface")
         out.append("")
-        out.append("The tree flags these as underdetermined — mention the caveat when the "
-                   "answer touches them:")
+        out.append(
+            "The tree flags these as underdetermined — mention the caveat when the "
+            "answer touches them:"
+        )
         for i, n in gray:
             out.append(f"- (n{i}) {n.gray_zone}")
         out.append("")
@@ -183,8 +190,10 @@ def render_orchestrator_skill(
     for idx, it in enumerate(items, 1):
         out += ["", f"## {idx}. `{it['fn']}` — frozen"]
         if it.get("consumes"):
-            out.append(f"Chained: feed the outcome of `{', '.join(it['consumes'])}` into the "
-                       "matching feature below.")
+            out.append(
+                f"Chained: feed the outcome of `{', '.join(it['consumes'])}` into the "
+                "matching feature below."
+            )
         out.append("Extract " + ", ".join(f"`{f}`" for f in it["features"]) + ", then:")
         out += [
             "```python",
@@ -244,41 +253,63 @@ def arrange_skill_dir(
         tree.export(str(scripts / f"{module}.py"))
 
         # Ratified ground truth wins its cell over panel proposals, so it goes first in the merge.
-        ratified = [ValidationCase(input=c["input"], expected=c["expected"],
-                                   rationale=c.get("rationale", ""), status="ratified",
-                                   source=c.get("source", "ratified")).to_record()
-                    for c in d.get("ratified", [])]
+        ratified = [
+            ValidationCase(
+                input=c["input"],
+                expected=c["expected"],
+                rationale=c.get("rationale", ""),
+                status="ratified",
+                source=c.get("source", "ratified"),
+            ).to_record()
+            for c in d.get("ratified", [])
+        ]
         proposed = getattr(tree, "proposed_examples", None) or []
         val_path = assets / f"{module}.validation.jsonl"
         enriched = enrich_validation(
-            tree, merge_cases(load_validation(str(val_path)), ratified + proposed))
+            tree, merge_cases(load_validation(str(val_path)), ratified + proposed)
+        )
         if enriched:
             val_path.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in enriched))
             (scripts / f"test_{module}.py").write_text(
-                render_behavior_lock(module, tree.fn_name, enriched))
+                render_behavior_lock(module, tree.fn_name, enriched)
+            )
             rat = render_ratified(module, tree.fn_name, enriched)
             if rat:
                 (scripts / f"test_{module}_ratified.py").write_text(rat)
         if d.get("schema_src"):
             (assets / f"{module}.schema.py").write_text(d["schema_src"])
 
-        items.append({
-            "fn": tree.fn_name, "module": module, "features": list(tree.features),
-            "consumes": d.get("consumes", []),
-            "gray_zones": [n.gray_zone for n in tree.nodes if n.gray_zone],
-        })
+        items.append(
+            {
+                "fn": tree.fn_name,
+                "module": module,
+                "features": list(tree.features),
+                "consumes": d.get("consumes", []),
+                "gray_zones": [n.gray_zone for n in tree.nodes if n.gray_zone],
+            }
+        )
 
     # Single decision reads naturally as a tempered skill; several read as an orchestrator.
     if len(items) == 1:
         it = items[0]
         md = render_tempered_skill(
-            decisions[0]["tree"], it["module"], original_skill_text=original_skill_text,
-            name=name, description=description, script_path=f"scripts/{it['module']}.py",
-            import_prefix="scripts.")
+            decisions[0]["tree"],
+            it["module"],
+            original_skill_text=original_skill_text,
+            name=name,
+            description=description,
+            script_path=f"scripts/{it['module']}.py",
+            import_prefix="scripts.",
+        )
     else:
-        md = render_orchestrator_skill(name, items, generative_steps=generative_steps,
-                                       original_skill_text=original_skill_text,
-                                       description=description, import_prefix="scripts.")
+        md = render_orchestrator_skill(
+            name,
+            items,
+            generative_steps=generative_steps,
+            original_skill_text=original_skill_text,
+            description=description,
+            import_prefix="scripts.",
+        )
     (root / "SKILL.md").write_text(md)
     return root
 
@@ -299,9 +330,12 @@ def _load_decision(d: dict, base: Path) -> dict:
 def main(argv: list[str] | None = None) -> int:
     argv = argv if argv is not None else sys.argv[1:]
     if len(argv) != 2:
-        print("usage: python scripts/skill_render.py <spec.json> <skill-dir/>\n"
-              "  spec.json: {name, description?, original_skill?, generative_steps?, "
-              "decisions:[{tree, module?, schema?, ratified?, consumes?}]}", file=sys.stderr)
+        print(
+            "usage: python scripts/skill_render.py <spec.json> <skill-dir/>\n"
+            "  spec.json: {name, description?, original_skill?, generative_steps?, "
+            "decisions:[{tree, module?, schema?, ratified?, consumes?}]}",
+            file=sys.stderr,
+        )
         return 2
     spec_path, out_dir = argv
     base = Path(spec_path).resolve().parent
@@ -310,9 +344,14 @@ def main(argv: list[str] | None = None) -> int:
     original = None
     if spec.get("original_skill"):
         original = (base / spec["original_skill"]).read_text()
-    root = arrange_skill_dir(out_dir, spec["name"], decisions,
-                             generative_steps=spec.get("generative_steps"),
-                             original_skill_text=original, description=spec.get("description"))
+    root = arrange_skill_dir(
+        out_dir,
+        spec["name"],
+        decisions,
+        generative_steps=spec.get("generative_steps"),
+        original_skill_text=original,
+        description=spec.get("description"),
+    )
     n = len(decisions)
     print(f"wrote {root}/ — SKILL.md + scripts/ ({n} tree{'s' if n != 1 else ''}) + assets/")
     return 0

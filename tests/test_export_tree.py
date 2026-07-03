@@ -19,10 +19,18 @@ TREE = {
     "model": "claude-sonnet-4-6 via claude-code-subagents",
     "profile": "standard",
     "nodes": [
-        {"condition": 'food_item == "chocolate"', "outcome": "toxic",
-         "rounds_survived": 12, "sources": ["domain_expert"]},
-        {"condition": 'food_item == "peanut butter" and food_form == "low_fat"',
-         "outcome": "xylitol risk", "sources": ["edge_case_hunter"], "gray_zone": "check label"},
+        {
+            "condition": 'food_item == "chocolate"',
+            "outcome": "toxic",
+            "rounds_survived": 12,
+            "sources": ["domain_expert"],
+        },
+        {
+            "condition": 'food_item == "peanut butter" and food_form == "low_fat"',
+            "outcome": "xylitol risk",
+            "sources": ["edge_case_hunter"],
+            "gray_zone": "check label",
+        },
     ],
 }
 
@@ -45,11 +53,14 @@ def test_main_writes_file_and_runs(tmp_path):
     ns: dict = {}
     exec(compile(out.read_text(), "<gen>", "exec"), ns)
     assert ns["can_dog_eat"]({"food_item": "chocolate"}) == "toxic"
-    assert ns["can_dog_eat"]({"food_item": "peanut butter", "food_form": "low_fat"}) == "xylitol risk"
+    assert (
+        ns["can_dog_eat"]({"food_item": "peanut butter", "food_form": "low_fat"}) == "xylitol risk"
+    )
 
 
 def test_main_reads_stdin(tmp_path, monkeypatch, capsys):
     import io
+
     monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(TREE)))
     out = tmp_path / "checker.py"
     assert main(["-", str(out)]) == 0
@@ -68,25 +79,39 @@ def test_enrich_validation_computes_prediction_agreement_and_status():
         {"input": {"food_item": "carrot"}, "rationale": "no label to compare"},
     ]
     enriched = enrich_validation(t, raw)
-    assert all(e["status"] == "proposed" for e in enriched)          # never auto-ratified
+    assert all(e["status"] == "proposed" for e in enriched)  # never auto-ratified
     assert enriched[0]["tree_prediction"] == "toxic" and enriched[0]["agrees"] is True
     assert enriched[1]["tree_prediction"] == "unknown" and enriched[1]["agrees"] is False
-    assert enriched[2]["agrees"] is None                             # no expected → nothing to compare
+    assert enriched[2]["agrees"] is None  # no expected → nothing to compare
 
 
 def test_enrich_respects_explicit_status_and_passes_through_provenance():
     t = tree_from_dict(TREE)
-    raw = [{"input": {"food_item": "carrot"}, "expected": "unknown", "status": "resolved",
-            "source": "domain_expert#r2", "round": 2}]
+    raw = [
+        {
+            "input": {"food_item": "carrot"},
+            "expected": "unknown",
+            "status": "resolved",
+            "source": "domain_expert#r2",
+            "round": 2,
+        }
+    ]
     e = enrich_validation(t, raw)[0]
-    assert e["status"] == "resolved"          # passed-in status preserved
+    assert e["status"] == "resolved"  # passed-in status preserved
     assert e["source"] == "domain_expert#r2" and e["round"] == 2
 
 
 def test_main_writes_validation_dataset(tmp_path):
-    tree_with = {**TREE, "proposed_examples": [
-        {"input": {"food_item": "macadamia"}, "expected": "toxic", "rationale": "nut gray zone"},
-    ]}
+    tree_with = {
+        **TREE,
+        "proposed_examples": [
+            {
+                "input": {"food_item": "macadamia"},
+                "expected": "toxic",
+                "rationale": "nut gray zone",
+            },
+        ],
+    }
     src = tmp_path / "tree.json"
     src.write_text(json.dumps(tree_with))
     out = tmp_path / "checker.py"
@@ -95,8 +120,8 @@ def test_main_writes_validation_dataset(tmp_path):
     assert side.exists()
     rows = [json.loads(ln) for ln in side.read_text().splitlines() if ln.strip()]
     assert rows[0]["status"] == "proposed"
-    assert rows[0]["tree_prediction"] == "unknown"   # exporter computed it, not the LLM
-    assert rows[0]["agrees"] is False                # "toxic" proposed, tree says "unknown"
+    assert rows[0]["tree_prediction"] == "unknown"  # exporter computed it, not the LLM
+    assert rows[0]["agrees"] is False  # "toxic" proposed, tree says "unknown"
     # the old gitignored sidecar name is no longer produced by this path
     assert not (tmp_path / "checker.proposed_examples.json").exists()
 
@@ -112,10 +137,13 @@ def test_main_no_dataset_without_proposed(tmp_path):
 def test_behavior_lock_is_always_green_and_has_no_xfail(tmp_path):
     """A proposed label the tree does NOT return must never become a failing/xfail test."""
     t = tree_from_dict(TREE)
-    enriched = enrich_validation(t, [
-        {"input": {"food_item": "chocolate"}, "expected": "toxic"},   # agrees
-        {"input": {"food_item": "carrot"}, "expected": "toxic"},      # disagrees (tree: unknown)
-    ])
+    enriched = enrich_validation(
+        t,
+        [
+            {"input": {"food_item": "chocolate"}, "expected": "toxic"},  # agrees
+            {"input": {"food_item": "carrot"}, "expected": "toxic"},  # disagrees (tree: unknown)
+        ],
+    )
     src = render_behavior_lock("checker", "can_dog_eat", enriched)
     assert "xfail" not in src and "OPEN" not in src
     assert "def test_can_dog_eat_behavior" in src
@@ -137,9 +165,12 @@ def test_ratified_file_only_when_ratified_present(tmp_path):
     assert render_ratified("checker", "can_dog_eat", proposed_only) is None
 
     # a ratified case → a real assertion of the human label (can fail on regression)
-    ratified = enrich_validation(t, [
-        {"input": {"food_item": "chocolate"}, "expected": "toxic", "status": "ratified"},
-    ])
+    ratified = enrich_validation(
+        t,
+        [
+            {"input": {"food_item": "chocolate"}, "expected": "toxic", "status": "ratified"},
+        ],
+    )
     src = render_ratified("checker", "can_dog_eat", ratified)
     assert src is not None
     assert "def test_can_dog_eat_ratified" in src and "RATIFIED = [" in src
@@ -148,11 +179,18 @@ def test_ratified_file_only_when_ratified_present(tmp_path):
 
 
 def test_main_emits_behavior_lock_and_ratified_files(tmp_path):
-    tree_with = {**TREE, "proposed_examples": [
-        {"input": {"food_item": "chocolate"}, "expected": "toxic", "rationale": "agrees"},
-        {"input": {"food_item": "peanut butter", "food_form": "low_fat"},
-         "expected": "xylitol risk", "status": "ratified", "rationale": "human blessed"},
-    ]}
+    tree_with = {
+        **TREE,
+        "proposed_examples": [
+            {"input": {"food_item": "chocolate"}, "expected": "toxic", "rationale": "agrees"},
+            {
+                "input": {"food_item": "peanut butter", "food_form": "low_fat"},
+                "expected": "xylitol risk",
+                "status": "ratified",
+                "rationale": "human blessed",
+            },
+        ],
+    }
     src = tmp_path / "tree.json"
     src.write_text(json.dumps(tree_with))
     out = tmp_path / "checker.py"

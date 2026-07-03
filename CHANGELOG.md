@@ -5,6 +5,12 @@ versions follow [SemVer](https://semver.org/) (pre-1.0: minor bumps may break).
 
 ## [Unreleased]
 
+### Added
+- CI now enforces `ruff format` (whole repo reformatted once; generated dirs
+  excluded) and `mypy` over `temper_skills/` — `ingest_skill` gained `@overload`s
+  so its return type follows `propose_schema_only`, and `loop_error` became a
+  declared `DecisionTree` field.
+
 ## [0.0.3] — 2026-07-03
 
 ### Fixed

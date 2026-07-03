@@ -29,12 +29,21 @@ class RoutingBackend(Backend):
         skip = "SKIPME" in user
         if schema is InferredSchema:
             if skip:
-                return InferredSchema(fn_name="write_post", features=[
-                    InferredFeature(name="topic", type="string", description="the topic")])
-            return InferredSchema(fn_name="route_ticket", features=[
-                InferredFeature(name="priority", type="string",
-                                description='one of "low", "high"'),
-                InferredFeature(name="security_score", type="number")])
+                return InferredSchema(
+                    fn_name="write_post",
+                    features=[
+                        InferredFeature(name="topic", type="string", description="the topic")
+                    ],
+                )
+            return InferredSchema(
+                fn_name="route_ticket",
+                features=[
+                    InferredFeature(
+                        name="priority", type="string", description='one of "low", "high"'
+                    ),
+                    InferredFeature(name="security_score", type="number"),
+                ],
+            )
         if schema is JudgeScores:
             if skip:
                 return JudgeScores(decisiveness=2, combinatorics=3, stakes=3)
@@ -90,8 +99,7 @@ def test_dir_sweep_json_with_report_keeps_stdout_parseable(tmp_path, monkeypatch
     # the JSON stream on stdout (bit the first live corpus sweep).
     monkeypatch.setattr(cli, "get_backend", lambda n, m: RoutingBackend())
     out = tmp_path / "audit.md"
-    res = runner.invoke(cli.app, ["audit", str(_lib(tmp_path)), "--json",
-                                  "--report", str(out)])
+    res = runner.invoke(cli.app, ["audit", str(_lib(tmp_path)), "--json", "--report", str(out)])
     assert res.exit_code == 0
     assert len(json.loads(res.stdout)) == 2
     assert out.exists()
@@ -117,6 +125,7 @@ def test_single_skill_report_md(tmp_path, monkeypatch):
 
 
 # ---- bare invocation: `temper-skills <path>` ----
+
 
 def test_implicit_command_dir_audits(tmp_path):
     assert cli._implicit_command(str(tmp_path)) == "audit"

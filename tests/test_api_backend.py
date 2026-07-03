@@ -20,8 +20,9 @@ def _stub_client(obj, usage):
     def create(**kw):
         return obj, completion
 
-    return SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
-        create_with_completion=create)))
+    return SimpleNamespace(
+        chat=SimpleNamespace(completions=SimpleNamespace(create_with_completion=create))
+    )
 
 
 def test_complete_accumulates_tokens_and_cost():

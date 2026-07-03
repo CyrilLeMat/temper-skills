@@ -53,6 +53,7 @@ class ScriptedBackend(Backend):
     def __init__(self, trees, scores=None, initial=None):
         super().__init__("fake-model")
         import threading
+
         self.trees = trees
         self.scores = scores or [9]
         self.initial = initial or ProposedTree(nodes=[], default_outcome="route_default")
@@ -83,7 +84,8 @@ class ScriptedBackend(Backend):
             self.arb += 1
             return ProposerArbitration(
                 entries=[ArbitrationEntry(persona="literalist", decision="kept", rationale="ok")],
-                convergence_estimate=90, tree=tree,
+                convergence_estimate=90,
+                tree=tree,
             )
         if schema is ProposedExampleSet:
             return ProposedExampleSet(examples=[])
@@ -99,6 +101,7 @@ class FakeBackend(Backend):
     def __init__(self, score: int = 9):
         super().__init__("fake-model")
         import threading
+
         self.score = score
         self.personas_seen: list[str] = []
         self.calls = {"tree": 0, "verdict": 0, "arbitration": 0, "inferred": 0, "woven": 0}
@@ -114,9 +117,7 @@ class FakeBackend(Backend):
             with self._lock:
                 self.calls["verdict"] += 1
                 self.personas_seen.append(persona)
-            return PersonaVerdict(
-                persona=persona, score=self.score, verdict="ok", detail="fine"
-            )
+            return PersonaVerdict(persona=persona, score=self.score, verdict="ok", detail="fine")
         if schema is ProposerArbitration:
             self.calls["arbitration"] += 1
             return ProposerArbitration(
@@ -139,10 +140,18 @@ class FakeBackend(Backend):
             return WovenSkill(markdown="# Woven skill\n\nDelegates to the tree; see code.")
         if schema is ProposedExampleSet:
             self.calls["proposed"] = self.calls.get("proposed", 0) + 1
-            return ProposedExampleSet(examples=[
-                ProposedExample(input={"priority": "low", "security_score": 0.5},
-                                expected="human_review", rationale="low priority, mid score"),
-                ProposedExample(input={"priority": "high", "security_score": 0.1},
-                                expected="escalate_urgent", rationale="dup of a ratified case"),
-            ])
+            return ProposedExampleSet(
+                examples=[
+                    ProposedExample(
+                        input={"priority": "low", "security_score": 0.5},
+                        expected="human_review",
+                        rationale="low priority, mid score",
+                    ),
+                    ProposedExample(
+                        input={"priority": "high", "security_score": 0.1},
+                        expected="escalate_urgent",
+                        rationale="dup of a ratified case",
+                    ),
+                ]
+            )
         raise AssertionError(f"unexpected schema {schema}")

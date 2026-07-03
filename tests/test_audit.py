@@ -36,6 +36,7 @@ def _free(name: str) -> InferredFeature:
 
 # ---- schema_closure: open free-text vs closed spaces ----
 
+
 def test_closure_empty_schema_is_zero():
     assert schema_closure(_schema()) == 0.0
 
@@ -60,19 +61,22 @@ def test_closure_enum_like_string_counts_closed():
 def test_comma_list_description_is_not_credited_as_closed():
     # The false-100% bug: a free-text identifier whose description lists examples with
     # commas must NOT count as a closed enum — that's the unbounded tail (dog_food).
-    f = InferredFeature(name="food_item", type="string",
-                        description="the food, e.g. chocolate, grapes, onion, xylitol")
+    f = InferredFeature(
+        name="food_item",
+        type="string",
+        description="the food, e.g. chocolate, grapes, onion, xylitol",
+    )
     assert schema_closure(_schema(f)) == 0.0
     assert open_features(_schema(f)) == ["food_item"]
 
 
 def test_open_features_lists_only_free_text():
-    s = _schema(_enum("priority"), _free("food_item"),
-                InferredFeature(name="qty", type="number"))
+    s = _schema(_enum("priority"), _free("food_item"), InferredFeature(name="qty", type="number"))
     assert open_features(s) == ["food_item"]
 
 
 # ---- verdict_of: the rubric, keyed to the shipped examples ----
+
 
 def test_generation_skill_skips():
     # decisiveness < 4 — nothing to freeze
@@ -138,16 +142,18 @@ def test_marginal_combinatorics_survives_if_schema_closed():
 
 # ---- recommend_action: the routing layer ----
 
+
 def test_action_generation_skill_delegates_prose():
     a = recommend_action(JudgeScores(decisiveness=2, combinatorics=5, stakes=5), ["x"])
     assert a == "delegate_prose"
-    assert ACTIONS[a][2] == "skill-creator"   # points at the delegated tool
+    assert ACTIONS[a][2] == "skill-creator"  # points at the delegated tool
 
 
 def test_action_dog_food_routes_to_externalize_data():
     # decisive, borderline combinatorics, a free-text key → externalize the list as data
-    a = recommend_action(JudgeScores(decisiveness=8, combinatorics=5, stakes=6),
-                         ["food_item", "food_form"])
+    a = recommend_action(
+        JudgeScores(decisiveness=8, combinatorics=5, stakes=6), ["food_item", "food_form"]
+    )
     assert a == "externalize_data"
 
 
@@ -165,11 +171,13 @@ def test_action_closed_schema_tempers():
 def test_action_multi_decision_routes_to_decompose():
     # auto-detection: >=2 separable decisions outranks every per-decision verdict
     a = recommend_action(
-        JudgeScores(decisiveness=9, combinatorics=8, stakes=8, distinct_decisions=3), [])
+        JudgeScores(decisiveness=9, combinatorics=8, stakes=8, distinct_decisions=3), []
+    )
     assert a == "decompose"
 
 
 # ---- audit_skill end-to-end on a scripted backend (no network) ----
+
 
 class _AuditBackend(Backend):
     name = "fake"
@@ -192,8 +200,11 @@ def test_audit_skill_infers_schema_then_judges(tmp_path):
     skill.write_text("# route tickets by priority and security")
     be = _AuditBackend(
         JudgeScores(decisiveness=9, combinatorics=8, stakes=8),
-        _schema(_enum("priority"), InferredFeature(name="security_score", type="number"),
-                fn_name="route_ticket"),
+        _schema(
+            _enum("priority"),
+            InferredFeature(name="security_score", type="number"),
+            fn_name="route_ticket",
+        ),
     )
     report = audit_skill(str(skill), backend=be)
     assert isinstance(report, FitnessReport)
@@ -218,13 +229,18 @@ def test_audit_skill_surfaces_rationale_and_open_features(tmp_path):
     skill = tmp_path / "skill.md"
     skill.write_text("# can my dog eat that?")
     scores = JudgeScores(
-        decisiveness=8, combinatorics=5, stakes=6,
+        decisiveness=8,
+        combinatorics=5,
+        stakes=6,
         rationale={"combinatorics": "mostly a flat toxin lookup with a little dose logic"},
     )
-    pinned = _schema(_free("food_item"), InferredFeature(name="quantity_grams", type="number"),
-                     fn_name="can_dog_eat")
+    pinned = _schema(
+        _free("food_item"),
+        InferredFeature(name="quantity_grams", type="number"),
+        fn_name="can_dog_eat",
+    )
     report = audit_skill(str(skill), backend=_AuditBackend(scores, pinned), schema=pinned)
-    assert report.verdict == "caveats"            # not a clean temper
+    assert report.verdict == "caveats"  # not a clean temper
     assert report.open_features == ["food_item"]
     assert report.n_features == 2
     assert "flat toxin lookup" in report.rationale["combinatorics"]
@@ -240,7 +256,7 @@ def test_audit_skill_build_normalizer_hint_fills_field_names(tmp_path):
     pinned = _schema(_free("address"), fn_name="route_address")
     report = audit_skill(str(skill), backend=_AuditBackend(scores, pinned), schema=pinned)
     assert report.recommended_action == "build_normalizer"
-    assert "address" in report.action_hint        # {fields} placeholder was filled
+    assert "address" in report.action_hint  # {fields} placeholder was filled
 
 
 def test_audit_skill_flags_multi_decision_for_decompose(tmp_path):

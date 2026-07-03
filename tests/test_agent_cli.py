@@ -28,8 +28,9 @@ def test_extract_json_none_when_absent():
 
 def test_complete_first_try(monkeypatch):
     be = AgentCliBackend(preset="opencode", model="m")
-    monkeypatch.setattr(be, "_run",
-                        lambda p: '{"persona":"literalist","score":8,"verdict":"ok","detail":"ok"}')
+    monkeypatch.setattr(
+        be, "_run", lambda p: '{"persona":"literalist","score":8,"verdict":"ok","detail":"ok"}'
+    )
     v = be.complete("sys", "usr", PersonaVerdict)
     assert v.persona == "literalist" and v.score == 8
 
@@ -96,7 +97,14 @@ def test_preset_argv_and_text_extractors():
     )
 
     assert _claude_argv("hi", "claude-sonnet-4-6") == [
-        "claude", "-p", "hi", "--model", "claude-sonnet-4-6", "--output-format", "json"]
+        "claude",
+        "-p",
+        "hi",
+        "--model",
+        "claude-sonnet-4-6",
+        "--output-format",
+        "json",
+    ]
     assert _claude_text('{"result": "the reply"}') == "the reply"
     assert _opencode_argv("hi", "claude-sonnet-4-6")[-1] == "anthropic/claude-sonnet-4-6"
     assert _qualify_opencode_model("openai/gpt-4o") == "openai/gpt-4o"
@@ -149,6 +157,7 @@ def test_complete_retries_on_schema_invalid_json(monkeypatch):
 
 
 # ---- transient CLI failures join the retry path (a timeout must not bypass it) ----
+
 
 def test_complete_retries_after_timeout_then_succeeds(monkeypatch):
     import subprocess

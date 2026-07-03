@@ -27,9 +27,11 @@ def test_classname_pascalcases():
 
 
 def test_rendered_source_is_loadable_pydantic(tmp_path):
-    src = render_schema_source(_inferred(
-        [{"name": "priority", "type": "string"},
-         {"name": "security_score", "type": "number"}]))
+    src = render_schema_source(
+        _inferred(
+            [{"name": "priority", "type": "string"}, {"name": "security_score", "type": "number"}]
+        )
+    )
     p = tmp_path / "schema.proposed.py"
     p.write_text(src)
     cls = _load_schema(f"{p}:RouteTicket")
@@ -44,21 +46,28 @@ def test_empty_schema_renders_pass(tmp_path):
 
 
 def test_normalization_notes_flag_exact_match_and_enum():
-    notes = normalization_notes(_inferred([
-        {"name": "food_item", "type": "string", "description": "the food the dog ate"},
-        {"name": "food_form", "type": "string",
-         "description": 'one of "standard", "raw", "cooked"'},
-        {"name": "weight", "type": "number"},
-    ]))
+    notes = normalization_notes(
+        _inferred(
+            [
+                {"name": "food_item", "type": "string", "description": "the food the dog ate"},
+                {
+                    "name": "food_form",
+                    "type": "string",
+                    "description": 'one of "standard", "raw", "cooked"',
+                },
+                {"name": "weight", "type": "number"},
+            ]
+        )
+    )
     assert "exact-match" in notes["food_item"]
     assert "Literal" in notes["food_form"]
-    assert "weight" not in notes          # numeric fields carry no normalizer burden
+    assert "weight" not in notes  # numeric fields carry no normalizer burden
 
 
 def test_constraints_rendered_as_comments():
-    src = render_schema_source(_inferred(
-        [{"name": "x", "type": "boolean"}],
-        constraints=["when in doubt, human_review"]))
+    src = render_schema_source(
+        _inferred([{"name": "x", "type": "boolean"}], constraints=["when in doubt, human_review"])
+    )
     assert "when in doubt, human_review" in src
 
 
@@ -69,7 +78,7 @@ def test_ingest_propose_schema_only_returns_without_distilling(tmp_path):
     out = ingest_skill(str(skill), schema=None, backend=be, propose_schema_only=True)
     assert isinstance(out, InferredSchema)
     assert be.calls["inferred"] == 1
-    assert be.calls["tree"] == 0          # the loop never ran
+    assert be.calls["tree"] == 0  # the loop never ran
 
 
 def test_yes_flag_auto_accepts_inferred_schema(tmp_path, monkeypatch):
@@ -85,8 +94,11 @@ def test_yes_flag_auto_accepts_inferred_schema(tmp_path, monkeypatch):
 
     def _boom(*a, **k):
         raise AssertionError("Prompt.ask must not fire under -y")
-    with patch.object(cli, "get_backend", lambda *a, **k: FakeBackend(score=9)), \
-         patch.object(Prompt, "ask", _boom):
+
+    with (
+        patch.object(cli, "get_backend", lambda *a, **k: FakeBackend(score=9)),
+        patch.object(Prompt, "ask", _boom),
+    ):
         r = CliRunner().invoke(cli.app, ["ingest", str(skill), "--profile", "quick", "-y"])
     assert r.exit_code == 0, r.output
     assert "auto-accepted" in r.output

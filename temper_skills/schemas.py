@@ -61,10 +61,16 @@ class ProposedExampleSet(BaseModel):
 
 class PersonaVerdict(BaseModel):
     persona: str
-    score: int = Field(ge=0, le=10, description="0 = the tree fails this persona's lens; 10 = solid.")
+    score: int = Field(
+        ge=0, le=10, description="0 = the tree fails this persona's lens; 10 = solid."
+    )
     verdict: Literal[
-        "ok", "missing_case", "collapsible", "contradiction",
-        "schema_too_thin", "outcome_too_coarse",
+        "ok",
+        "missing_case",
+        "collapsible",
+        "contradiction",
+        "schema_too_thin",
+        "outcome_too_coarse",
     ]
     detail: str = Field(description="One sentence: what is wrong, or why it is fine.")
     proposed_case: str | None = Field(
@@ -96,7 +102,9 @@ class PersonaVerdict(BaseModel):
 class ArbitrationEntry(BaseModel):
     persona: str
     decision: Literal["kept", "changed", "rejected"]
-    rationale: str = Field(description="One line explaining how the proposer resolved this critique.")
+    rationale: str = Field(
+        description="One line explaining how the proposer resolved this critique."
+    )
 
 
 class ProposerArbitration(BaseModel):

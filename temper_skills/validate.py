@@ -82,6 +82,7 @@ def run_validation(
 
 # --- loaders: turn an artifact into a callable decide(case) -> str ---
 
+
 def fn_from_tree(tree: DecisionTree) -> Callable[[dict], str]:
     ns: dict = {}
     exec(compile(tree.to_source(), f"<{tree.fn_name}>", "exec"), ns)
@@ -99,9 +100,7 @@ def fn_from_pyfile(path: str, fn_name: str | None = None) -> Callable[[dict], st
         return ns[fn_name]
     fns = [v for k, v in ns.items() if callable(v) and not k.startswith("_")]
     if len(fns) != 1:
-        raise ValueError(
-            f"{path} defines {len(fns)} functions; pass fn_name to disambiguate."
-        )
+        raise ValueError(f"{path} defines {len(fns)} functions; pass fn_name to disambiguate.")
     return fns[0]
 
 

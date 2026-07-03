@@ -40,8 +40,14 @@ from export_tree import (
 )
 
 
-def update(tree_json: dict, out_py: str, new_cases: list[dict], *,
-           round: int | None = None, run_id: str | None = None) -> dict:
+def update(
+    tree_json: dict,
+    out_py: str,
+    new_cases: list[dict],
+    *,
+    round: int | None = None,
+    run_id: str | None = None,
+) -> dict:
     """Merge ``new_cases`` into the dataset beside ``out_py`` and refresh against the tree.
 
     Returns the score summary from :func:`export_tree.write_dataset_and_tests`, plus ``new`` —
@@ -82,8 +88,11 @@ def main(argv: list[str] | None = None) -> int:
         i += 1
 
     if len(positional) != 2:
-        print("usage: python -m temper_skills.update_validation <tree.json> <out.py> "
-              "[--round N] [--run-id ID]  (new cases as JSON list on stdin)", file=sys.stderr)
+        print(
+            "usage: python -m temper_skills.update_validation <tree.json> <out.py> "
+            "[--round N] [--run-id ID]  (new cases as JSON list on stdin)",
+            file=sys.stderr,
+        )
         return 2
 
     tree_path, out_py = positional
@@ -98,9 +107,11 @@ def main(argv: list[str] | None = None) -> int:
     stem = str(Path(out_py).with_suffix(""))
     tag = f"round {round_no}" if round_no is not None else "update"
     score = f"{s['agree']}/{s['comparable']}" if s["comparable"] else "n/a"
-    print(f"[{tag}] {stem}.validation.jsonl: {s['total']} case(s) (+{s['new']} new); "
-          f"tree agrees {score}; {s['disputes']} open disagreement(s)"
-          + (f"; {s['ratified']} ratified" if s["ratified"] else ""))
+    print(
+        f"[{tag}] {stem}.validation.jsonl: {s['total']} case(s) (+{s['new']} new); "
+        f"tree agrees {score}; {s['disputes']} open disagreement(s)"
+        + (f"; {s['ratified']} ratified" if s["ratified"] else "")
+    )
     return 0
 
 

@@ -63,8 +63,7 @@ def _normalize_schema(schema: Any) -> dict:
     if isinstance(schema, dict):
         return schema
     raise TypeError(
-        "schema must be a Pydantic BaseModel subclass or a JSON Schema dict, "
-        f"got {type(schema)!r}"
+        f"schema must be a Pydantic BaseModel subclass or a JSON Schema dict, got {type(schema)!r}"
     )
 
 

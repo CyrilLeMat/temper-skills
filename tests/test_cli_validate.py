@@ -24,10 +24,14 @@ def artifacts(tmp_path):
     tree = tmp_path / "tree.json"
     tree.write_text(json.dumps(TREE))
     data = tmp_path / "set.json"
-    data.write_text(json.dumps([
-        {"input": {"x": 12}, "expected": "high"},
-        {"input": {"x": 1}, "expected": "low"},
-    ]))
+    data.write_text(
+        json.dumps(
+            [
+                {"input": {"x": 12}, "expected": "high"},
+                {"input": {"x": 1}, "expected": "low"},
+            ]
+        )
+    )
     return tree, data
 
 

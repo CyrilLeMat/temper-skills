@@ -25,24 +25,28 @@ Action = Literal["temper", "externalize_data", "build_normalizer", "delegate_pro
 
 class JudgeScores(BaseModel):
     decisiveness: int = Field(
-        ge=0, le=10,
+        ge=0,
+        le=10,
         description="Does the skill resolve to a finite set of outcomes (route/classify/"
         "verdict), or is it mostly open-ended generation? Pure generation scores low — "
         "there is no decision to freeze.",
     )
     combinatorics: int = Field(
-        ge=0, le=10,
+        ge=0,
+        le=10,
         description="Does the difficulty live in INTERACTIONS among bounded features "
         "(priority x tier x score), or is it a flat unbounded lookup (a forever-growing "
         "list)? A flat list scores low — the tree thrashes and never converges.",
     )
     stakes: int = Field(
-        ge=0, le=10,
+        ge=0,
+        le=10,
         description="Is the decision repeated, auditable, and stable enough that freezing "
         "pays off, or one-off / changing weekly? Low means freezing won't pay for itself.",
     )
     distinct_decisions: int = Field(
-        default=1, ge=0,
+        default=1,
+        ge=0,
         description="How many SEPARABLE decisions this skill contains: 1 if it's a single "
         "coherent decision, >=2 if it's a flow of several (classify, then escalate, then "
         "draft …). The three axes above describe the skill as a WHOLE.",
@@ -158,14 +162,14 @@ def recommend_action(j: JudgeScores, open_feats: list[str]) -> Action:
     """Route a skill to its next useful action — a pure function of the same axes the
     verdict uses. Cascade, most-disqualifying first (mirrors verdict_of)."""
     if j.distinct_decisions >= 2:
-        return "decompose"                 # a flow of several decisions — split before tempering
+        return "decompose"  # a flow of several decisions — split before tempering
     if j.decisiveness < 4:
-        return "delegate_prose"            # generation skill — not our lane
+        return "delegate_prose"  # generation skill — not our lane
     if open_feats:
         # the decision branches on un-pinned free text. How we fix it depends on whether
         # there's genuine interacting logic, or it's a flat list keyed on that text.
         return "externalize_data" if j.combinatorics <= 5 else "build_normalizer"
-    return "temper"                        # decisive + closed schema → tree-shaped
+    return "temper"  # decisive + closed schema → tree-shaped
 
 
 def verdict_of(
@@ -186,9 +190,7 @@ def verdict_of(
         return "skip", reasons, caveats
 
     if closure < 0.7:
-        caveats.append(
-            f"schema only {closure:.0%} closed — the guarantee rests on YOUR normalizer"
-        )
+        caveats.append(f"schema only {closure:.0%} closed — the guarantee rests on YOUR normalizer")
     if j.combinatorics <= 5:
         caveats.append(
             f"borderline combinatorics ({j.combinatorics}/10) — the hardness is partly a flat "
@@ -227,8 +229,11 @@ def audit_skill(
     verdict, reasons, caveats = verdict_of(j, closure, len(schema.features))
     action = recommend_action(j, opens)
     if j.distinct_decisions >= 2:
-        caveats.insert(0, f"~{j.distinct_decisions} distinct decisions — the scores above "
-                       "AVERAGE them; decompose before trusting this verdict")
+        caveats.insert(
+            0,
+            f"~{j.distinct_decisions} distinct decisions — the scores above "
+            "AVERAGE them; decompose before trusting this verdict",
+        )
     _, hint, tool = ACTIONS[action]
     hint = hint.format(fields=", ".join(opens)) if "{fields}" in hint else hint
     if tool:

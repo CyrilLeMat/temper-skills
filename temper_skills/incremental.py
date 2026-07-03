@@ -20,8 +20,9 @@ from .tree import DecisionNode, DecisionTree
 def _seed_from_tree(tree: DecisionTree) -> tuple[ProposedTree, dict[str, int]]:
     """A DecisionTree -> (ProposedTree seed, survival map carried forward)."""
     nodes = [
-        ProposedNode(condition=n.condition, outcome=n.outcome, sources=list(n.sources),
-                     gray_zone=n.gray_zone)
+        ProposedNode(
+            condition=n.condition, outcome=n.outcome, sources=list(n.sources), gray_zone=n.gray_zone
+        )
         for n in tree.nodes
     ]
     survival = {_node_key(n.condition): n.rounds_survived for n in tree.nodes}

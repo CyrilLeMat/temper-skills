@@ -13,12 +13,12 @@ from datetime import datetime, timezone
 class DecisionNode:
     """One branch of the tree, carrying its provenance (§4.4)."""
 
-    condition: str          # a Python boolean expression over the feature names
-    outcome: str            # the value returned when the condition holds
+    condition: str  # a Python boolean expression over the feature names
+    outcome: str  # the value returned when the condition holds
     rounds_survived: int = 0
     sources: list[str] = field(default_factory=list)
-    critic_note: str | None = None      # overengineering_critic verdict, if any
-    gray_zone: str | None = None        # flagged ambiguity near this node
+    critic_note: str | None = None  # overengineering_critic verdict, if any
+    gray_zone: str | None = None  # flagged ambiguity near this node
 
 
 @dataclass
@@ -61,6 +61,9 @@ class DecisionTree:
     # earned a branch on (co-evolving schema). Surfaced for the final schema review — the loop
     # grew the schema by these. Metadata only, not emitted into source.
     added_features: "list | None" = None
+    # Non-None = the loop ended early on this backend failure ("round N: Type: msg") and
+    # kept the best tree so far — the run must not be read as converged. Metadata only.
+    loop_error: "str | None" = None
 
     def to_source(self) -> str:
         """Render the tree as a zero-dependency Python module."""

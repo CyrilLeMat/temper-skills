@@ -24,89 +24,104 @@ from .backends import Backend
 @dataclass
 class Finding:
     severity: str  # "warn" | "good"
-    text: str      # what the audit observed, in skill-author words
-    fix: str       # what to do about it
+    text: str  # what the audit observed, in skill-author words
+    fix: str  # what to do about it
 
 
 def findings_of(r: FitnessReport) -> list[Finding]:
     out: list[Finding] = []
     if r.distinct_decisions >= 2:
-        out.append(Finding(
-            "warn",
-            f"bundles ~{r.distinct_decisions} separable decisions — every score below "
-            "averages them",
-            "split first (`temper-skills decompose`); each decision gets its own tree "
-            "+ test suite",
-        ))
+        out.append(
+            Finding(
+                "warn",
+                f"bundles ~{r.distinct_decisions} separable decisions — every score below "
+                "averages them",
+                "split first (`temper-skills decompose`); each decision gets its own tree "
+                "+ test suite",
+            )
+        )
     if r.decisiveness < 4:
-        out.append(Finding(
-            "warn",
-            "no finite decision to freeze — this skill is mostly open-ended generation",
-            "improve it as prose (e.g. skill-creator); there is nothing to compile here",
-        ))
+        out.append(
+            Finding(
+                "warn",
+                "no finite decision to freeze — this skill is mostly open-ended generation",
+                "improve it as prose (e.g. skill-creator); there is nothing to compile here",
+            )
+        )
     if r.open_features:
         names = ", ".join(f"`{n}`" for n in r.open_features)
         if r.recommended_action == "externalize_data":
-            fix = ("move the lookup into a versioned data file + matcher; freeze only "
-                   "the residual logic")
+            fix = (
+                "move the lookup into a versioned data file + matcher; freeze only "
+                "the residual logic"
+            )
         elif r.recommended_action == "build_normalizer":
-            fix = ("pin these fields to canonical values upstream (your extractor) "
-                   "before freezing")
+            fix = "pin these fields to canonical values upstream (your extractor) before freezing"
         else:
-            fix = ("tighten each to a closed set (a `Literal`) or own the mapping in "
-                   "your normalizer")
-        out.append(Finding(
-            "warn",
-            f"branches on free text with an unbounded value space: {names} — answers "
-            "can drift call-to-call",
-            fix,
-        ))
+            fix = "tighten each to a closed set (a `Literal`) or own the mapping in your normalizer"
+        out.append(
+            Finding(
+                "warn",
+                f"branches on free text with an unbounded value space: {names} — answers "
+                "can drift call-to-call",
+                fix,
+            )
+        )
     if r.decisiveness >= 4 and r.combinatorics <= 5:
-        out.append(Finding(
-            "warn",
-            "the difficulty reads as item-by-item lookup, not interacting rules",
-            "keep the list as data; only genuine feature interactions belong in code",
-        ))
+        out.append(
+            Finding(
+                "warn",
+                "the difficulty reads as item-by-item lookup, not interacting rules",
+                "keep the list as data; only genuine feature interactions belong in code",
+            )
+        )
     if r.n_features <= 1:
-        out.append(Finding(
-            "warn",
-            "only one input feature — the \"logic\" may be a plain lookup table",
-            "confirm there are real branches; a dict may serve better than a tree",
-        ))
+        out.append(
+            Finding(
+                "warn",
+                'only one input feature — the "logic" may be a plain lookup table',
+                "confirm there are real branches; a dict may serve better than a tree",
+            )
+        )
     if r.stakes < 4:
-        out.append(Finding(
-            "warn",
-            "low-stakes or fast-changing — freezing may not pay for itself",
-            "temper only if this decision repeats enough to earn its maintenance",
-        ))
+        out.append(
+            Finding(
+                "warn",
+                "low-stakes or fast-changing — freezing may not pay for itself",
+                "temper only if this decision repeats enough to earn its maintenance",
+            )
+        )
     if not out:
-        out.append(Finding(
-            "good",
-            "decisive, interacting, bounded inputs — a prime candidate for freezing",
-            "`temper-skills ingest <skill>` → deterministic code + a reviewed test suite",
-        ))
+        out.append(
+            Finding(
+                "good",
+                "decisive, interacting, bounded inputs — a prime candidate for freezing",
+                "`temper-skills ingest <skill>` → deterministic code + a reviewed test suite",
+            )
+        )
     return out
 
 
 def headline_of(r: FitnessReport) -> tuple[str, str]:
     """Author-facing verdict label + gloss (the CLI adds color, Markdown adds bold)."""
     if r.recommended_action == "decompose":
-        return ("SPLIT FIRST",
-                f"a flow of ~{r.distinct_decisions} decisions — decompose, then freeze each")
+        return (
+            "SPLIT FIRST",
+            f"a flow of ~{r.distinct_decisions} decisions — decompose, then freeze each",
+        )
     return {
-        "temper":  ("FREEZE-WORTHY",
-                    "decision logic worth compiling into code + a test suite"),
-        "caveats": ("FREEZE-WORTHY, WITH FINDINGS",
-                    "compilable — read the findings first"),
-        "skip":    ("NOTHING TO FREEZE",
-                    "don't grow a tree here — see the findings"),
+        "temper": ("FREEZE-WORTHY", "decision logic worth compiling into code + a test suite"),
+        "caveats": ("FREEZE-WORTHY, WITH FINDINGS", "compilable — read the findings first"),
+        "skip": ("NOTHING TO FREEZE", "don't grow a tree here — see the findings"),
     }[r.verdict]
 
 
 def _scores_line(r: FitnessReport) -> str:
-    return (f"scores: decisiveness {r.decisiveness}/10 · interactions "
-            f"{r.combinatorics}/10 · stakes {r.stakes}/10 · bounded inputs "
-            f"{r.schema_closure:.0%} of {r.n_features} feature(s)")
+    return (
+        f"scores: decisiveness {r.decisiveness}/10 · interactions "
+        f"{r.combinatorics}/10 · stakes {r.stakes}/10 · bounded inputs "
+        f"{r.schema_closure:.0%} of {r.n_features} feature(s)"
+    )
 
 
 def render_audit_md(r: FitnessReport, skill: str) -> str:
@@ -142,6 +157,7 @@ def render_audit_md(r: FitnessReport, skill: str) -> str:
 
 # ---- library fan-out: `temper-skills audit <dir>` ----
 
+
 @dataclass
 class LibraryRow:
     path: Path
@@ -150,24 +166,35 @@ class LibraryRow:
 
 
 _SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "dist", "build"}
-_REPO_FURNITURE = {"readme.md", "changelog.md", "contributing.md", "license.md",
-                   "claude.md", "agents.md", "plan.md"}
+_REPO_FURNITURE = {
+    "readme.md",
+    "changelog.md",
+    "contributing.md",
+    "license.md",
+    "claude.md",
+    "agents.md",
+    "plan.md",
+}
 
 
 def discover_skills(root: Path) -> list[Path]:
     """``SKILL.md`` files if the library uses that convention (``.claude/skills/``,
     exported skill dirs); otherwise every ``.md`` that isn't repo furniture or an
     already-tempered output."""
+
     def walk(keep):
         return sorted(
-            p for p in root.rglob("*.md")
+            p
+            for p in root.rglob("*.md")
             if not any(part in _SKIP_DIRS for part in p.parts) and keep(p)
         )
+
     named = walk(lambda p: p.name.lower() == "skill.md")
     if named:
         return named
-    return walk(lambda p: p.name.lower() not in _REPO_FURNITURE
-                and not p.name.endswith(".tempered.md"))
+    return walk(
+        lambda p: p.name.lower() not in _REPO_FURNITURE and not p.name.endswith(".tempered.md")
+    )
 
 
 def rank_key(row: LibraryRow) -> tuple:
@@ -217,7 +244,9 @@ def render_library_md(rows: list[LibraryRow], root: str | Path) -> str:
             continue
         r = row.report
         label, _ = headline_of(r)
-        lines.append(f"| `{rel}` | {label} | {r.distinct_decisions} | "
-                     f"{top_finding(r)} | `{r.recommended_action}` |")
+        lines.append(
+            f"| `{rel}` | {label} | {r.distinct_decisions} | "
+            f"{top_finding(r)} | `{r.recommended_action}` |"
+        )
     lines.append("")
     return "\n".join(lines)

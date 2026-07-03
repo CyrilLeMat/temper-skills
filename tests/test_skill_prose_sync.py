@@ -18,8 +18,7 @@ from pathlib import Path
 from temper_skills.distill import _EARN_ROUNDS, HARVEST_EXCLUDED
 from temper_skills.validation_case import ValidationCase
 
-_SKILL = (Path(__file__).resolve().parents[1]
-          / ".claude/skills/temper-skills/SKILL.md").read_text()
+_SKILL = (Path(__file__).resolve().parents[1] / ".claude/skills/temper-skills/SKILL.md").read_text()
 
 
 def test_earn_a_branch_window_matches_the_code():
@@ -53,6 +52,5 @@ def test_proposed_test_shape_is_a_subset_of_the_case_contract():
     prose_fields = {part.split(":")[0].strip() for part in m.group(1).split(",")}
     contract = {f.name for f in fields(ValidationCase)}
     assert prose_fields <= contract, (
-        f"prose names case fields {prose_fields - contract} that ValidationCase "
-        "does not define"
+        f"prose names case fields {prose_fields - contract} that ValidationCase does not define"
     )

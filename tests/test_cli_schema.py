@@ -37,6 +37,8 @@ def test_load_pyfile_without_class_errors(tmp_path):
 
 
 def test_loads_the_example_dogfoodquery():
-    cls = _load_schema("examples/dog_food/output/dog-food/assets/can_dog_eat.schema.py:DogFoodQuery")
+    cls = _load_schema(
+        "examples/dog_food/output/dog-food/assets/can_dog_eat.schema.py:DogFoodQuery"
+    )
     props = set(cls.model_json_schema()["properties"])
     assert {"food_item", "food_form", "dog_weight_kg", "quantity_grams"} <= props

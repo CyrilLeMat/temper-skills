@@ -25,7 +25,10 @@ SCHEMA = {
     "type": "object",
     "properties": {
         "food_item": {"type": "string"},
-        "food_form": {"type": "string", "enum": ["standard", "low_fat", "cooked", "raw", "concentrated"]},
+        "food_form": {
+            "type": "string",
+            "enum": ["standard", "low_fat", "cooked", "raw", "concentrated"],
+        },
         "dog_weight_kg": {"type": "number"},
     },
 }
@@ -54,27 +57,44 @@ class Critique(BaseModel):
 
 def _xylitol_surfaced(text: str) -> bool:
     t = text.lower()
-    return "xylitol" in t or ("peanut butter" in t and ("low_fat" in t or "low-fat" in t or "sugar-free" in t or "sugar free" in t))
+    return "xylitol" in t or (
+        "peanut butter" in t
+        and ("low_fat" in t or "low-fat" in t or "sugar-free" in t or "sugar free" in t)
+    )
 
 
 def main() -> int:
     client = anthropic.Anthropic()
 
     draft = client.messages.parse(
-        model=MODEL, max_tokens=4000, thinking={"type": "adaptive"},
+        model=MODEL,
+        max_tokens=4000,
+        thinking={"type": "adaptive"},
         system="You compile decision logic into a flat decision tree over the schema's features.",
-        messages=[{"role": "user", "content":
-                   f"SKILL:\n{SKILL}\n\nSCHEMA:\n{json.dumps(SCHEMA)}\n\nDraft the decision tree."}],
+        messages=[
+            {
+                "role": "user",
+                "content": f"SKILL:\n{SKILL}\n\nSCHEMA:\n{json.dumps(SCHEMA)}\n\nDraft the decision tree.",
+            }
+        ],
         output_format=Tree,
     ).parsed_output
 
     crit = client.messages.parse(
-        model=MODEL, max_tokens=4000, thinking={"type": "adaptive"},
-        system=("You are an edge_case_hunter reviewing a decision tree: seek rare "
-                "combinations of feature values the tree mishandles. List concrete missing cases."),
-        messages=[{"role": "user", "content":
-                   f"SCHEMA:\n{json.dumps(SCHEMA)}\n\nTREE:\n{draft.model_dump_json(indent=2)}\n\n"
-                   "What rare-but-real cases does this tree miss?"}],
+        model=MODEL,
+        max_tokens=4000,
+        thinking={"type": "adaptive"},
+        system=(
+            "You are an edge_case_hunter reviewing a decision tree: seek rare "
+            "combinations of feature values the tree mishandles. List concrete missing cases."
+        ),
+        messages=[
+            {
+                "role": "user",
+                "content": f"SCHEMA:\n{json.dumps(SCHEMA)}\n\nTREE:\n{draft.model_dump_json(indent=2)}\n\n"
+                "What rare-but-real cases does this tree miss?",
+            }
+        ],
         output_format=Critique,
     ).parsed_output
 
@@ -88,8 +108,14 @@ def main() -> int:
         print(f"  • {c}")
 
     passed = _xylitol_surfaced(blob)
-    print("\n" + ("PASS ✓ — xylitol / low-fat peanut butter surfaced unprompted."
-                   if passed else "FAIL ✗ — xylitol did NOT surface. Rethink domain/personas before building."))
+    print(
+        "\n"
+        + (
+            "PASS ✓ — xylitol / low-fat peanut butter surfaced unprompted."
+            if passed
+            else "FAIL ✗ — xylitol did NOT surface. Rethink domain/personas before building."
+        )
+    )
     return 0 if passed else 1
 
 

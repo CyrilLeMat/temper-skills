@@ -12,6 +12,7 @@ the check (e.g. `shutil.which("claude")`) drifts from reality: auto_backend uses
 which *executes* the CLI to confirm it's runnable, so a CLI on PATH but not logged in counts
 as no backend.
 """
+
 import importlib.util
 import sys
 

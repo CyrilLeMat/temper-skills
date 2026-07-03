@@ -91,8 +91,12 @@ def _extract_json(text: str) -> str | None:
 
 
 class AgentCliBackend(Backend):
-    def __init__(self, preset: str = "opencode", model: str = "claude-sonnet-4-6",
-                 timeout: int = DEFAULT_TIMEOUT):
+    def __init__(
+        self,
+        preset: str = "opencode",
+        model: str = "claude-sonnet-4-6",
+        timeout: int = DEFAULT_TIMEOUT,
+    ):
         super().__init__(model)
         if preset not in PRESETS:
             raise ValueError(f"unknown agent-CLI preset {preset!r}; choose from {list(PRESETS)}")

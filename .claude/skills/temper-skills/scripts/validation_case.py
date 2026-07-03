@@ -62,8 +62,7 @@ class ValidationCase:
         """The canonical dict row. Key order is stable (it is the on-disk JSONL diff
         surface); enrichment keys appear only on enriched rows (tree_prediction set),
         provenance keys only when present."""
-        rec: dict = {"input": self.input, "expected": self.expected,
-                     "rationale": self.rationale}
+        rec: dict = {"input": self.input, "expected": self.expected, "rationale": self.rationale}
         if self.tree_prediction is not None:
             rec["tree_prediction"] = self.tree_prediction
             rec["agrees"] = self.agrees

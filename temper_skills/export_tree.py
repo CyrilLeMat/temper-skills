@@ -78,8 +78,13 @@ def load_validation(path: str | Path) -> list[dict]:
     return [json.loads(ln) for ln in p.read_text().splitlines() if ln.strip()]
 
 
-def merge_cases(existing: list[dict], new: list[dict], *,
-                first_seen_round: int | None = None, run_id: str | None = None) -> list[dict]:
+def merge_cases(
+    existing: list[dict],
+    new: list[dict],
+    *,
+    first_seen_round: int | None = None,
+    run_id: str | None = None,
+) -> list[dict]:
     """Merge freshly-proposed cases into the accumulated set, deduped by input.
 
     The first round to find a case owns its label/status and provenance; a later duplicate only
@@ -139,10 +144,12 @@ def write_dataset_and_tests(tree: DecisionTree, out_py: str, enriched: list[dict
     out_path = Path(out_py)
     stem = str(out_path.with_suffix(""))
     Path(stem + ".validation.jsonl").write_text(
-        "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in enriched))
+        "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in enriched)
+    )
 
     Path(out_path.with_name("test_" + out_path.name)).write_text(
-        render_behavior_lock(out_path.stem, tree.fn_name, enriched))
+        render_behavior_lock(out_path.stem, tree.fn_name, enriched)
+    )
 
     rat_path = out_path.with_name("test_" + out_path.stem + "_ratified.py")
     rat_src = render_ratified(out_path.stem, tree.fn_name, enriched)
@@ -155,7 +162,9 @@ def write_dataset_and_tests(tree: DecisionTree, out_py: str, enriched: list[dict
 
 
 def _note(c: dict) -> str:
-    return (c.get("source", "") + (" — " + c["rationale"] if c.get("rationale") else "")).strip(" —")
+    return (c.get("source", "") + (" — " + c["rationale"] if c.get("rationale") else "")).strip(
+        " —"
+    )
 
 
 def render_behavior_lock(module: str, fn_name: str, enriched: list[dict]) -> str:
@@ -183,7 +192,7 @@ def render_behavior_lock(module: str, fn_name: str, enriched: list[dict]) -> str
         "]",
         "",
         '@pytest.mark.parametrize("case,expected,status,note", LOCKED, '
-        'ids=[c[3][:60] for c in LOCKED])',
+        "ids=[c[3][:60] for c in LOCKED])",
         f"def test_{fn_name}_behavior(case, expected, status, note):",
         f"    assert {fn_name}(case) == expected",
         "",
@@ -198,9 +207,13 @@ def render_ratified(module: str, fn_name: str, enriched: list[dict]) -> str | No
     human-blessed answer. That is the only sanctioned test failure in the pipeline. Returns
     None when nothing is ratified yet (no file is written), so a run never carries an empty or
     xfail placeholder — open disputes stay as data in the dataset until a human rules."""
-    rows = [c for c in enriched
-            if c.get("status") == "ratified" and c.get("expected") not in ("", None)
-            and not _is_error(c["tree_prediction"])]
+    rows = [
+        c
+        for c in enriched
+        if c.get("status") == "ratified"
+        and c.get("expected") not in ("", None)
+        and not _is_error(c["tree_prediction"])
+    ]
     if not rows:
         return None
     L = [
@@ -279,10 +292,14 @@ def main(argv: list[str] | None = None) -> int:
         s = write_dataset_and_tests(tree, out, enriched)
         score = f"{s['agree']}/{s['comparable']}" if s["comparable"] else "n/a"
         print(f"wrote {s['total']} validation case(s) → {stem}.validation.jsonl")
-        print(f"  tree agrees with {score} labelled case(s); "
-              f"{s['disputes']} open disagreement(s) (data, not failures — review to ratify)")
-        print(f"wrote behavior-lock tests (always green) → "
-              f"{Path(out).with_name('test_' + Path(out).name)}")
+        print(
+            f"  tree agrees with {score} labelled case(s); "
+            f"{s['disputes']} open disagreement(s) (data, not failures — review to ratify)"
+        )
+        print(
+            f"wrote behavior-lock tests (always green) → "
+            f"{Path(out).with_name('test_' + Path(out).name)}"
+        )
         if s["ratified"]:
             print(f"wrote ratified-truth tests ({s['ratified']} case(s), can fail on regression)")
     return 0

@@ -77,8 +77,8 @@ class ApiBackend(Backend):
                 {"role": "user", "content": user},
             ],
             response_model=schema,
-            max_retries=2,        # instructor: schema-validation retries
-            num_retries=4,        # litellm: transient transport/5xx retries with backoff
+            max_retries=2,  # instructor: schema-validation retries
+            num_retries=4,  # litellm: transient transport/5xx retries with backoff
             timeout=120,
         )
         usage = getattr(completion, "usage", None)

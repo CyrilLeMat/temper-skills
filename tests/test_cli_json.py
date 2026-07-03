@@ -11,10 +11,17 @@ from temper_skills.tree import DecisionNode, DecisionTree
 def _tree():
     return DecisionTree(
         nodes=[
-            DecisionNode(condition='food_item == "chocolate"', outcome="toxic",
-                         rounds_survived=12, sources=["domain_expert"]),
-            DecisionNode(condition='food_item == "macadamia"', outcome="toxic",
-                         gray_zone="skill never lists nuts"),
+            DecisionNode(
+                condition='food_item == "chocolate"',
+                outcome="toxic",
+                rounds_survived=12,
+                sources=["domain_expert"],
+            ),
+            DecisionNode(
+                condition='food_item == "macadamia"',
+                outcome="toxic",
+                gray_zone="skill never lists nuts",
+            ),
         ],
         default_outcome="unknown",
         features=["food_item", "preparation"],
@@ -22,8 +29,12 @@ def _tree():
         model="vertex_ai/claude-sonnet-4-6 via api",
         profile="quick",
         proposed_examples=[
-            {"input": {"food_item": "grape"}, "expected": "toxic",
-             "tree_prediction": "toxic", "rationale": "r"},
+            {
+                "input": {"food_item": "grape"},
+                "expected": "toxic",
+                "tree_prediction": "toxic",
+                "rationale": "r",
+            },
         ],
     )
 
@@ -78,7 +89,7 @@ def test_manifest_ratified_examples_none_when_unchecked():
 def test_manifest_surfaces_loop_error():
     t = _tree()
     m = _tree_manifest(t, "out/x.py", "out/x.tempered.md")
-    assert m["loop_error"] is None            # clean run
+    assert m["loop_error"] is None  # clean run
     t.loop_error = "round 3: RuntimeError: backend fell over"
     m = _tree_manifest(t, "out/x.py", "out/x.tempered.md")
-    assert "round 3" in m["loop_error"]       # an agent must not read this as converged
+    assert "round 3" in m["loop_error"]  # an agent must not read this as converged

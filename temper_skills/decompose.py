@@ -57,8 +57,9 @@ DECOMPOSE_SYSTEM = (
 )
 
 
-def decompose_skill(path: str, backend: Backend | None = None,
-                    model: str = "claude-sonnet-4-6") -> Decomposition:
+def decompose_skill(
+    path: str, backend: Backend | None = None, model: str = "claude-sonnet-4-6"
+) -> Decomposition:
     """One LLM turn: segment a skill into its decision points + generative steps."""
     backend = backend or auto_backend(model)
     with open(path) as f:

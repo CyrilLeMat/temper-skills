@@ -50,8 +50,14 @@ PROFILES = {
 PROFILE_PERSONAS: dict[str, list[Persona]] = {
     "quick": [EDGE_CASE_HUNTER],
     "standard": [EDGE_CASE_HUNTER, DOMAIN_EXPERT, SCHEMA_CRITIC, OUTCOME_CRITIC],
-    "audit-grade": [LITERALIST, EDGE_CASE_HUNTER, BAD_FAITH_ACTOR, DOMAIN_EXPERT,
-                    SCHEMA_CRITIC, OUTCOME_CRITIC],
+    "audit-grade": [
+        LITERALIST,
+        EDGE_CASE_HUNTER,
+        BAD_FAITH_ACTOR,
+        DOMAIN_EXPERT,
+        SCHEMA_CRITIC,
+        OUTCOME_CRITIC,
+    ],
 }
 
 
@@ -108,7 +114,11 @@ class RoundResult:
 
     @property
     def mean_score(self) -> float:
-        return round(sum(v.score for v in self.verdicts) / len(self.verdicts), 1) if self.verdicts else 0.0
+        return (
+            round(sum(v.score for v in self.verdicts) / len(self.verdicts), 1)
+            if self.verdicts
+            else 0.0
+        )
 
 
 # A gate decides whether to continue after each round.
@@ -200,8 +210,13 @@ def _initial_tree(backend: Backend, sources: Sources) -> ProposedTree:
     return backend.complete(PROPOSER_SYSTEM, user, ProposedTree)
 
 
-def _critique(backend: Backend, sources: Sources, persona: Persona, tree: ProposedTree,
-              closed: list[str] | None = None) -> PersonaVerdict:
+def _critique(
+    backend: Backend,
+    sources: Sources,
+    persona: Persona,
+    tree: ProposedTree,
+    closed: list[str] | None = None,
+) -> PersonaVerdict:
     if persona.name == SCHEMA_CRITIC.name:
         tests_clause = (
             "Leave `proposed_tests` EMPTY. Your job is the schema's EXPRESSIVENESS: judge "
@@ -255,7 +270,10 @@ def _critique(backend: Backend, sources: Sources, persona: Persona, tree: Propos
 
 
 def _critique_all(
-    backend: Backend, sources: Sources, personas: list[Persona], tree: ProposedTree,
+    backend: Backend,
+    sources: Sources,
+    personas: list[Persona],
+    tree: ProposedTree,
     closed: list[str] | None = None,
 ) -> list[PersonaVerdict]:
     """Run every persona's critique of the SAME tree concurrently (they're independent).
@@ -270,8 +288,12 @@ def _critique_all(
 
 
 def _arbitrate(
-    backend: Backend, sources: Sources, tree: ProposedTree, verdicts: list[PersonaVerdict],
-    incremental: bool = False, regressed_last: bool = False,
+    backend: Backend,
+    sources: Sources,
+    tree: ProposedTree,
+    verdicts: list[PersonaVerdict],
+    incremental: bool = False,
+    regressed_last: bool = False,
 ) -> ProposerArbitration:
     crit = "\n".join(
         f"  {v.persona} (score {v.score}, {v.verdict}): {v.detail}"
@@ -284,7 +306,8 @@ def _arbitrate(
         "does NOT affect — keep its condition and outcome verbatim. Only add, modify, or "
         "remove nodes the new constraints/sources (or a surviving critique) require. "
         "Minimize churn.\n\n"
-        if incremental else ""
+        if incremental
+        else ""
     )
     caution = (
         "NOTE: your previous revision REGRESSED (it lowered the validation pass-rate or "
@@ -292,7 +315,8 @@ def _arbitrate(
         "version so far. Revise it only if you can RAISE the pass-rate, or remove/merge a "
         "node WITHOUT dropping any case. Do not collapse or reorder branches when that "
         "loses coverage; if no safe improvement exists, return the tree unchanged.\n\n"
-        if regressed_last else ""
+        if regressed_last
+        else ""
     )
     user = (
         f"{incr}{caution}"
@@ -382,7 +406,7 @@ def distill(
     backend = backend or auto_backend(model)
     model_tag = f"{backend.model} via {backend.name}"
     incremental = seed_tree is not None
-    if incremental:
+    if seed_tree is not None:
         tree = seed_tree
         survival = dict(seed_survival or {_node_key(n.condition): 1 for n in tree.nodes})
     else:
@@ -426,8 +450,11 @@ def distill(
         # last round's rejected critiques) so a persona stops re-scoring a decided point down.
         closed = [n.gray_zone for n in tree.nodes if n.gray_zone]
         if last_arbitration:
-            closed += [f"{e.persona}: {e.rationale}" for e in last_arbitration.entries
-                       if e.decision == "rejected"]
+            closed += [
+                f"{e.persona}: {e.rationale}"
+                for e in last_arbitration.entries
+                if e.decision == "rejected"
+            ]
         try:
             verdicts = _critique_all(backend, sources, personas, tree, closed)
             for v in verdicts:
@@ -439,16 +466,25 @@ def distill(
                         # next proposer) can branch on it. It's on probation until it earns a
                         # branch (below); if it never does, it's reverted, not shipped.
                         name, frag = _parse_feature_spec(feat)
-                        if name and name not in sources.json_schema["properties"] \
-                                and name not in earned:
+                        if (
+                            name
+                            and name not in sources.json_schema["properties"]
+                            and name not in earned
+                        ):
                             sources.json_schema["properties"][name] = frag
                             watching.setdefault(name, (r, feat))
                     else:
                         schema_gaps.setdefault(feat, None)  # advisory-only (legacy behavior)
             if propose_examples:
                 _harvest_proposed(verdicts, r, proposed, existing_inputs)
-            arbitration = _arbitrate(backend, sources, tree, verdicts,
-                                     incremental=incremental, regressed_last=regressed_last)
+            arbitration = _arbitrate(
+                backend,
+                sources,
+                tree,
+                verdicts,
+                incremental=incremental,
+                regressed_last=regressed_last,
+            )
         except Exception as e:
             # A transient backend failure shouldn't throw away the rounds already
             # paid for. With nothing to salvage (round 1), re-raise; otherwise keep
@@ -483,19 +519,29 @@ def distill(
         agreement = _agreement(new_tree, sources, fn_name)
         prop_items = list(proposed.values())
         prop_passed = _score(new_tree, prop_items, sources.feature_names, fn_name)
-        result = RoundResult(r, max_rounds, verdicts, arbitration, new_tree, dict(survival),
-                             agreement, proposed_count=len(prop_items),
-                             proposed_passed=prop_passed,
-                             ratified_count=len(sources.examples))
+        result = RoundResult(
+            r,
+            max_rounds,
+            verdicts,
+            arbitration,
+            new_tree,
+            dict(survival),
+            agreement,
+            proposed_count=len(prop_items),
+            proposed_passed=prop_passed,
+            ratified_count=len(sources.examples),
+        )
         candidates.append((new_tree, arbitration, result.mean_score))
 
         # Hill-climb: adopt the attempt as the working tree ONLY if it is not worse than the
         # current one. A regressing round is discarded and the NEXT round re-attempts from
         # the best tree (with a caution to the proposer) — so one bad collapse can't poison
         # the rest of the run. The final export still picks the best candidate across rounds.
-        new_q = AdoptKey(ratified=agreement if agreement is not None else 1.0,
-                         proposed=prop_passed / len(prop_items) if prop_items else 0.0,
-                         parsimony=-len(new_tree.nodes))
+        new_q = AdoptKey(
+            ratified=agreement if agreement is not None else 1.0,
+            proposed=prop_passed / len(prop_items) if prop_items else 0.0,
+            parsimony=-len(new_tree.nodes),
+        )
         if new_q >= _quality(tree, sources, prop_items, fn_name):
             tree = new_tree
             regressed_last = False
@@ -503,14 +549,26 @@ def distill(
             regressed_last = True
 
         if checkpoint:  # persist the current best (working) tree — followable + crash-safe
-            checkpoint(_finalize(tree, last_arbitration, survival, sources, model_tag,
-                                 profile, provenance, fn_name))
+            checkpoint(
+                _finalize(
+                    tree,
+                    last_arbitration,
+                    survival,
+                    sources,
+                    model_tag,
+                    profile,
+                    provenance,
+                    fn_name,
+                )
+            )
 
         # Convergence: once no round beats the best for `stop_quiet` rounds, the loop has
         # plateaued — stop, whether the plateau is high (a good tree) or low (can't improve).
-        round_key = SelectKey(ratified=agreement if agreement is not None else 1.0,
-                              proposed=prop_passed / len(prop_items) if prop_items else 0.0,
-                              panel_mean=result.mean_score)
+        round_key = SelectKey(
+            ratified=agreement if agreement is not None else 1.0,
+            proposed=prop_passed / len(prop_items) if prop_items else 0.0,
+            panel_mean=result.mean_score,
+        )
         if round_key > stop_key:
             stop_key = round_key
             stale_rounds = 0
@@ -529,7 +587,9 @@ def distill(
     # (+ ratified), so a later round isn't judged on a smaller set than an earlier one.
     # `survival` is cumulative and keyed by condition, so it gives the right
     # rounds_survived for whichever tree wins.
-    best_tree, best_arbitration = _select_best(candidates, sources, list(proposed.values()), fn_name)
+    best_tree, best_arbitration = _select_best(
+        candidates, sources, list(proposed.values()), fn_name
+    )
     arb_for_final = best_arbitration if best_arbitration is not None else last_arbitration
 
     # Final earn-a-branch reconciliation against the WINNING tree: a co-evolution-added feature
@@ -545,7 +605,9 @@ def distill(
                 sources.json_schema["properties"].pop(name, None)
                 schema_gaps.setdefault(spec, None)
 
-    final = _finalize(best_tree, arb_for_final, survival, sources, model_tag, profile, provenance, fn_name)
+    final = _finalize(
+        best_tree, arb_for_final, survival, sources, model_tag, profile, provenance, fn_name
+    )
     if loop_error:
         final.loop_error = loop_error  # the run ended early on this failure, not on convergence
     if added_features:
@@ -565,8 +627,11 @@ def distill(
     if propose_examples:
         items = list(proposed.values())
         if not items:
-            items = [i for i in _propose_examples(backend, sources, final, fn_name)
-                     if _canon(i["input"]) not in existing_inputs]
+            items = [
+                i
+                for i in _propose_examples(backend, sources, final, fn_name)
+                if _canon(i["input"]) not in existing_inputs
+            ]
         final.proposed_examples = _stamp_proposed(final, items)
     return final
 
@@ -595,7 +660,9 @@ def _harvest_proposed(
             if key in existing_inputs or key in acc:
                 continue
             acc[key] = ValidationCase(
-                input=ex.input, expected=ex.expected, rationale=ex.rationale,
+                input=ex.input,
+                expected=ex.expected,
+                rationale=ex.rationale,
                 source=f"{v.persona} (round {rnd})",
             ).to_record()
 
@@ -639,8 +706,10 @@ def _propose_examples(
         "ratified. Do not duplicate any EXAMPLES already listed."
     )
     proposed = backend.complete(EXAMPLE_PROPOSER_SYSTEM, user, ProposedExampleSet)
-    return [{"input": ex.input, "expected": ex.expected, "rationale": ex.rationale}
-            for ex in proposed.examples]
+    return [
+        {"input": ex.input, "expected": ex.expected, "rationale": ex.rationale}
+        for ex in proposed.examples
+    ]
 
 
 class AdoptKey(NamedTuple):
@@ -672,7 +741,9 @@ def _as_decision_tree(tree: ProposedTree, features: list[str], fn_name: str) -> 
     only; provenance metadata is attached at finalize, not needed to score."""
     return DecisionTree(
         nodes=[DecisionNode(condition=n.condition, outcome=n.outcome) for n in tree.nodes],
-        default_outcome=tree.default_outcome, features=features, fn_name=fn_name,
+        default_outcome=tree.default_outcome,
+        features=features,
+        fn_name=fn_name,
     )
 
 
@@ -700,6 +771,7 @@ def _score(tree: ProposedTree, items: list[dict], features: list[str], fn_name: 
 def _assert_compiles(tree: DecisionTree) -> None:
     """Belt-and-suspenders: refuse to return a tree whose source won't import."""
     from .validate import fn_from_tree
+
     try:
         fn_from_tree(tree)
     except SyntaxError as e:
@@ -708,7 +780,9 @@ def _assert_compiles(tree: DecisionTree) -> None:
 
 def _select_best(
     candidates: list[tuple[ProposedTree, "ProposerArbitration | None", float]],
-    sources: Sources, prop_items: list[dict], fn_name: str,
+    sources: Sources,
+    prop_items: list[dict],
+    fn_name: str,
 ) -> tuple[ProposedTree, "ProposerArbitration | None"]:
     """Pick the candidate tree with the best (ratified rate, proposed rate, persona score).
 
@@ -722,7 +796,8 @@ def _select_best(
         key = SelectKey(
             ratified=rat if rat is not None else 1.0,
             proposed=_score(tree, prop_items, sources.feature_names, fn_name) / len(prop_items)
-            if prop_items else 0.0,
+            if prop_items
+            else 0.0,
             panel_mean=mean,
         )
         if key > best_key:
@@ -731,13 +806,19 @@ def _select_best(
     return best
 
 
-def _quality(tree: ProposedTree, sources: Sources, prop_items: list[dict], fn_name: str) -> AdoptKey:
+def _quality(
+    tree: ProposedTree, sources: Sources, prop_items: list[dict], fn_name: str
+) -> AdoptKey:
     """The working tree's AdoptKey (see AdoptKey for the tie-break rationale)."""
     rat = _agreement(tree, sources, fn_name)
-    prop_rate = (_score(tree, prop_items, sources.feature_names, fn_name) / len(prop_items)
-                 if prop_items else 0.0)
-    return AdoptKey(ratified=rat if rat is not None else 1.0, proposed=prop_rate,
-                    parsimony=-len(tree.nodes))
+    prop_rate = (
+        _score(tree, prop_items, sources.feature_names, fn_name) / len(prop_items)
+        if prop_items
+        else 0.0
+    )
+    return AdoptKey(
+        ratified=rat if rat is not None else 1.0, proposed=prop_rate, parsimony=-len(tree.nodes)
+    )
 
 
 def _agreement(tree: ProposedTree, sources: Sources, fn_name: str) -> float | None:

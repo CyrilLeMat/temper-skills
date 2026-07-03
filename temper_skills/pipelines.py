@@ -34,7 +34,10 @@ def load_schema(spec: str):
         raise ValueError("schema must be 'file.py:ClassName' or a path ending in .json")
     import importlib.util
     import sys
+
     s = importlib.util.spec_from_file_location("_temper_pinned_schema", path)
+    if s is None or s.loader is None:
+        raise ValueError(f"cannot load a Python module from {path!r}")
     mod = importlib.util.module_from_spec(s)
     sys.modules[s.name] = mod  # so Pydantic can resolve string annotations (Literal, etc.)
     s.loader.exec_module(mod)
@@ -56,8 +59,8 @@ class SuiteResult:
 class CompileResult:
     tree: DecisionTree
     tree_path: str
-    skill_path: str | None      # None when skill_style=None (e.g. decompose orchestrates)
-    suite: SuiteResult | None   # None when the loop proposed no cases
+    skill_path: str | None  # None when skill_style=None (e.g. decompose orchestrates)
+    suite: SuiteResult | None  # None when the loop proposed no cases
     weave_error: str | None = None  # woven render failed; template fallback was used
 
 
@@ -108,9 +111,16 @@ def compile_tree(
     """
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     tree = ingest_skill(
-        skill, schema=schema, profile=profile, backend=backend,
-        gate=gate, confirm=confirm, examples=examples,
-        fn_name=fn_name, propose_examples=propose_examples, checkpoint=checkpoint,
+        skill,
+        schema=schema,
+        profile=profile,
+        backend=backend,
+        gate=gate,
+        confirm=confirm,
+        examples=examples,
+        fn_name=fn_name,
+        propose_examples=propose_examples,
+        checkpoint=checkpoint,
     )
     tree_path = str(Path(out_dir) / f"{stem or fn_name or tree.fn_name}.py")
     tree.export(tree_path)
@@ -133,8 +143,9 @@ def compile_tree(
             md = render_tempered_skill(tree, module, original_skill_text=original)
         Path(skill_path).write_text(md)
 
-    return CompileResult(tree=tree, tree_path=tree_path, skill_path=skill_path,
-                         suite=suite, weave_error=weave_error)
+    return CompileResult(
+        tree=tree, tree_path=tree_path, skill_path=skill_path, suite=suite, weave_error=weave_error
+    )
 
 
 def tree_manifest(tree: DecisionTree, tree_path: str, skill_path: str | None) -> dict:

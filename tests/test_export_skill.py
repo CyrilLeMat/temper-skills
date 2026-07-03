@@ -22,8 +22,9 @@ def _tree():
 
 
 def test_delegates_to_the_tree():
-    md = render_tempered_skill(_tree(), "dog_food_checker",
-                               original_skill_text="You are a dog food safety assistant.")
+    md = render_tempered_skill(
+        _tree(), "dog_food_checker", original_skill_text="You are a dog food safety assistant."
+    )
     assert "decision is frozen" in md.lower()
     assert "from dog_food_checker import can_dog_eat" in md
     # both features listed for extraction
@@ -44,27 +45,36 @@ def test_generic_role_when_no_original():
 
 
 def test_no_gray_zone_section_when_none():
-    t = DecisionTree(nodes=[DecisionNode('x == 1', "a")], default_outcome="b",
-                     features=["x"], fn_name="decide")
+    t = DecisionTree(
+        nodes=[DecisionNode("x == 1", "a")], default_outcome="b", features=["x"], fn_name="decide"
+    )
     md = render_tempered_skill(t, "m")
     assert "Gray zones" not in md
 
 
 def test_woven_uses_the_backend():
     be = FakeBackend()
-    md = weave_tempered_skill(_tree(), "dog_food_checker",
-                              "You are a dog food safety assistant.", be)
+    md = weave_tempered_skill(
+        _tree(), "dog_food_checker", "You are a dog food safety assistant.", be
+    )
     assert be.calls["woven"] == 1
     assert "Woven skill" in md  # FakeBackend's canned markdown
 
 
 def test_main_writes_file(tmp_path):
     import json
+
     tj = tmp_path / "tree.json"
-    tj.write_text(json.dumps({
-        "fn_name": "can_dog_eat", "features": ["food_item"],
-        "default_outcome": "no", "nodes": [{"condition": 'food_item == "x"', "outcome": "no"}],
-    }))
+    tj.write_text(
+        json.dumps(
+            {
+                "fn_name": "can_dog_eat",
+                "features": ["food_item"],
+                "default_outcome": "no",
+                "nodes": [{"condition": 'food_item == "x"', "outcome": "no"}],
+            }
+        )
+    )
     out = tmp_path / "skill.tempered.md"
     assert main([str(tj), "dog_food_checker", str(out)]) == 0
     text = out.read_text()
@@ -92,12 +102,23 @@ def test_frontmatter_present_and_valid():
 
 def test_dir_mode_emits_spec_compliant_skill(tmp_path):
     import json
+
     tj = tmp_path / "tree.json"
-    tj.write_text(json.dumps({
-        "fn_name": "decide_walk", "features": ["weather"],
-        "default_outcome": "normal_walk",
-        "nodes": [{"condition": '(weather or "").lower() == "storm"', "outcome": "toilet_break_only"}],
-    }))
+    tj.write_text(
+        json.dumps(
+            {
+                "fn_name": "decide_walk",
+                "features": ["weather"],
+                "default_outcome": "normal_walk",
+                "nodes": [
+                    {
+                        "condition": '(weather or "").lower() == "storm"',
+                        "outcome": "toilet_break_only",
+                    }
+                ],
+            }
+        )
+    )
     # underscore in the requested dir name must be sanitized to a hyphenated skill name
     assert main([str(tj), "decide_walk", str(tmp_path / "dog_day")]) == 0
     skill_dir = tmp_path / "dog-day"

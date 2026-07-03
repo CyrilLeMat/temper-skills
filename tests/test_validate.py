@@ -33,8 +33,10 @@ def _tree():
 
 def test_all_agree():
     fn = fn_from_tree(_tree())
-    data = [{"input": {"food_item": "chocolate"}, "expected": "no — toxic"},
-            {"input": {"food_item": "carrot"}, "expected": "yes — safe"}]
+    data = [
+        {"input": {"food_item": "chocolate"}, "expected": "no — toxic"},
+        {"input": {"food_item": "carrot"}, "expected": "yes — safe"},
+    ]
     r = run_validation(fn, data, exact_match)
     assert r.total == 2 and r.agreements == 2 and r.agreement_rate == 1.0
     assert r.passed()
@@ -67,8 +69,10 @@ def test_crashing_branch_is_a_finding():
 
 def test_passed_threshold():
     fn = fn_from_tree(_tree())
-    data = [{"input": {"food_item": "chocolate"}, "expected": "no — toxic"},
-            {"input": {"food_item": "carrot"}, "expected": "WRONG"}]
+    data = [
+        {"input": {"food_item": "chocolate"}, "expected": "no — toxic"},
+        {"input": {"food_item": "carrot"}, "expected": "WRONG"},
+    ]
     r = run_validation(fn, data, exact_match)
     assert r.agreement_rate == 0.5
     assert not r.passed(1.0)
@@ -91,11 +95,15 @@ def test_fn_from_pyfile_ambiguous(tmp_path):
 def test_load_dataset_skips_unratified_proposed_cases(tmp_path):
     """The trust boundary: a machine-proposed label must not gate until ratified."""
     p = tmp_path / "set.json"
-    p.write_text(json.dumps([
-        {"input": {"x": 1}, "expected": "a"},                       # ratified (no status)
-        {"input": {"x": 2}, "expected": "b", "status": "ratified"},  # explicitly ratified
-        {"input": {"x": 3}, "expected": "c", "status": "proposed"},  # must be skipped
-    ]))
+    p.write_text(
+        json.dumps(
+            [
+                {"input": {"x": 1}, "expected": "a"},  # ratified (no status)
+                {"input": {"x": 2}, "expected": "b", "status": "ratified"},  # explicitly ratified
+                {"input": {"x": 3}, "expected": "c", "status": "proposed"},  # must be skipped
+            ]
+        )
+    )
     data = load_dataset(str(p))
     assert [e["input"] for e in data] == [{"x": 1}, {"x": 2}]
 
@@ -103,11 +111,15 @@ def test_load_dataset_skips_unratified_proposed_cases(tmp_path):
 def test_load_dataset_reads_jsonl_skill_assets(tmp_path):
     """The skill-dir assets/*.validation.jsonl format must feed the same gate."""
     p = tmp_path / "set.validation.jsonl"
-    p.write_text("\n".join([
-        json.dumps({"input": {"x": 1}, "expected": "a", "status": "ratified"}),
-        "",
-        json.dumps({"input": {"x": 2}, "expected": "b", "status": "proposed"}),
-    ]))
+    p.write_text(
+        "\n".join(
+            [
+                json.dumps({"input": {"x": 1}, "expected": "a", "status": "ratified"}),
+                "",
+                json.dumps({"input": {"x": 2}, "expected": "b", "status": "proposed"}),
+            ]
+        )
+    )
     data = load_dataset(str(p))
     assert [e["input"] for e in data] == [{"x": 1}]
 
@@ -119,10 +131,16 @@ def _canonical_skill(example: str, skill: str, fn: str):
     <skill>/assets/<fn>.validation.jsonl (status: ratified)."""
     base = REPO / "examples" / example / "output" / skill
     tree_fn = fn_from_pyfile(str(base / "scripts" / f"{fn}.py"))
-    rows = [json.loads(ln) for ln in (base / "assets" / f"{fn}.validation.jsonl")
-            .read_text().splitlines() if ln.strip()]
-    data = [{"input": r["input"], "expected": r["expected"]}
-            for r in rows if r.get("status") == "ratified"]
+    rows = [
+        json.loads(ln)
+        for ln in (base / "assets" / f"{fn}.validation.jsonl").read_text().splitlines()
+        if ln.strip()
+    ]
+    data = [
+        {"input": r["input"], "expected": r["expected"]}
+        for r in rows
+        if r.get("status") == "ratified"
+    ]
     assert data, f"no ratified cases in {example}"
     return tree_fn, data
 
@@ -160,12 +178,16 @@ def test_canonical_parking_tree_passes_its_validation_set():
 
 def test_fn_from_json_compiles_a_tree_dict(tmp_path):
     p = tmp_path / "tree.json"
-    p.write_text(json.dumps({
-        "fn_name": "route",
-        "features": ["x"],
-        "default_outcome": "low",
-        "nodes": [{"condition": "x is not None and x >= 10", "outcome": "high"}],
-    }))
+    p.write_text(
+        json.dumps(
+            {
+                "fn_name": "route",
+                "features": ["x"],
+                "default_outcome": "low",
+                "nodes": [{"condition": "x is not None and x >= 10", "outcome": "high"}],
+            }
+        )
+    )
     fn = fn_from_json(str(p))
     assert fn({"x": 12}) == "high" and fn({"x": 1}) == "low"
 

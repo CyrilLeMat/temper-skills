@@ -17,7 +17,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/ruff-action@v3   # lint only; format enforcement is deferred (see pyproject)
+      - uses: astral-sh/ruff-action@v3
+      - uses: astral-sh/ruff-action@v3
+        with:
+          args: "format --check"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Type check
+        run: |
+          pip install -e ".[dev]"
+          mypy
 
   test:
     runs-on: ubuntu-latest

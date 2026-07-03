@@ -3,7 +3,7 @@ agent's decision logic (§11.4, Option C hybrid)."""
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any, Callable, Literal, overload
 
 from pydantic import BaseModel, Field
 
@@ -20,7 +20,9 @@ class InferredFeature(BaseModel):
 
 
 class InferredSchema(BaseModel):
-    fn_name: str = Field(description="A snake_case name for the decision function, e.g. can_dog_eat.")
+    fn_name: str = Field(
+        description="A snake_case name for the decision function, e.g. can_dog_eat."
+    )
     features: list[InferredFeature]
     constraints: list[str] = Field(
         default_factory=list,
@@ -57,6 +59,43 @@ def _to_json_schema(inferred: InferredSchema) -> dict:
         for f in inferred.features
     }
     return {"type": "object", "properties": props, "additionalProperties": True}
+
+
+# The flag flips the return type: propose_schema_only=True stops after inference and
+# hands back the drafted contract; otherwise the loop runs and a tree comes back.
+@overload
+def ingest_skill(
+    path: str,
+    schema: Any | None = ...,
+    profile: str = ...,
+    model: str = ...,
+    backend: Backend | None = ...,
+    gate=...,
+    confirm: Callable[[InferredSchema], bool] | None = ...,
+    fn_name: str | None = ...,
+    examples: list[dict] | None = ...,
+    propose_examples: bool = ...,
+    *,
+    propose_schema_only: Literal[True],
+    checkpoint=...,
+) -> InferredSchema: ...
+
+
+@overload
+def ingest_skill(
+    path: str,
+    schema: Any | None = ...,
+    profile: str = ...,
+    model: str = ...,
+    backend: Backend | None = ...,
+    gate=...,
+    confirm: Callable[[InferredSchema], bool] | None = ...,
+    fn_name: str | None = ...,
+    examples: list[dict] | None = ...,
+    propose_examples: bool = ...,
+    propose_schema_only: Literal[False] = ...,
+    checkpoint=...,
+) -> DecisionTree: ...
 
 
 def ingest_skill(
@@ -106,9 +145,15 @@ def ingest_skill(
     elif isinstance(schema, type) and issubclass(schema, BaseModel):
         resolved_fn = fn_name or "decide"
 
-    sources = Sources(schema=schema, constraints=constraints, skill_text=skill_text,
-                      examples=examples or [])
+    sources = Sources(
+        schema=schema, constraints=constraints, skill_text=skill_text, examples=examples or []
+    )
     return distill(
-        sources, profile=profile, backend=backend, gate=gate, fn_name=resolved_fn,
-        propose_examples=propose_examples, checkpoint=checkpoint,
+        sources,
+        profile=profile,
+        backend=backend,
+        gate=gate,
+        fn_name=resolved_fn,
+        propose_examples=propose_examples,
+        checkpoint=checkpoint,
     )

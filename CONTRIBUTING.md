@@ -8,7 +8,8 @@ Thanks for looking! Issues and PRs welcome — small, focused PRs merge fastest.
 pip install -e ".[dev]"
 git config core.hooksPath .githooks   # once per clone: pre-commit runs the suite
 pytest -q                             # full suite, no network
-ruff check temper_skills tests        # lint (CI-enforced)
+ruff check . && ruff format --check . # lint + formatting (CI-enforced)
+mypy                                  # type check (CI-enforced; scope: temper_skills/)
 ```
 
 ## Ground rules

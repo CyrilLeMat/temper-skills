@@ -13,13 +13,28 @@ def _compile(src: str):
 
 def _tree(**kw):
     nodes = [
-        DecisionNode('priority == "high"', "escalate", rounds_survived=14, sources=["constraints#1"],
-                     critic_note="kept: the only branch the source mandates unconditionally"),
-        DecisionNode('security_score > 0.8', "secure", rounds_survived=8, sources=["examples#3"],
-                     gray_zone="0.7–0.8 ambiguous"),
+        DecisionNode(
+            'priority == "high"',
+            "escalate",
+            rounds_survived=14,
+            sources=["constraints#1"],
+            critic_note="kept: the only branch the source mandates unconditionally",
+        ),
+        DecisionNode(
+            "security_score > 0.8",
+            "secure",
+            rounds_survived=8,
+            sources=["examples#3"],
+            gray_zone="0.7–0.8 ambiguous",
+        ),
     ]
-    return DecisionTree(nodes=nodes, default_outcome="route_default",
-                        features=["priority", "security_score"], fn_name="route", **kw)
+    return DecisionTree(
+        nodes=nodes,
+        default_outcome="route_default",
+        features=["priority", "security_score"],
+        fn_name="route",
+        **kw,
+    )
 
 
 def test_generated_code_compiles_and_runs():

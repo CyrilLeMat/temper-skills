@@ -20,16 +20,27 @@ from temper_skills.audit_report import (
 
 def _report(**over) -> FitnessReport:
     base = dict(
-        fn_name="route_ticket", verdict="temper", decisiveness=9, combinatorics=8,
-        stakes=8, distinct_decisions=1, schema_closure=1.0, open_features=[],
-        n_features=4, rationale={}, recommended_action="temper",
-        action_hint="run `temper-skills ingest`", reasons=[], caveats=[],
+        fn_name="route_ticket",
+        verdict="temper",
+        decisiveness=9,
+        combinatorics=8,
+        stakes=8,
+        distinct_decisions=1,
+        schema_closure=1.0,
+        open_features=[],
+        n_features=4,
+        rationale={},
+        recommended_action="temper",
+        action_hint="run `temper-skills ingest`",
+        reasons=[],
+        caveats=[],
     )
     base.update(over)
     return FitnessReport(**base)
 
 
 # ---- findings_of ----
+
 
 def test_clean_temper_yields_single_good_finding():
     fs = findings_of(_report())
@@ -43,18 +54,23 @@ def test_flow_finding_points_at_decompose():
 
 
 def test_generation_finding_points_at_prose():
-    fs = findings_of(_report(verdict="skip", decisiveness=2,
-                             recommended_action="delegate_prose"))
+    fs = findings_of(_report(verdict="skip", decisiveness=2, recommended_action="delegate_prose"))
     assert any("open-ended generation" in f.text and "prose" in f.fix for f in fs)
 
 
 def test_open_features_fix_tracks_the_action():
-    ext = findings_of(_report(verdict="caveats", combinatorics=5,
-                              open_features=["food_item"],
-                              recommended_action="externalize_data"))
+    ext = findings_of(
+        _report(
+            verdict="caveats",
+            combinatorics=5,
+            open_features=["food_item"],
+            recommended_action="externalize_data",
+        )
+    )
     assert any("`food_item`" in f.text and "data file" in f.fix for f in ext)
-    norm = findings_of(_report(verdict="caveats", open_features=["address"],
-                               recommended_action="build_normalizer"))
+    norm = findings_of(
+        _report(verdict="caveats", open_features=["address"], recommended_action="build_normalizer")
+    )
     assert any("`address`" in f.text and "upstream" in f.fix for f in norm)
 
 
@@ -68,14 +84,18 @@ def test_lookup_shape_single_feature_and_low_stakes_findings():
 
 def test_no_jargon_in_findings():
     # The rendering layer must not leak the rubric's internal vocabulary.
-    for rep in (_report(), _report(verdict="skip", decisiveness=2),
-                _report(verdict="caveats", open_features=["x"], schema_closure=0.5)):
+    for rep in (
+        _report(),
+        _report(verdict="skip", decisiveness=2),
+        _report(verdict="caveats", open_features=["x"], schema_closure=0.5),
+    ):
         for f in findings_of(rep):
             for word in ("H4", "closure", "caveat"):
                 assert word not in f.text and word not in f.fix
 
 
 # ---- headline_of ----
+
 
 def test_headlines_are_author_facing():
     assert headline_of(_report())[0] == "FREEZE-WORTHY"
@@ -87,10 +107,14 @@ def test_headlines_are_author_facing():
 
 # ---- render_audit_md ----
 
+
 def test_audit_md_carries_headline_findings_and_scores():
-    rep = _report(verdict="caveats", open_features=["food_item"],
-                  recommended_action="externalize_data",
-                  rationale={"combinatorics": "mostly a flat toxin lookup"})
+    rep = _report(
+        verdict="caveats",
+        open_features=["food_item"],
+        recommended_action="externalize_data",
+        rationale={"combinatorics": "mostly a flat toxin lookup"},
+    )
     md = render_audit_md(rep, "skills/dog_food/skill.md")
     assert "# Skill audit — `skill.md`" in md
     assert "FREEZE-WORTHY, WITH FINDINGS" in md
@@ -101,6 +125,7 @@ def test_audit_md_carries_headline_findings_and_scores():
 
 
 # ---- discovery ----
+
 
 def test_discover_prefers_skill_md_convention(tmp_path):
     (tmp_path / "a").mkdir()
@@ -124,6 +149,7 @@ def test_discover_empty(tmp_path):
 
 # ---- ranking + library markdown ----
 
+
 def test_rank_actionable_first_then_impact_errors_last(tmp_path):
     hot = LibraryRow(Path("hot.md"), report=_report(decisiveness=9, stakes=9))
     mild = LibraryRow(Path("mild.md"), report=_report(decisiveness=5, stakes=5))
@@ -134,8 +160,10 @@ def test_rank_actionable_first_then_impact_errors_last(tmp_path):
 
 
 def test_library_md_is_a_ranked_table_with_errors_inline():
-    rows = [LibraryRow(Path("lib/a/SKILL.md"), report=_report()),
-            LibraryRow(Path("lib/b.md"), error="no backend")]
+    rows = [
+        LibraryRow(Path("lib/a/SKILL.md"), report=_report()),
+        LibraryRow(Path("lib/b.md"), error="no backend"),
+    ]
     md = render_library_md(rows, "lib")
     assert "| skill | verdict |" in md
     assert "`a/SKILL.md`" in md and "FREEZE-WORTHY" in md

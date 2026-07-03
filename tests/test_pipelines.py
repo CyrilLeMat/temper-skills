@@ -29,7 +29,7 @@ def test_compile_tree_emits_tree_suite_and_tempered_skill(tmp_path, skill):
 
     assert res.suite is not None
     assert res.suite.cases == len(res.suite.enriched) > 0
-    assert open(res.suite.dataset_path).read().strip()          # jsonl written
+    assert open(res.suite.dataset_path).read().strip()  # jsonl written
     assert "def test_route_ticket_behavior" in open(res.suite.test_path).read()
 
     assert res.skill_path.endswith("route_ticket.tempered.md")
@@ -38,24 +38,25 @@ def test_compile_tree_emits_tree_suite_and_tempered_skill(tmp_path, skill):
 
 
 def test_compile_tree_stem_overrides_filenames(tmp_path, skill):
-    res = compile_tree(str(skill), FakeBackend(), out_dir=str(tmp_path), stem="custom",
-                       profile="quick")
+    res = compile_tree(
+        str(skill), FakeBackend(), out_dir=str(tmp_path), stem="custom", profile="quick"
+    )
     assert res.tree_path.endswith("custom.py")
     assert res.skill_path.endswith("custom.tempered.md")
     assert res.suite.test_path.endswith("test_custom.py")
 
 
 def test_compile_tree_skill_style_none_skips_the_tempered_skill(tmp_path, skill):
-    res = compile_tree(str(skill), FakeBackend(), out_dir=str(tmp_path),
-                       profile="quick", skill_style=None)
+    res = compile_tree(
+        str(skill), FakeBackend(), out_dir=str(tmp_path), profile="quick", skill_style=None
+    )
     assert res.skill_path is None
     assert not list(tmp_path.glob("*.tempered.md"))
 
 
 def test_compile_tree_woven_success(tmp_path, skill):
     be = FakeBackend()
-    res = compile_tree(str(skill), be, out_dir=str(tmp_path), profile="quick",
-                       skill_style="woven")
+    res = compile_tree(str(skill), be, out_dir=str(tmp_path), profile="quick", skill_style="woven")
     assert res.weave_error is None
     assert be.calls["woven"] == 1
     assert "Woven skill" in open(res.skill_path).read()
@@ -65,12 +66,14 @@ def test_compile_tree_woven_failure_falls_back_to_template(tmp_path, skill):
     class WeaveCrash(FakeBackend):
         def complete(self, system, user, schema):
             from temper_skills.export_skill import WovenSkill
+
             if schema is WovenSkill:
                 raise RuntimeError("model refused")
             return super().complete(system, user, schema)
 
-    res = compile_tree(str(skill), WeaveCrash(), out_dir=str(tmp_path), profile="quick",
-                       skill_style="woven")
+    res = compile_tree(
+        str(skill), WeaveCrash(), out_dir=str(tmp_path), profile="quick", skill_style="woven"
+    )
     assert "model refused" in res.weave_error
     assert res.skill_path and "route_ticket" in open(res.skill_path).read()  # template fallback
 
@@ -85,15 +88,22 @@ def test_compile_tree_checkpoint_and_gate_are_honored(tmp_path, skill):
         seen["rounds"] += 1
         return "continue"
 
-    compile_tree(str(skill), FakeBackend(), out_dir=str(tmp_path), profile="quick",
-                 gate=gate, checkpoint=checkpoint)
+    compile_tree(
+        str(skill),
+        FakeBackend(),
+        out_dir=str(tmp_path),
+        profile="quick",
+        gate=gate,
+        checkpoint=checkpoint,
+    )
     assert seen["rounds"] > 0
     assert seen["checkpoints"] > 0
 
 
 def test_write_validation_artifacts_none_without_proposals(tmp_path, skill):
-    res = compile_tree(str(skill), FakeBackend(), out_dir=str(tmp_path), profile="quick",
-                       propose_examples=False)
+    res = compile_tree(
+        str(skill), FakeBackend(), out_dir=str(tmp_path), profile="quick", propose_examples=False
+    )
     assert res.suite is None
     # and calling the writer directly on such a tree is a clean no-op
     assert write_validation_artifacts(res.tree, res.tree_path) is None

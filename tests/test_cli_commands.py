@@ -23,14 +23,19 @@ class AuditableBackend(FakeBackend):
 
     def complete(self, system, user, schema):
         from temper_skills.ingest import InferredFeature, InferredSchema
+
         if schema is JudgeScores:
             return JudgeScores(decisiveness=9, combinatorics=8, stakes=8)
         if schema is InferredSchema:
-            return InferredSchema(fn_name="route_ticket", features=[
-                InferredFeature(name="priority", type="string",
-                                description='one of "low", "high"'),
-                InferredFeature(name="security_score", type="number"),
-            ])
+            return InferredSchema(
+                fn_name="route_ticket",
+                features=[
+                    InferredFeature(
+                        name="priority", type="string", description='one of "low", "high"'
+                    ),
+                    InferredFeature(name="security_score", type="number"),
+                ],
+            )
         return super().complete(system, user, schema)
 
 
@@ -43,8 +48,10 @@ def _skill(tmp_path) -> Path:
 def test_ingest_json_emits_manifest_and_artifacts(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "get_backend", lambda n, m: AuditableBackend())
     out = tmp_path / "out" / "route.py"
-    res = runner.invoke(cli.app, ["ingest", str(_skill(tmp_path)), "--json",
-                                  "--profile", "quick", "--out", str(out)])
+    res = runner.invoke(
+        cli.app,
+        ["ingest", str(_skill(tmp_path)), "--json", "--profile", "quick", "--out", str(out)],
+    )
     assert res.exit_code == 0, res.output
     m = json.loads(res.stdout)  # panels went to stderr; stdout is pure manifest
     assert m["fn_name"] == "route_ticket"
@@ -57,8 +64,9 @@ def test_ingest_json_emits_manifest_and_artifacts(tmp_path, monkeypatch):
 def test_guide_json_compiles_on_a_temper_verdict(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "get_backend", lambda n, m: AuditableBackend())
     out_dir = tmp_path / "out"
-    res = runner.invoke(cli.app, ["guide", str(_skill(tmp_path)),
-                                  "--json", "--out-dir", str(out_dir)])
+    res = runner.invoke(
+        cli.app, ["guide", str(_skill(tmp_path)), "--json", "--out-dir", str(out_dir)]
+    )
     assert res.exit_code == 0, res.output
     m = json.loads(res.stdout)
     assert m["status"] == "compiled"
@@ -76,8 +84,9 @@ def test_guide_json_relays_non_auto_actions(tmp_path, monkeypatch):
             return super().complete(system, user, schema)
 
     monkeypatch.setattr(cli, "get_backend", lambda n, m: ProseBackend())
-    res = runner.invoke(cli.app, ["guide", str(_skill(tmp_path)),
-                                  "--json", "--out-dir", str(tmp_path / "o")])
+    res = runner.invoke(
+        cli.app, ["guide", str(_skill(tmp_path)), "--json", "--out-dir", str(tmp_path / "o")]
+    )
     assert res.exit_code == 0
     m = json.loads(res.stdout)
     assert m["status"] == "action_not_auto_run"
@@ -87,8 +96,7 @@ def test_guide_json_relays_non_auto_actions(tmp_path, monkeypatch):
 def test_ingest_propose_schema_stops_and_emits_manifest(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "get_backend", lambda n, m: AuditableBackend())
     monkeypatch.chdir(tmp_path)  # schema.proposed.py is written to the cwd
-    res = runner.invoke(cli.app, ["ingest", str(_skill(tmp_path)),
-                                  "--propose-schema", "--json"])
+    res = runner.invoke(cli.app, ["ingest", str(_skill(tmp_path)), "--propose-schema", "--json"])
     assert res.exit_code == 0
     m = json.loads(res.stdout)
     assert Path(m["proposed_schema_path"]).exists()
@@ -104,6 +112,15 @@ def test_ingest_require_fit_exits_3_on_skip(tmp_path, monkeypatch):
             return super().complete(system, user, schema)
 
     monkeypatch.setattr(cli, "get_backend", lambda n, m: SkipBackend())
-    res = runner.invoke(cli.app, ["ingest", str(_skill(tmp_path)), "--require-fit",
-                                  "--json", "--out", str(tmp_path / "t.py")])
+    res = runner.invoke(
+        cli.app,
+        [
+            "ingest",
+            str(_skill(tmp_path)),
+            "--require-fit",
+            "--json",
+            "--out",
+            str(tmp_path / "t.py"),
+        ],
+    )
     assert res.exit_code == 3

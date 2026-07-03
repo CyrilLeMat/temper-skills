@@ -31,8 +31,7 @@ def test_first_call_runs_alone_then_the_rest_fan_out(monkeypatch):
         return "ok"
 
     be = _backend(monkeypatch, fake)
-    threads = [threading.Thread(target=lambda: be.complete("s", "u", None))
-               for _ in range(6)]
+    threads = [threading.Thread(target=lambda: be.complete("s", "u", None)) for _ in range(6)]
     for t in threads:
         t.start()
     for t in threads:

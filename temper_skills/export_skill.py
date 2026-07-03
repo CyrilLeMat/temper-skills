@@ -32,8 +32,14 @@ from .skill_render import (  # re-exported for the library/CLI (all pydantic-fre
 from .tree import DecisionTree
 
 __all__ = [
-    "arrange_skill_dir", "render_tempered_skill", "render_orchestrator_skill",
-    "weave_tempered_skill", "WovenSkill", "skill_name", "module_call", "main",
+    "arrange_skill_dir",
+    "render_tempered_skill",
+    "render_orchestrator_skill",
+    "weave_tempered_skill",
+    "WovenSkill",
+    "skill_name",
+    "module_call",
+    "main",
 ]
 
 
@@ -79,7 +85,11 @@ def weave_tempered_skill(
         f"- Instruct the agent to (1) extract the structured features {feats} from the request, "
         f"(2) call `from {module} import {fn}` then `verdict = {module_call(module, fn, feats)}`, "
         f"(3) relay the verdict and NEVER override or re-derive it; pass a missing feature as None.\n"
-        + ("- Surface these gray zones as caveats when relevant: " + "; ".join(gray) + "\n" if gray else "")
+        + (
+            "- Surface these gray zones as caveats when relevant: " + "; ".join(gray) + "\n"
+            if gray
+            else ""
+        )
         + "- Do NOT invent new rules, foods, categories, or thresholds — only re-route to the tree.\n"
         "Return the COMPLETE skill.md as markdown, ready to save, with no preamble."
     )
@@ -89,12 +99,14 @@ def weave_tempered_skill(
 def main(argv: list[str] | None = None) -> int:
     argv = argv if argv is not None else sys.argv[1:]
     if len(argv) < 2:
-        print("usage: python -m temper_skills.export_skill <tree.json> <module> "
-              "[out.md | skill-dir/] [original_skill.md]\n"
-              "  out.md      → single tempered skill file (with frontmatter)\n"
-              "  skill-dir/  → spec-compliant Agent Skill: <dir>/SKILL.md + scripts/<module>.py "
-              "+ assets/ (schema + validation dataset when the tree carries proposals)",
-              file=sys.stderr)
+        print(
+            "usage: python -m temper_skills.export_skill <tree.json> <module> "
+            "[out.md | skill-dir/] [original_skill.md]\n"
+            "  out.md      → single tempered skill file (with frontmatter)\n"
+            "  skill-dir/  → spec-compliant Agent Skill: <dir>/SKILL.md + scripts/<module>.py "
+            "+ assets/ (schema + validation dataset when the tree carries proposals)",
+            file=sys.stderr,
+        )
         return 2
     tree_path, module = argv[0], argv[1]
     out = argv[2] if len(argv) > 2 else "skill.tempered.md"
@@ -117,9 +129,14 @@ def main(argv: list[str] | None = None) -> int:
     requested = out_p.parent if out_p.name == "SKILL.md" else out_p
     name = skill_name(requested.name)
     skill_dir = requested.parent / name
-    arrange_skill_dir(str(skill_dir), name, [{"tree": tree, "module": module}],
-                      original_skill_text=original)
-    note = "" if requested.name == name else f" (renamed from '{requested.name}' to a valid skill name)"
+    arrange_skill_dir(
+        str(skill_dir), name, [{"tree": tree, "module": module}], original_skill_text=original
+    )
+    note = (
+        ""
+        if requested.name == name
+        else f" (renamed from '{requested.name}' to a valid skill name)"
+    )
     print(f"wrote {skill_dir}/ (SKILL.md + scripts/{module}.py)  · name: {name}{note}")
     return 0
 
