@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "temper-skills"
-version = "0.0.2"
+version = "0.0.3"
 description = "Adversarial reviewers write a test suite for your agent skill's decision logic — and freeze that logic into deterministic Python that must keep passing."
 readme = "README.md"
 requires-python = ">=3.10"
