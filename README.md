@@ -6,30 +6,30 @@
 |---------------------------------------- | -------: | -------: | ------: | --------: |
 | temper\_skills/\_\_init\_\_.py          |       10 |        0 |    100% |           |
 | temper\_skills/audit.py                 |       86 |        0 |    100% |           |
-| temper\_skills/audit\_report.py         |       98 |        2 |     98% |   189-190 |
+| temper\_skills/audit\_report.py         |       98 |        2 |     98% |   216-217 |
 | temper\_skills/backends/\_\_init\_\_.py |       25 |        1 |     96% |        17 |
 | temper\_skills/backends/agent\_cli.py   |       95 |        0 |    100% |           |
 | temper\_skills/backends/api.py          |       50 |        0 |    100% |           |
 | temper\_skills/backends/base.py         |       17 |        0 |    100% |           |
-| temper\_skills/cli.py                   |      471 |      108 |     77% |61, 69, 82-86, 88-89, 108-112, 167-169, 177, 181-183, 210-211, 227-229, 242, 282-285, 294-297, 306-310, 317, 326-334, 347-349, 394-423, 480-482, 496, 499-512, 545-546, 577-578, 651, 663-666, 670-672, 740-742, 767-769, 776-778, 795-796, 810-812, 834-840, 844 |
+| temper\_skills/cli.py                   |      472 |      108 |     77% |65, 73, 86-90, 92-93, 114-120, 188-190, 201, 207-211, 241-242, 272-274, 287, 334-339, 348-353, 362-368, 375, 386-396, 414-416, 484-521, 588-590, 605, 608-636, 684-685, 717-718, 809, 830-839, 845-847, 962-964, 1003-1005, 1012-1020, 1037-1038, 1061-1063, 1088-1094, 1098 |
 | temper\_skills/decompose.py             |       30 |        0 |    100% |           |
-| temper\_skills/distill.py               |      326 |       10 |     97% |80, 241, 267, 593, 693-694, 705-706, 770, 782 |
+| temper\_skills/distill.py               |      326 |       10 |     97% |86, 256, 285, 658, 764-765, 777-778, 851, 863 |
 | temper\_skills/export\_schema.py        |       31 |        0 |    100% |           |
-| temper\_skills/export\_skill.py         |       48 |        3 |     94% |92-98, 128 |
-| temper\_skills/export\_tree.py          |      118 |        2 |     98% |  152, 292 |
+| temper\_skills/export\_skill.py         |       48 |        3 |     94% |102-110, 145 |
+| temper\_skills/export\_tree.py          |      118 |        2 |     98% |  159, 309 |
 | temper\_skills/incremental.py           |       53 |        0 |    100% |           |
 | temper\_skills/ingest.py                |       38 |        0 |    100% |           |
-| temper\_skills/pipelines.py             |       72 |        0 |    100% |           |
+| temper\_skills/pipelines.py             |       74 |        1 |     99% |        40 |
 | temper\_skills/schemas.py               |       34 |        0 |    100% |           |
-| temper\_skills/skill\_docs.py           |       55 |        5 |     91% |128-130, 135-136 |
-| temper\_skills/skill\_render.py         |      142 |        7 |     95% |193, 258, 292, 299-302, 309, 319 |
+| temper\_skills/skill\_docs.py           |       55 |        5 |     91% |129-131, 136-137 |
+| temper\_skills/skill\_render.py         |      142 |        7 |     95% |202, 275, 323, 330-336, 343, 358 |
 | temper\_skills/sources.py               |       33 |        0 |    100% |           |
-| temper\_skills/tree.py                  |       60 |        0 |    100% |           |
+| temper\_skills/tree.py                  |       61 |        0 |    100% |           |
 | temper\_skills/update\_validation.py    |       54 |        0 |    100% |           |
 | temper\_skills/validate.py              |       65 |        0 |    100% |           |
-| temper\_skills/validation\_case.py      |       38 |        1 |     97% |        77 |
+| temper\_skills/validation\_case.py      |       38 |        1 |     97% |        76 |
 | temper\_skills/vendor\_scripts.py       |       28 |        0 |    100% |           |
-| **TOTAL**                               | **2077** |  **139** | **93%** |           |
+| **TOTAL**                               | **2081** |  **140** | **93%** |           |
 
 
 ## Setup coverage badge
