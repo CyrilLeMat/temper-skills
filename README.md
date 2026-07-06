@@ -27,6 +27,8 @@ uvx temper-skills audit path/to/skill.md    # one skill: findings + a recommende
 uvx temper-skills audit .claude/skills/     # your whole library, ranked (--report audit.md to share)
 ```
 
+![A live audit of the flagship example — real run, unedited](docs/assets/audit-demo.gif)
+
 No config. Any one backend works — an `ANTHROPIC_API_KEY` or a logged-in `claude`/`opencode`
 CLI — and it tells you exactly what to do if none is found. Inside **Claude Code** there's
 nothing to install: [`/temper path/to/skill.md`](#two-ways-to-run-it) runs on your
@@ -168,6 +170,18 @@ tree.export("assess_ankle.py")
   *you* own, upstream of the guarantee. [→ scope](docs/reference.md#out-of-scope-normalization)
 
 ## Where this fits
+
+**Not another skill eval harness — the step after one.** Eval harnesses like
+[skillgrade](https://github.com/mgechev/skillgrade) and
+[agent-skills-eval](https://github.com/darkrishabh/agent-skills-eval) measure the *model
+wielding the skill*: run the task N times with graders, or A/B the same prompts with and
+without the skill loaded. That's the right tool for prose, generation, and tool-flow
+quality — and it's measurement, not change: after the eval, every production call still
+re-derives the skill's decisions from prose, so the number you measured can drift with the
+next model bump or prompt tweak. Temper-Skills takes the *decision* subset of the skill out
+of that loop entirely — into Python that can't drift and ratified cases that gate it in CI.
+Use both: a harness for "does the model use this skill well?", temper for the
+classify/route/escalate calls that shouldn't be re-decided on every call.
 
 **Real sweep:** [docs/audits/anthropic-skills-2026-07-02.md](docs/audits/anthropic-skills-2026-07-02.md)
 audits Anthropic's 17 official skills — none is a clean freeze candidate (the audit says no
