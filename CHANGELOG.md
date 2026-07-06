@@ -11,6 +11,20 @@ versions follow [SemVer](https://semver.org/) (pre-1.0: minor bumps may break).
   so its return type follows `propose_schema_only`, and `loop_error` became a
   declared `DecisionTree` field.
 
+### Fixed
+- Audit verdicts no longer flip across identical runs: `ApiBackend` pins
+  `temperature=0` (constructor knob to override). The determinism exposed two
+  judge biases, both fixed by tightening the prompts: `distinct_decisions` now
+  counts OUTPUTS, not rules (a pile of overrides selecting one route is ONE
+  decision — ticket_routing/parking/license_compat no longer misread as
+  DECOMPOSE), and the schema proposer must spell closed vocabularies as
+  `one of "a", "b", "c"` so schema closure stops depending on wording luck.
+  All six README example labels re-verified live (2× each, Claude on Vertex).
+  The agent-CLI path has no sampling knob — noted in `agent_cli.py`.
+- A `vertex_ai/*` model without the `[vertex]` extra now fails fast at backend
+  construction with install guidance, instead of surfacing four retries later
+  as a raw `InstructorRetryException` traceback.
+
 ## [0.0.3] — 2026-07-03
 
 ### Fixed

@@ -34,10 +34,44 @@ def _route(model: str) -> str:
     return model
 
 
+def _module_exists(name: str) -> bool:
+    import importlib.util
+
+    try:
+        return importlib.util.find_spec(name) is not None
+    except ModuleNotFoundError:  # parent package absent (e.g. no `google` at all)
+        return False
+
+
+def _check_vertex_extra(route: str) -> None:
+    """Fail fast with install guidance — without this, a missing Vertex dependency
+    surfaces four retries later as a raw InstructorRetryException traceback."""
+    if not route.startswith("vertex_ai/"):
+        return
+    missing = [m for m in ("google.auth", "vertexai") if not _module_exists(m)]
+    if missing:
+        raise RuntimeError(
+            f"model {route!r} needs the Vertex extra (missing: {', '.join(missing)}).\n\n"
+            "  pip install 'temper-skills[vertex]'\n\n"
+            "then authenticate with gcloud ADC (gcloud auth application-default login) "
+            "and set VERTEXAI_PROJECT / VERTEXAI_LOCATION."
+        )
+
+
 class ApiBackend(Backend):
     name = "api"
 
-    def __init__(self, model: str = "claude-sonnet-4-6", max_tokens: int = 8000):
+    # temperature is pinned to 0 by default: audit verdicts are meant to be as
+    # reproducible as the rubric they feed (default sampling flipped ankle_sprain
+    # between TEMPER and DECOMPOSE across identical runs). The loop's diversity
+    # comes from distinct persona prompts and the evolving tree/case state, not
+    # from sampling noise — raise this only if the loop measurably stalls.
+    def __init__(
+        self,
+        model: str = "claude-sonnet-4-6",
+        max_tokens: int = 8000,
+        temperature: float = 0.0,
+    ):
         super().__init__(model)
         import instructor
         import litellm
@@ -48,7 +82,9 @@ class ApiBackend(Backend):
         self._litellm = litellm
         self._client = instructor.from_litellm(litellm.completion)
         self._route = _route(model)
+        _check_vertex_extra(self._route)
         self.max_tokens = max_tokens
+        self.temperature = temperature
         self.cost = 0.0
         self._lock = threading.Lock()  # personas run concurrently — guard the counters
         self._warm_lock = threading.Lock()
@@ -72,6 +108,7 @@ class ApiBackend(Backend):
         obj, completion = self._client.chat.completions.create_with_completion(
             model=self._route,
             max_tokens=self.max_tokens,
+            temperature=self.temperature,
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
