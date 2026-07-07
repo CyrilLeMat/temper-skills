@@ -18,7 +18,8 @@ implementation** — readable Python you can diff in a PR and pin in CI, with **
 at inference**.
 
 Does the review actually catch anything? Fed a first-aid skill giving outdated **RICE**
-advice, the panel **corrected its own source** — see [Step 3](#step-3--temper-freeze-one-decision-into-tests--a-tree).
+advice, an audit-grade run **corrected its own source** — and the ratified suite pins that
+correction so no later run can regress it — see [Step 3](#step-3--temper-freeze-one-decision-into-tests--a-tree).
 
 ## Quickstart
 
@@ -82,9 +83,10 @@ proposer drafts the tree, personas attack it, an independent arbiter rules on ea
 and converges when no round improves on the best.
 
 The flagship example, [`examples/ankle_sprain/`](examples/ankle_sprain/): the source skill
-advises the **outdated RICE protocol**. The panel — drawing on medical literature the prompt
-never cited — **corrects its own source** and layers in the Ottawa fracture rules the prompt
-never mentioned *(educational example, not clinical advice)*:
+advises the **outdated RICE protocol**. In the audit-grade run that produced these artifacts,
+the panel — drawing on medical literature the prompt never cited — **corrected its own
+source** and layered in the Ottawa fracture rules the prompt never mentioned *(educational
+example, not clinical advice)*:
 
 ```
 ✓ 16-case test suite → test_assess_ankle_ratified.py  ·  16/16 ratified cases pass
@@ -111,7 +113,11 @@ def assess_ankle(case: dict) -> str:
 
 The correction isn't prose in a chat window — it's a reviewed, versioned diff: the tree
 disagrees with its own source, says why in a provenance comment, and 16 ratified cases pin
-the corrected behavior in CI forever.
+the corrected behavior in CI forever. That permanence is the point: an LLM re-derives this
+logic on every call, and whether it recalls that RICE is outdated is a dice roll — re-run
+the loop and it may converge back to RICE (the Ottawa gates reappear more reliably). A
+prompt catches the correction *sometimes*; the loop only has to catch it **once** — ratify
+it, and regressing to RICE stops being a bad sample and becomes a failing test.
 
 | Profile | Max rounds | Panel | Per-round gate |
 | --- | --- | --- | --- |
@@ -192,9 +198,10 @@ triage: crystallize what's worth crystallizing, decompose the flows, delegate th
 ## Examples
 
 - [`examples/ankle_sprain/`](examples/ankle_sprain/) — **the flagship — start here.** The
-  source prompt gives outdated **RICE** advice; the loop corrects it to **POLICE /
-  PEACE & LOVE** and layers in the Ottawa Ankle Rules the prompt never mentioned. The proof
-  that the panel isn't theater. Educational only, not clinical advice. Audit: **TEMPER**.
+  source prompt gives outdated **RICE** advice; an audit-grade run corrected it to **POLICE /
+  PEACE & LOVE**, layered in the Ottawa Ankle Rules the prompt never mentioned, and the
+  ratified suite locks the correction in. Educational only, not clinical advice.
+  Audit: **TEMPER**.
 - [`examples/ticket_routing/`](examples/ticket_routing/) — **the one to watch converge.** A
   closed feature space where the difficulty is the *interactions* (priority × tier × SLA ×
   security). The loop's sweet spot. Audit: **TEMPER**.
@@ -214,6 +221,12 @@ triage: crystallize what's worth crystallizing, decompose the flows, delegate th
   `temper` loop, `validate`, incremental mode, the tempered-skill emitter.
 - **Deferred:** the `clarify`/`generate_examples` actions; a woven `--temper-each`
   orchestrator; `audit_decision` can over-count decisions on an already-atomic skill.
+- **The panel's insights are sampled, not guaranteed.** Structural attacks (edge cases,
+  interaction bugs) recur reliably across runs; literature-level corrections like the RICE
+  fix are opportunistic — a re-run may not rediscover one. The ratified suite is what turns
+  a good run into a permanent one.
+- **`audit-grade` proposes a lot to ratify.** One run on the flagship skill proposed 229
+  cases with 65 open disagreements — budget a real review pass, or start with `standard`.
 - **`audit-grade`** today is `standard` with more rounds and stricter convergence —
   tournament orchestration, required citations, and per-gray-zone sign-off are roadmap.
 - The `dog_day` trees are quick-profile drafts; harden with `standard`/`audit-grade` + a
