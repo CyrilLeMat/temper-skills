@@ -9,7 +9,7 @@
 | temper\_skills/audit\_report.py         |       98 |        2 |     98% |   216-217 |
 | temper\_skills/backends/\_\_init\_\_.py |       25 |        1 |     96% |        17 |
 | temper\_skills/backends/agent\_cli.py   |       95 |        0 |    100% |           |
-| temper\_skills/backends/api.py          |       50 |        0 |    100% |           |
+| temper\_skills/backends/api.py          |       64 |        5 |     92% |     38-43 |
 | temper\_skills/backends/base.py         |       17 |        0 |    100% |           |
 | temper\_skills/cli.py                   |      472 |      108 |     77% |65, 73, 86-90, 92-93, 114-120, 188-190, 201, 207-211, 241-242, 272-274, 287, 334-339, 348-353, 362-368, 375, 386-396, 414-416, 484-521, 588-590, 605, 608-636, 684-685, 717-718, 809, 830-839, 845-847, 962-964, 1003-1005, 1012-1020, 1037-1038, 1061-1063, 1088-1094, 1098 |
 | temper\_skills/decompose.py             |       30 |        0 |    100% |           |
@@ -29,7 +29,7 @@
 | temper\_skills/validate.py              |       65 |        0 |    100% |           |
 | temper\_skills/validation\_case.py      |       38 |        1 |     97% |        76 |
 | temper\_skills/vendor\_scripts.py       |       28 |        0 |    100% |           |
-| **TOTAL**                               | **2081** |  **140** | **93%** |           |
+| **TOTAL**                               | **2095** |  **145** | **93%** |           |
 
 
 ## Setup coverage badge
