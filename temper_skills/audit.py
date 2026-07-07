@@ -47,9 +47,12 @@ class JudgeScores(BaseModel):
     distinct_decisions: int = Field(
         default=1,
         ge=0,
-        description="How many SEPARABLE decisions this skill contains: 1 if it's a single "
-        "coherent decision, >=2 if it's a flow of several (classify, then escalate, then "
-        "draft …). The three axes above describe the skill as a WHOLE.",
+        description="How many SEPARABLE decisions this skill contains — count OUTPUTS, not "
+        "rules: many rules/exceptions/overrides that all select ONE final outcome (a single "
+        "route or verdict, even when 'escalate' or 'human review' are among the outcomes) "
+        "are 1 decision; >=2 only for a flow producing several distinct outputs in sequence "
+        "(classify, then escalate, then draft …). The three axes above describe the skill "
+        "as a WHOLE.",
     )
     rationale: dict[str, str] = Field(
         default_factory=dict,
@@ -87,9 +90,12 @@ AUDIT_SYSTEM = (
     "converges, because each round surfaces one more item.\n"
     "  stakes — is the decision repeated, auditable, and stable enough that freezing it "
     "pays off, or is it one-off / likely to change weekly? Low stakes score low.\n\n"
-    "Also report distinct_decisions: how many SEPARABLE decisions the skill contains — 1 for "
-    "a single coherent decision, >=2 for a flow of several (e.g. classify, then escalate, "
-    "then draft a reply). Score the three axes for the skill as a WHOLE."
+    "Also report distinct_decisions: how many SEPARABLE decisions the skill contains. Count "
+    "OUTPUTS, not rules: a pile of rules, exceptions, and overrides that all select ONE final "
+    "outcome is ONE decision (routing a ticket to exactly one queue is 1, even when "
+    "'escalate' and 'human review' are among the destinations). Report >=2 only for a flow "
+    "that produces several distinct outputs in sequence (e.g. classify, then escalate, then "
+    "draft a reply). Score the three axes for the skill as a WHOLE."
 )
 
 

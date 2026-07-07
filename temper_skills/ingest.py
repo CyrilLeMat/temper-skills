@@ -49,7 +49,15 @@ INFER_SYSTEM = (
     "attributes (breed, age, weight, etc.) unless the skill explicitly conditions on them, "
     "and never include two features carrying the same information (e.g. a boolean "
     "`has_additive` flag alongside an `additive_name` field — keep only the one a rule "
-    "needs). Every unused feature is surface the loop cannot converge on."
+    "needs). Every unused feature is surface the loop cannot converge on.\n\n"
+    # the audit's schema-closure check credits a string as bounded only on this exact
+    # signal — make the proposer emit it deliberately instead of by wording luck
+    "For every string feature whose value space is CLOSED — a small, stable vocabulary the "
+    "skill's rules cover (statuses, categories, tiers, named licenses) — the description "
+    'MUST spell the values out as: one of "a", "b", "c" (with a catch-all like "other" if '
+    "the skill has a fallback). Keep the description open ONLY for genuinely unbounded "
+    "identifiers where new values keep arriving (a food name, product, address, free-text "
+    "title) — writing 'one of' there would fake a closure no normalizer can honor."
 )
 
 

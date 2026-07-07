@@ -4,6 +4,10 @@ Routes each turn through `claude -p` or `opencode run` (or a custom command),
 which run on the user's existing subscription login. These CLIs have no native
 structured-output mode, so the JSON Schema is embedded in the prompt and the
 result is scraped + validated, with one corrective retry.
+
+Neither CLI exposes a sampling-temperature flag, so unlike ApiBackend (which
+pins temperature=0) this path samples at the CLI's defaults — audit verdicts
+are correspondingly less reproducible here.
 """
 
 from __future__ import annotations
