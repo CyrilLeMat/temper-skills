@@ -24,7 +24,10 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "litellm>=1.50",      # provider-agnostic model routing (Anthropic, OpenAI, Gemini, local, …)
+    # <1.95: from 1.95 litellm ships a Rust extension with Linux/Windows wheels only —
+    # on macOS pip falls back to an sdist build that dies without cargo. Lift the cap
+    # when litellm publishes macOS wheels.
+    "litellm>=1.50,<1.95",  # provider-agnostic model routing (Anthropic, OpenAI, Gemini, local, …)
     "instructor>=1.5",    # Pydantic-validated structured output + retries over LiteLLM
     "pydantic>=2.0",
     "typer>=0.12",
