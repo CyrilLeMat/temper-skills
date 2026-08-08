@@ -4,7 +4,7 @@
 
 | Name                                    |    Stmts |     Miss |   Cover |   Missing |
 |---------------------------------------- | -------: | -------: | ------: | --------: |
-| temper\_skills/\_\_init\_\_.py          |       10 |        0 |    100% |           |
+| temper\_skills/\_\_init\_\_.py          |       12 |        0 |    100% |           |
 | temper\_skills/audit.py                 |       86 |        0 |    100% |           |
 | temper\_skills/audit\_report.py         |       98 |        2 |     98% |   216-217 |
 | temper\_skills/backends/\_\_init\_\_.py |       25 |        1 |     96% |        17 |
@@ -29,7 +29,7 @@
 | temper\_skills/validate.py              |       65 |        0 |    100% |           |
 | temper\_skills/validation\_case.py      |       38 |        1 |     97% |        76 |
 | temper\_skills/vendor\_scripts.py       |       28 |        0 |    100% |           |
-| **TOTAL**                               | **2095** |  **145** | **93%** |           |
+| **TOTAL**                               | **2097** |  **145** | **93%** |           |
 
 
 ## Setup coverage badge
