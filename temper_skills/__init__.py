@@ -18,7 +18,13 @@ from .sources import (
 )
 from .tree import DecisionNode, DecisionTree
 
-__version__ = "0.0.1"
+# single-sourced from pyproject metadata — it already drifted once as a literal
+try:
+    from importlib.metadata import version as _version
+
+    __version__ = _version("temper-skills")
+except Exception:  # pragma: no cover — running from a raw source tree
+    __version__ = "0.0.0+unknown"
 
 __all__ = [
     "distill",
