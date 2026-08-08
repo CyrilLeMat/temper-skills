@@ -15,6 +15,11 @@ versions follow [SemVer](https://semver.org/) (pre-1.0: minor bumps may break).
   declared `DecisionTree` field.
 
 ### Fixed
+- CI lint no longer breaks on ruff releases: the action installed latest ruff,
+  whose defaults grew (0.16 turned a green tree red and started reformatting
+  Markdown code blocks). The rule set is now pinned in `[tool.ruff.lint]`,
+  `*.md` is excluded (README excerpts are verbatim generated output), and the
+  CI action pins `version: 0.16.2`.
 - The PyPI project page now renders correctly: README image and doc/example links
   were repo-relative (broken image, 404 links on pypi.org) — all rewritten to
   absolute GitHub URLs; `Documentation` added to `[project.urls]`.
