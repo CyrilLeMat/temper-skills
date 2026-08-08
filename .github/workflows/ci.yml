@@ -17,9 +17,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/ruff-action@v3
+      # version pinned: the action tracks latest ruff by default, and formatter
+      # style + default rules drift across releases (0.16 broke a green tree)
       - uses: astral-sh/ruff-action@v3
         with:
+          version: "0.16.2"
+      - uses: astral-sh/ruff-action@v3
+        with:
+          version: "0.16.2"
           args: "format --check"
       - uses: actions/setup-python@v7
         with:

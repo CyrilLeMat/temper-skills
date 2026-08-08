@@ -33,6 +33,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/CyrilLeMat/temper-skills"
+Documentation = "https://github.com/CyrilLeMat/temper-skills/blob/main/docs/reference.md"
 Repository = "https://github.com/CyrilLeMat/temper-skills"
 Issues = "https://github.com/CyrilLeMat/temper-skills/issues"
 Changelog = "https://github.com/CyrilLeMat/temper-skills/blob/main/CHANGELOG.md"
@@ -69,8 +70,15 @@ line-length = 100
 target-version = "py310"
 # examples/ holds loop-GENERATED trees (never hand-edited — regenerate instead) and
 # demo run.py scripts with sys.path-before-import; the skill's scripts/ dir is a
-# vendored mirror of temper_skills/ (regenerate via vendor_scripts, don't format it).
-extend-exclude = ["examples", ".claude/skills/temper-skills/scripts"]
+# vendored mirror of temper_skills/ (regenerate via vendor_scripts, don't format it);
+# *.md excluded because ruff >=0.16 formats Markdown code blocks and the README's
+# excerpts are verbatim generated output.
+extend-exclude = ["examples", ".claude/skills/temper-skills/scripts", "*.md"]
+
+[tool.ruff.lint]
+# Pin the rule set: CI's ruff-action tracks latest ruff, whose default select has
+# grown across versions — an unpinned rule set flips CI red on ruff releases.
+select = ["E4", "E7", "E9", "F"]
 
 [tool.coverage.run]
 source = ["temper_skills"]

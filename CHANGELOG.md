@@ -6,12 +6,23 @@ versions follow [SemVer](https://semver.org/) (pre-1.0: minor bumps may break).
 ## [Unreleased]
 
 ### Added
+- Community scaffolding: issue templates (bug / feature), a PR checklist template,
+  and a Contributor Covenant 2.1 code of conduct. README gained a banner
+  (`docs/assets/banner.png` — also meant for the repo's social preview).
 - CI now enforces `ruff format` (whole repo reformatted once; generated dirs
   excluded) and `mypy` over `temper_skills/` — `ingest_skill` gained `@overload`s
   so its return type follows `propose_schema_only`, and `loop_error` became a
   declared `DecisionTree` field.
 
 ### Fixed
+- CI lint no longer breaks on ruff releases: the action installed latest ruff,
+  whose defaults grew (0.16 turned a green tree red and started reformatting
+  Markdown code blocks). The rule set is now pinned in `[tool.ruff.lint]`,
+  `*.md` is excluded (README excerpts are verbatim generated output), and the
+  CI action pins `version: 0.16.2`.
+- The PyPI project page now renders correctly: README image and doc/example links
+  were repo-relative (broken image, 404 links on pypi.org) — all rewritten to
+  absolute GitHub URLs; `Documentation` added to `[project.urls]`.
 - Audit verdicts no longer flip across identical runs: `ApiBackend` pins
   `temperature=0` (constructor knob to override). The determinism exposed two
   judge biases, both fixed by tightening the prompts: `distinct_decisions` now
