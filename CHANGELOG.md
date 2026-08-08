@@ -21,9 +21,9 @@ reflects that (SemVer pre-1.0: minors may still break).
 
 ### Fixed
 - Fresh installs no longer require a Rust toolchain on macOS: litellm capped
-  `<1.95` — from 1.95 it ships a Rust extension with Linux/Windows wheels only,
-  so macOS pip fell back to an sdist build that dies without cargo. Cap lifts
-  when litellm publishes macOS wheels.
+  `<1.92` — from 1.92 it ships a Rust extension with Linux/Windows wheels only
+  (1.91.4 is the last pure-Python release), so macOS pip fell back to an sdist
+  build that dies without cargo. Cap lifts when litellm publishes macOS wheels.
 - `temper_skills.__version__` no longer drifts from the released version: it
   was a hand-maintained literal stuck at "0.0.1"; now read from package
   metadata (`importlib.metadata`).
