@@ -5,6 +5,11 @@ versions follow [SemVer](https://semver.org/) (pre-1.0: minor bumps may break).
 
 ## [Unreleased]
 
+## [0.1.0] — 2026-08-08
+
+First minor release: the mechanics have been stable across 0.0.x; this bump
+reflects that (SemVer pre-1.0: minors may still break).
+
 ### Added
 - Community scaffolding: issue templates (bug / feature), a PR checklist template,
   and a Contributor Covenant 2.1 code of conduct. README gained a banner
@@ -15,6 +20,9 @@ versions follow [SemVer](https://semver.org/) (pre-1.0: minor bumps may break).
   declared `DecisionTree` field.
 
 ### Fixed
+- `temper_skills.__version__` no longer drifts from the released version: it
+  was a hand-maintained literal stuck at "0.0.1"; now read from package
+  metadata (`importlib.metadata`).
 - CI lint no longer breaks on ruff releases: the action installed latest ruff,
   whose defaults grew (0.16 turned a green tree red and started reformatting
   Markdown code blocks). The rule set is now pinned in `[tool.ruff.lint]`,
