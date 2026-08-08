@@ -32,7 +32,7 @@ uvx temper-skills audit path/to/skill.md    # one skill: findings + a recommende
 uvx temper-skills audit .claude/skills/     # your whole library, ranked (--report audit.md to share)
 ```
 
-![A live audit of the flagship example — real run, unedited](https://raw.githubusercontent.com/CyrilLeMat/temper-skills/main/docs/assets/audit-demo.gif)
+![A live audit of the flagship example — real run, sped up](https://raw.githubusercontent.com/CyrilLeMat/temper-skills/main/docs/assets/audit-demo.gif)
 
 No config. Any one backend works — an `ANTHROPIC_API_KEY` or a logged-in `claude`/`opencode`
 CLI — and it tells you exactly what to do if none is found. Inside **Claude Code** there's
