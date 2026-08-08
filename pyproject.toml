@@ -33,6 +33,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/CyrilLeMat/temper-skills"
+Documentation = "https://github.com/CyrilLeMat/temper-skills/blob/main/docs/reference.md"
 Repository = "https://github.com/CyrilLeMat/temper-skills"
 Issues = "https://github.com/CyrilLeMat/temper-skills/issues"
 Changelog = "https://github.com/CyrilLeMat/temper-skills/blob/main/CHANGELOG.md"

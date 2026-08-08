@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Reference docs
+    url: https://github.com/CyrilLeMat/temper-skills/blob/main/docs/reference.md
+    about: Backends, profiles, the validation lifecycle, and the audit's axes.

@@ -1,0 +1,47 @@
+name: Bug report
+description: Something misbehaves — a crash, a wrong verdict, a broken export.
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you ran, what you expected, what you got instead.
+      placeholder: |
+        Ran `temper-skills audit my_skill.md` and ...
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: >
+        The exact command, and if possible the skill.md (or a minimal version of it —
+        the input skill usually matters more than the code path).
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: temper-skills version
+      placeholder: "0.0.3 (from `pip show temper-skills`)"
+    validations:
+      required: true
+  - type: dropdown
+    id: backend
+    attributes:
+      label: Backend
+      options:
+        - api (ANTHROPIC_API_KEY / LiteLLM)
+        - claude CLI
+        - opencode CLI
+        - Claude Code subagent skill (/temper)
+        - not backend-related
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Output / traceback
+      render: shell

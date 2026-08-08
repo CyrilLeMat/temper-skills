@@ -1,0 +1,25 @@
+name: Feature request
+description: An action, backend, or workflow you wish temper-skills covered.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do that the tool doesn't handle today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you'd like
+      description: A command, a flag, an output — whatever shape you imagine.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: >
+        Optional — the skill or workflow this came up in, and any workaround you're
+        using meanwhile.
