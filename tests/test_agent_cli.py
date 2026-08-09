@@ -201,3 +201,17 @@ def test_complete_raises_with_cause_after_repeated_timeouts(monkeypatch):
     monkeypatch.setattr(be, "_run", fake_run)
     with pytest.raises(RuntimeError, match="300"):
         be.complete("sys", "usr", PersonaVerdict)
+
+
+def test_run_error_includes_stdout_when_stderr_is_empty(monkeypatch):
+    # claude prints failures like "Credit balance is too low" on stdout with an
+    # empty stderr — the error message must not end at "exited 1: ".
+    from types import SimpleNamespace
+
+    from temper_skills.backends import agent_cli
+
+    be = AgentCliBackend(preset="claude", model="m")
+    proc = SimpleNamespace(returncode=1, stdout="Credit balance is too low\n", stderr="")
+    monkeypatch.setattr(agent_cli.subprocess, "run", lambda *a, **k: proc)
+    with pytest.raises(RuntimeError, match="Credit balance is too low"):
+        be._run("prompt")

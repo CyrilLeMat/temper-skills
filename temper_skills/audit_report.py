@@ -17,8 +17,25 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
+from pydantic import BaseModel
+
 from .audit import FitnessReport, audit_skill
 from .backends import Backend
+
+
+class Ping(BaseModel):
+    ok: bool
+
+
+def preflight(backend: Backend) -> None:
+    """One tiny completion before the sweep fans out.
+
+    A broken backend (dead CLI, empty credit balance, bad key) must fail ONCE with
+    the real error — not once per skill, truncated inside a table cell."""
+    try:
+        backend.complete("Health check.", 'Reply with exactly {"ok": true}.', Ping)
+    except Exception as e:
+        raise RuntimeError(f"backend failed the pre-sweep check: {e}") from e
 
 
 @dataclass
@@ -218,6 +235,8 @@ def audit_library(root: str | Path, backend: Backend, max_workers: int = 8) -> l
 
     if not paths:
         return []
+    if len(paths) > 1:  # a single audit is its own canary
+        preflight(backend)
     with ThreadPoolExecutor(max_workers=min(max_workers, len(paths))) as ex:
         rows = list(ex.map(one, paths))
     return sorted(rows, key=rank_key)

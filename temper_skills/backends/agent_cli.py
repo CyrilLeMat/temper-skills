@@ -112,9 +112,9 @@ class AgentCliBackend(Backend):
         argv = self._build_argv(prompt, self.model)
         proc = subprocess.run(argv, capture_output=True, text=True, timeout=self.timeout)
         if proc.returncode != 0:
-            raise RuntimeError(
-                f"{self.name} CLI exited {proc.returncode}: {proc.stderr.strip()[:500]}"
-            )
+            # claude prints failures like "Credit balance is too low" on STDOUT
+            detail = (proc.stderr.strip() or proc.stdout.strip())[:500]
+            raise RuntimeError(f"{self.name} CLI exited {proc.returncode}: {detail}")
         return self._extract_text(proc.stdout)
 
     def complete(self, system: str, user: str, schema: type[T]) -> T:
