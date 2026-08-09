@@ -5,6 +5,12 @@ versions follow [SemVer](https://semver.org/) (pre-1.0: minor bumps may break).
 
 ## [Unreleased]
 
+### Changed
+- The no-backend onboarding message now suggests Claude Code's native installer
+  (`curl -fsSL https://claude.ai/install.sh | bash`) instead of `npm install -g`
+  — the npm path assumes a healthy Node toolchain, which is exactly what a
+  first-touch machine may not have.
+
 ## [0.1.0] — 2026-08-08
 
 First minor release: the mechanics have been stable across 0.0.x; this bump
@@ -116,7 +122,8 @@ First public release — on [PyPI](https://pypi.org/project/temper-skills/).
 - First ecosystem audit: all 17 skills in anthropics/skills
   (`docs/audits/anthropic-skills-2026-07-02.md`).
 
-[Unreleased]: https://github.com/CyrilLeMat/temper-skills/compare/v0.0.3...HEAD
+[Unreleased]: https://github.com/CyrilLeMat/temper-skills/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/CyrilLeMat/temper-skills/compare/v0.0.3...v0.1.0
 [0.0.3]: https://github.com/CyrilLeMat/temper-skills/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/CyrilLeMat/temper-skills/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/CyrilLeMat/temper-skills/releases/tag/v0.0.1
