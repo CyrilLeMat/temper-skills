@@ -37,7 +37,7 @@ def auto_backend(model: str | None = None) -> Backend:
     raise RuntimeError(
         "no LLM backend detected. Any ONE of these unblocks every command:\n\n"
         "  1. an Anthropic API key      export ANTHROPIC_API_KEY=sk-ant-...\n"
-        "  2. the Claude Code CLI       npm install -g @anthropic-ai/claude-code   (run `claude` once to log in)\n"
+        "  2. the Claude Code CLI       curl -fsSL https://claude.ai/install.sh | bash   (run `claude` once to log in)\n"
         "  3. the opencode CLI          https://opencode.ai/docs  (any provider it is logged into)\n\n"
         "then re-run. Force a specific one with --backend api|claude|opencode "
         "(or TEMPER_BACKEND=...)."
