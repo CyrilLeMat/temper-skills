@@ -11,6 +11,15 @@ versions follow [SemVer](https://semver.org/) (pre-1.0: minor bumps may break).
   — the npm path assumes a healthy Node toolchain, which is exactly what a
   first-touch machine may not have.
 
+### Fixed
+- A broken backend now fails a library sweep ONCE, with the full error: a tiny
+  pre-sweep canary call runs before the fan-out (a single-skill audit is its own
+  canary), instead of N per-skill failures truncated inside table cells. When
+  individual audits do fail, the first error also prints in full under the table.
+- Agent-CLI errors no longer end at "exited 1: ": claude prints failures like
+  "Credit balance is too low" on stdout with an empty stderr — the error now
+  falls back to stdout. All three found by watching a real first-touch run.
+
 ## [0.1.0] — 2026-08-08
 
 First minor release: the mechanics have been stable across 0.0.x; this bump

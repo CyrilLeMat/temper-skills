@@ -643,7 +643,11 @@ def _audit_library(ui: Console, root: str, be, *, json_out: bool, report_md: str
     """The library sweep: rank every skill under ``root`` by what's most worth acting on."""
     from .audit_report import audit_library, headline_of, render_library_md, top_finding
 
-    rows = audit_library(root, be)
+    try:
+        rows = audit_library(root, be)
+    except RuntimeError as e:  # pre-sweep canary: fail once, with the full error
+        ui.print(f"[red]Backend error:[/] {e}")
+        raise typer.Exit(1)
     if not rows:
         ui.print(
             f"[red]no skills found under {root}[/] "
@@ -688,6 +692,12 @@ def _audit_library(ui: Console, root: str, be, *, json_out: bool, report_md: str
             color = "cyan" if r.recommended_action == "decompose" else _HEADLINE_COLOR[r.verdict]
             table.add_row(str(rel), f"[{color}]{label}[/]", top_finding(r), r.recommended_action)
         ui.print(table)
+        failed = [r for r in rows if r.report is None]
+        if failed:
+            # The table cell truncates; the first error prints in full so the cause
+            # (credits, auth, model id) is diagnosable without re-running.
+            ui.print(f"[red]{len(failed)} audit(s) failed[/] — first error in full:")
+            ui.print(f"[dim]{failed[0].error}[/]")
         ui.print(
             "[dim]details per skill: temper-skills audit <path>  ·  "
             "shareable report: --report audit.md[/]"

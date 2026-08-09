@@ -8,6 +8,7 @@ from typer.testing import CliRunner
 
 from temper_skills import cli
 from temper_skills.audit import JudgeScores
+from temper_skills.audit_report import Ping
 from temper_skills.backends.base import Backend
 from temper_skills.ingest import InferredFeature, InferredSchema
 
@@ -26,6 +27,8 @@ class RoutingBackend(Backend):
         super().__init__("fake-model")
 
     def complete(self, system, user, schema):
+        if schema is Ping:  # the pre-sweep canary
+            return Ping(ok=True)
         skip = "SKIPME" in user
         if schema is InferredSchema:
             if skip:
@@ -146,3 +149,45 @@ def test_implicit_command_never_shadows_a_subcommand(tmp_path, monkeypatch):
 def test_implicit_command_ignores_flags_and_missing_paths():
     assert cli._implicit_command("--help") is None
     assert cli._implicit_command("no/such/path.md") is None
+
+
+# ---- pre-sweep canary + full first error ----
+
+
+class DeadBackend(Backend):
+    """Every call fails the way a dead CLI / empty credit balance does."""
+
+    name = "dead"
+
+    def __init__(self):
+        super().__init__("dead-model")
+
+    def complete(self, system, user, schema):
+        raise RuntimeError("claude CLI exited 1: Credit balance is too low")
+
+
+def test_dir_sweep_dead_backend_fails_once_with_full_error(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "get_backend", lambda n, m: DeadBackend())
+    res = runner.invoke(cli.app, ["audit", str(_lib(tmp_path))])
+    assert res.exit_code == 1
+    flat = " ".join(res.output.split())  # Rich wraps at console width
+    assert "pre-sweep check" in flat
+    assert "Credit balance is too low" in flat
+    assert "audit failed" not in flat  # aborted before fanning out
+
+
+class OneBadSkillBackend(RoutingBackend):
+    def complete(self, system, user, schema):
+        if "BOOMME" in user:
+            raise RuntimeError("full-error-detail-xyz")
+        return super().complete(system, user, schema)
+
+
+def test_dir_sweep_prints_first_failure_in_full(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "get_backend", lambda n, m: OneBadSkillBackend())
+    lib = _lib(tmp_path)
+    (lib / "broken").mkdir()
+    (lib / "broken" / "SKILL.md").write_text("# BOOMME this one dies")
+    res = runner.invoke(cli.app, ["audit", str(lib)])
+    assert "1 audit(s) failed" in res.output
+    assert "full-error-detail-xyz" in res.output
