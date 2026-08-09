@@ -149,3 +149,12 @@ def normalize(raw: str) -> dict:
 
 can_dog_eat(normalize("a slice of Dark Chocolate cake"))   # -> "no — toxic, never feed"
 ```
+
+## Deferred and roadmap
+
+- **Deferred:** the `clarify`/`generate_examples` audit actions; a woven `--temper-each`
+  orchestrator; `audit_decision` can over-count decisions on an already-atomic skill.
+- **`audit-grade`** today is `standard` with more rounds and stricter convergence —
+  tournament orchestration, required citations, and per-gray-zone sign-off are roadmap.
+- The `dog_day` example trees are quick-profile drafts; harden with `standard`/`audit-grade`
+  plus a held-out set before real use.

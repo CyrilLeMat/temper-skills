@@ -14,12 +14,9 @@
 > reviewers to write a **test suite** for them, and freezes the logic into deterministic
 > Python that must keep passing.
 
-A skill or prompt is usually a *flow*: a few decisions (classify, route, escalate, judge)
-tangled with generation — re-derived from prose on every call, with no tests. Temper-Skills
-gives that decision logic what code gets: **a reviewed, labeled test suite** (written by
-adversarial persona reviewers, not by the model grading itself) and **a deterministic
-implementation** — readable Python you can diff in a PR and pin in CI, with **zero LLM calls
-at inference**.
+<p align="center">
+  <img src="https://raw.githubusercontent.com/CyrilLeMat/temper-skills/main/docs/assets/schema.png" alt="Before: a classic skill, its decisions buried in prose and re-derived on every call. The temper adversarial loop turns it into a light skill: a thin SKILL.md that delegates, a typed input contract you ratify, a deterministic assess_ankle.py with zero LLM calls, and a ratified test suite pinned in CI.">
+</p>
 
 Does the review actually catch anything? Fed a first-aid skill giving outdated **RICE**
 advice, an audit-grade run **corrected its own source** — and the ratified suite pins that
@@ -193,48 +190,33 @@ of that loop entirely — into Python that can't drift and ratified cases that g
 Use both: a harness for "does the model use this skill well?", temper for the
 classify/route/escalate calls that shouldn't be re-decided on every call.
 
-**Real sweep:** [docs/audits/anthropic-skills-2026-07-02.md](https://github.com/CyrilLeMat/temper-skills/blob/main/docs/audits/anthropic-skills-2026-07-02.md)
-audits Anthropic's 17 official skills — none is a clean freeze candidate (the audit says no
-most of the time; that's the point), but 11 of 17 bundle 2–5 separable decisions in one
-prompt. In a system that evolves skills automatically (e.g. SkillClaw), the audit is the
-triage: crystallize what's worth crystallizing, decompose the flows, delegate the prose.
+**Real sweep:** [the audit of Anthropic's 17 official skills](https://github.com/CyrilLeMat/temper-skills/blob/main/docs/audits/anthropic-skills-2026-07-02.md) —
+the audit says no most of the time (that's the point); 11 of 17 bundle 2–5 separable
+decisions in one prompt.
 
 ## Examples
 
-- [`examples/ankle_sprain/`](https://github.com/CyrilLeMat/temper-skills/tree/main/examples/ankle_sprain/) — **the flagship — start here.** The
-  source prompt gives outdated **RICE** advice; an audit-grade run corrected it to **POLICE /
-  PEACE & LOVE**, layered in the Ottawa Ankle Rules the prompt never mentioned, and the
-  ratified suite locks the correction in. Educational only, not clinical advice.
-  Audit: **TEMPER**.
-- [`examples/ticket_routing/`](https://github.com/CyrilLeMat/temper-skills/tree/main/examples/ticket_routing/) — **the one to watch converge.** A
-  closed feature space where the difficulty is the *interactions* (priority × tier × SLA ×
-  security). The loop's sweet spot. Audit: **TEMPER**.
-- [`examples/parking/`](https://github.com/CyrilLeMat/temper-skills/tree/main/examples/parking/) — **the everyday good fit.** Zone × day × hour ×
-  holiday × permit, with the edges a flat reading misses. Audit: **TEMPER**.
-- [`examples/license_compat/`](https://github.com/CyrilLeMat/temper-skills/tree/main/examples/license_compat/) — **the "moat" demo.** OSS license
-  compatibility: genuinely hard combinatorics. Audit: **TEMPER** (audit-grade).
-- [`examples/dog_food/`](https://github.com/CyrilLeMat/temper-skills/tree/main/examples/dog_food/) — **the cautionary contrast.** A flat lookup
-  with an unbounded toxin tail — the toxin list wants to be a data file, not a tree.
-  Audit: **CAVEATS** → `externalize_data`.
-- [`examples/dog_day/`](https://github.com/CyrilLeMat/temper-skills/tree/main/examples/dog_day/) — **the flow.** Three decisions + a note →
-  three trees + a thin orchestrator. Audit: **DECOMPOSE FIRST**.
+| Example | Why it's here | Audit |
+| --- | --- | --- |
+| [`ankle_sprain/`](https://github.com/CyrilLeMat/temper-skills/tree/main/examples/ankle_sprain/) | **The flagship — start here.** Outdated RICE advice corrected to PEACE & LOVE + the Ottawa rules, locked in by the ratified suite *(educational, not clinical advice)* | **TEMPER** |
+| [`ticket_routing/`](https://github.com/CyrilLeMat/temper-skills/tree/main/examples/ticket_routing/) | The one to watch converge: the difficulty is the interactions (priority × tier × SLA × security) | **TEMPER** |
+| [`parking/`](https://github.com/CyrilLeMat/temper-skills/tree/main/examples/parking/) | The everyday fit: zone × day × hour × holiday × permit, with the edges a flat reading misses | **TEMPER** |
+| [`license_compat/`](https://github.com/CyrilLeMat/temper-skills/tree/main/examples/license_compat/) | The "moat" demo: OSS license compatibility, genuinely hard combinatorics | **TEMPER** (audit-grade) |
+| [`dog_food/`](https://github.com/CyrilLeMat/temper-skills/tree/main/examples/dog_food/) | The cautionary contrast: an unbounded toxin list wants a data file, not a tree | **CAVEATS** → `externalize_data` |
+| [`dog_day/`](https://github.com/CyrilLeMat/temper-skills/tree/main/examples/dog_day/) | The flow: three decisions + a note → three trees + a thin orchestrator | **DECOMPOSE FIRST** |
 
 ## Honest scope
 
 - **Built and tested:** `audit` (single skill or library sweep), `decompose`, the adversarial
   `temper` loop, `validate`, incremental mode, the tempered-skill emitter.
-- **Deferred:** the `clarify`/`generate_examples` actions; a woven `--temper-each`
-  orchestrator; `audit_decision` can over-count decisions on an already-atomic skill.
 - **The panel's insights are sampled, not guaranteed.** Structural attacks (edge cases,
   interaction bugs) recur reliably across runs; literature-level corrections like the RICE
   fix are opportunistic — a re-run may not rediscover one. The ratified suite is what turns
   a good run into a permanent one.
 - **`audit-grade` proposes a lot to ratify.** One run on the flagship skill proposed 229
   cases with 65 open disagreements — budget a real review pass, or start with `standard`.
-- **`audit-grade`** today is `standard` with more rounds and stricter convergence —
-  tournament orchestration, required citations, and per-gray-zone sign-off are roadmap.
-- The `dog_day` trees are quick-profile drafts; harden with `standard`/`audit-grade` + a
-  held-out set for real use.
+- Deferred features and roadmap:
+  [docs/reference.md](https://github.com/CyrilLeMat/temper-skills/blob/main/docs/reference.md#deferred-and-roadmap)
 
 ## Development
 
