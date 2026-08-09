@@ -50,3 +50,27 @@ jobs:
           name: dist
           path: dist/
       - uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Release notes from the CHANGELOG section
+        run: |
+          python - <<'EOF'
+          import os, re
+          tag = os.environ["GITHUB_REF_NAME"]           # vX.Y.Z
+          version = tag.lstrip("v")
+          text = open("CHANGELOG.md").read()
+          m = re.search(rf"^## \[{re.escape(version)}\][^\n]*\n(.*?)(?=^## \[|\Z)",
+                        text, re.MULTILINE | re.DOTALL)
+          body = m.group(1).strip() if m else f"See CHANGELOG.md for {version}."
+          open("release_notes.md", "w").write(body)
+          EOF
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file release_notes.md

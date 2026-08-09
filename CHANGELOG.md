@@ -5,6 +5,12 @@ versions follow [SemVer](https://semver.org/) (pre-1.0: minor bumps may break).
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-08-09
+
+First-touch hardening — everything below was found by watching one real cold
+`uvx temper-skills audit` run. GitHub Releases are now created automatically by
+the release workflow (this page used to lag the tags).
+
 ### Changed
 - The no-backend onboarding message now suggests Claude Code's native installer
   (`curl -fsSL https://claude.ai/install.sh | bash`) instead of `npm install -g`
@@ -131,7 +137,8 @@ First public release — on [PyPI](https://pypi.org/project/temper-skills/).
 - First ecosystem audit: all 17 skills in anthropics/skills
   (`docs/audits/anthropic-skills-2026-07-02.md`).
 
-[Unreleased]: https://github.com/CyrilLeMat/temper-skills/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/CyrilLeMat/temper-skills/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/CyrilLeMat/temper-skills/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/CyrilLeMat/temper-skills/compare/v0.0.3...v0.1.0
 [0.0.3]: https://github.com/CyrilLeMat/temper-skills/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/CyrilLeMat/temper-skills/compare/v0.0.1...v0.0.2
